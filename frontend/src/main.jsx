@@ -1,0 +1,7909 @@
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import AiLoader from "./components/ui/AiLoader.jsx";
+import AnimatedGlowingSearchBar from "./components/ui/AnimatedGlowingSearchBar.jsx";
+import HeroErrorBoundary from "./components/ui/hero-error-boundary.jsx";
+import "./styles.css";
+
+const apiUrl =
+  window.__ALIBOOKS_CONFIG__?.apiUrl ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:3000";
+const LiquidMetalHero = lazy(() => import("./components/ui/liquid-metal-hero.jsx"));
+
+const copy = {
+  en: {
+    dashboard: "Business dashboard",
+    overview: "Overview",
+    createNew: "Create new",
+    customers: "Customers",
+    invoices: "Invoices",
+    contracts: "Contracts",
+    services: "Services",
+    serviceAdmin: "Service admin",
+    serviceName: "Service name",
+    serviceDescription: "Service description",
+    ordinaryPrice: "Ordinary price",
+    discountPrice: "Discount price",
+    discountLabel: "Discount label",
+    activeService: "Active service",
+    saveService: "Save service",
+    newService: "New service",
+    edit: "Edit",
+    inactive: "Inactive",
+    serviceSaved: "Service saved.",
+    payments: "Payments",
+    uploaded: "Uploaded",
+    bookkeeping: "Bookkeeping",
+    chartOfAccounts: "Chart of accounts",
+    vatReport: "VAT report",
+    reports: "Reports",
+    settings: "Settings",
+    revenue: "Revenue demo",
+    paid: "Paid",
+    name: "Name",
+    email: "Email",
+    saveCustomer: "Save customer",
+    customerName: "Customer name",
+    customerEmail: "customer@example.com",
+    personalNumber: "Personal number",
+    address: "Address",
+    phone: "Phone",
+    postalCode: "Postal code",
+    city: "City",
+    createInvoice: "Create invoice",
+    chooseCustomer: "Choose customer",
+    chooseService: "Choose service",
+    quantity: "Quantity",
+    noInvoices: "No invoices yet.",
+    noCustomers: "No customers yet.",
+    noExpenses: "No expenses yet.",
+    noJournalEntries: "No journal entries yet.",
+    refresh: "Refresh",
+    signedIn: "Signed in as",
+    logout: "Log out",
+    login: "Login",
+    register: "Register",
+    password: "Password",
+    customerSaved: "Customer saved.",
+    noServices: "No services loaded. Restart backend so demo services are seeded.",
+    advisor: "AI Advisor",
+    reminders: "AI reminders",
+    searchCustomers: "Search customers",
+    searchInvoices: "Search invoices",
+    all: "All",
+    draft: "Draft",
+    sent: "Sent",
+    unpaid: "Unpaid",
+    overdue: "Overdue",
+    dueSoon: "Due soon",
+    expenses: "Expenses",
+    description: "Description",
+    net: "Net",
+    vat: "VAT",
+    total: "Total",
+    category: "Category",
+    saveExpense: "Save expense",
+    receipt: "Receipt",
+    uploadReceipt: "Upload receipt",
+    attachReceipt: "Attach receipt",
+    openReceipt: "Open receipt",
+    receiptsSaved: "Receipts saved",
+    receiptsMissing: "Missing receipts",
+    noReceipts: "No receipts uploaded yet.",
+    noMissingReceipts: "All expenses have receipts.",
+    customerRequiredLogin: "Log in to see reminders.",
+    settingsSaved: "Settings saved.",
+    saveSettings: "Save settings",
+    clearTestData: "Clear test data",
+    testDataCleared: "Test data cleared.",
+    company: "Company",
+    companyType: "Company type",
+    soleTrader: "Sole trader",
+    limitedCompany: "Limited company",
+    contactEmail: "Contact email",
+    paymentRecipient: "Payment recipient",
+    date: "Date",
+    approvedForFtax: "Approved for F-tax",
+    serviceMissing: "Service missing",
+    payment: "Payment",
+    markSent: "Mark sent",
+    markPaid: "Register payment",
+    outputVat: "Output VAT",
+    inputVat: "Input VAT",
+    vatToPay: "VAT to pay",
+    exportCsv: "Export CSV",
+    voucher: "Voucher",
+    account: "Account",
+    manualVoucher: "Manual voucher",
+    debitAccount: "Debit account",
+    creditAccount: "Credit account",
+    amount: "Amount",
+    saveVoucher: "Save voucher",
+    accountNumber: "Account number",
+    accountName: "Account name",
+    appliesTo: "Applies to",
+    debit: "Debit",
+    credit: "Credit",
+    vatPercent: "VAT percent",
+    paymentTermsDays: "Payment terms days",
+    noEmail: "No email",
+    noPersonalNumber: "No personal number",
+    dueDate: "Due date",
+    paymentTerms: "Payment terms",
+    days: "days",
+    profitAndLoss: "Profit and loss",
+    balanceReport: "Balance report",
+    revenueLines: "Revenue",
+    expenseLines: "Expenses",
+    assetLines: "Assets",
+    liabilitiesAndEquity: "Liabilities and equity",
+    difference: "Difference",
+    result: "Result"
+  },
+  sv: {
+    dashboard: "Affarsdashboard",
+    overview: "Oversikt",
+    createNew: "Skapa ny",
+    customers: "Kunder",
+    invoices: "Fakturor",
+    contracts: "Avtal",
+    services: "Tjanster",
+    serviceAdmin: "Tjansteadministration",
+    serviceName: "Tjanstens namn",
+    serviceDescription: "Beskrivning",
+    ordinaryPrice: "Ordinarie pris",
+    discountPrice: "Rabattpris",
+    discountLabel: "Rabatttext",
+    activeService: "Aktiv tjanst",
+    saveService: "Spara tjanst",
+    newService: "Ny tjanst",
+    edit: "Redigera",
+    inactive: "Inaktiv",
+    serviceSaved: "Tjansten sparades.",
+    payments: "Betalningar",
+    uploaded: "Underlag",
+    bookkeeping: "Bokforing",
+    chartOfAccounts: "Kontoplan",
+    vatReport: "Momsrapport",
+    reports: "Rapporter",
+    settings: "Installningar",
+    revenue: "Intakter demo",
+    paid: "Betalda",
+    name: "Namn",
+    email: "E-post",
+    saveCustomer: "Spara kund",
+    customerName: "Kundnamn",
+    customerEmail: "kund@example.com",
+    personalNumber: "Personnummer",
+    address: "Adress",
+    phone: "Telefon",
+    postalCode: "Postnummer",
+    city: "Stad",
+    createInvoice: "Skapa faktura",
+    chooseCustomer: "Valj kund",
+    chooseService: "Valj tjanst",
+    quantity: "Antal",
+    noInvoices: "Inga fakturor annu.",
+    noCustomers: "Inga kunder annu.",
+    noExpenses: "Inga kostnader annu.",
+    noJournalEntries: "Inga bokforingsrader annu.",
+    refresh: "Uppdatera",
+    signedIn: "Inloggad som",
+    logout: "Logga ut",
+    login: "Logga in",
+    register: "Registrera",
+    password: "Losenord",
+    customerSaved: "Kunden sparades.",
+    noServices: "Inga tjanster laddades. Starta om backend sa demo-tjanster seedas.",
+    advisor: "AI-radgivare",
+    reminders: "AI-paminnelser",
+    searchCustomers: "Sok kunder",
+    searchInvoices: "Sok fakturor",
+    all: "Alla",
+    draft: "Utkast",
+    sent: "Skickade",
+    unpaid: "Obetalda",
+    overdue: "Forfallna",
+    dueSoon: "Forfaller snart",
+    expenses: "Kostnader",
+    description: "Beskrivning",
+    net: "Exkl. moms",
+    vat: "Moms",
+    total: "Totalt",
+    category: "Kategori",
+    saveExpense: "Spara kostnad",
+    receipt: "Kvitto",
+    uploadReceipt: "Ladda upp kvitto",
+    attachReceipt: "Lagg till kvitto",
+    openReceipt: "Oppna kvitto",
+    receiptsSaved: "Sparade underlag",
+    receiptsMissing: "Saknar kvitto",
+    noReceipts: "Inga kvitton uppladdade annu.",
+    noMissingReceipts: "Alla kostnader har kvitto.",
+    customerRequiredLogin: "Logga in for att se paminnelser.",
+    settingsSaved: "Installningar sparade.",
+    saveSettings: "Spara installningar",
+    clearTestData: "Rensa testdata",
+    testDataCleared: "Testdata rensad.",
+    company: "Foretag",
+    companyType: "Foretagsform",
+    soleTrader: "Enskild firma",
+    limitedCompany: "Aktiebolag",
+    contactEmail: "Kontakt e-post",
+    paymentRecipient: "Betalningsmottagare",
+    date: "Datum",
+    approvedForFtax: "Godkand for F-skatt",
+    serviceMissing: "Tjanst saknas",
+    payment: "Betalning",
+    markSent: "Markera skickad",
+    markPaid: "Registrera betalning",
+    outputVat: "Utgaende moms",
+    inputVat: "Ingaende moms",
+    vatToPay: "Moms att betala",
+    exportCsv: "Exportera CSV",
+    voucher: "Verifikat",
+    account: "Konto",
+    manualVoucher: "Manuell verifikation",
+    debitAccount: "Debetkonto",
+    creditAccount: "Kreditkonto",
+    amount: "Belopp",
+    saveVoucher: "Spara verifikat",
+    accountNumber: "Kontonummer",
+    accountName: "Kontonamn",
+    appliesTo: "Galler",
+    debit: "Debet",
+    credit: "Kredit",
+    vatPercent: "Momsprocent",
+    paymentTermsDays: "Betalningsvillkor dagar",
+    noEmail: "Ingen e-post",
+    noPersonalNumber: "Inget personnummer",
+    dueDate: "Forfallodatum",
+    paymentTerms: "Betalningsvillkor",
+    days: "dagar",
+    profitAndLoss: "Resultatrapport",
+    balanceReport: "Balansrapport",
+    revenueLines: "Intakter",
+    expenseLines: "Kostnader",
+    assetLines: "Tillgangar",
+    liabilitiesAndEquity: "Skulder och eget kapital",
+    difference: "Skillnad",
+    result: "Resultat"
+  }
+};
+
+function invoiceNetAmount(item) {
+  return item.netAmount || item.product?.price || 0;
+}
+
+function servicePriceLabel(service, language) {
+  const effectivePrice = serviceEffectivePrice(service);
+
+  if (!effectivePrice || effectivePrice <= 0) {
+    return language === "sv" ? "Kontakta for pris" : "Contact for price";
+  }
+
+  if (service.discountPrice > 0) {
+    return language === "sv"
+      ? `${service.discountPrice} SEK (ord. ${service.price} SEK)`
+      : `${service.discountPrice} SEK (regular ${service.price} SEK)`;
+  }
+
+  return `${effectivePrice} SEK`;
+}
+
+function serviceEffectivePrice(service) {
+  return service?.discountPrice > 0 ? service.discountPrice : service?.price || 0;
+}
+
+function serviceHasInvoicePrice(service) {
+  return serviceEffectivePrice(service) > 0;
+}
+
+function invoicePreviewFor(service, quantityValue) {
+  if (!service || !serviceHasInvoicePrice(service)) {
+    return null;
+  }
+
+  const quantity = Math.max(Number(quantityValue || 1), 1);
+  const ordinaryPrice = (service.price || 0) * quantity;
+  const netAmount = serviceEffectivePrice(service) * quantity;
+  const discountAmount = Math.max(ordinaryPrice - netAmount, 0);
+  const vatAmount = Math.round(netAmount * 0.25);
+  const totalAmount = netAmount + vatAmount;
+
+  return {
+    quantity,
+    ordinaryPrice,
+    discountAmount,
+    discountLabel: service.discountLabel,
+    netAmount,
+    vatAmount,
+    totalAmount
+  };
+}
+
+function invoiceVatAmount(item) {
+  return item.vatAmount || Math.round(invoiceNetAmount(item) * 0.25);
+}
+
+function invoiceTotalAmount(item) {
+  return item.totalAmount || invoiceNetAmount(item) + invoiceVatAmount(item);
+}
+
+function invoiceOrdinaryPrice(item) {
+  return item.ordinaryPrice || item.product?.price || invoiceNetAmount(item);
+}
+
+function invoiceDiscountAmount(item) {
+  return item.discountAmount || Math.max(invoiceOrdinaryPrice(item) - invoiceNetAmount(item), 0);
+}
+
+function invoicePaidAmount(item) {
+  return item.paidAmount || 0;
+}
+
+function invoiceRemainingAmount(item) {
+  return Math.max(invoiceTotalAmount(item) - invoicePaidAmount(item), 0);
+}
+
+function invoiceIsOverdue(item) {
+  if (!item.dueDate || invoiceRemainingAmount(item) <= 0) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(item.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
+  return dueDate < today;
+}
+
+function invoiceDaysUntilDue(item) {
+  if (!item.dueDate || invoiceRemainingAmount(item) <= 0) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(item.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
+  return Math.ceil((dueDate.getTime() - today.getTime()) / 86400000);
+}
+
+function invoiceShouldSendReminder(item, daysBeforeDue = 5) {
+  const daysUntilDue = invoiceDaysUntilDue(item);
+  return daysUntilDue !== null && daysUntilDue <= daysBeforeDue;
+}
+
+function invoiceReminderRuleText(item, language) {
+  const daysUntilDue = invoiceDaysUntilDue(item);
+
+  if (daysUntilDue === null) return "";
+  if (daysUntilDue < 0) return language === "sv" ? "Fakturan ar forfallen." : "Invoice is overdue.";
+  if (daysUntilDue === 0) return language === "sv" ? "Fakturan forfaller idag." : "Invoice is due today.";
+  return language === "sv"
+    ? `Fakturan forfaller om ${daysUntilDue} dagar.`
+    : `Invoice is due in ${daysUntilDue} days.`;
+}
+
+function invoiceDueStatus(item, language) {
+  if (invoiceRemainingAmount(item) <= 0 || item.status === "PAID") {
+    return {
+      className: "due-status-paid",
+      label: language === "sv" ? "Betald" : "Paid"
+    };
+  }
+
+  const daysUntilDue = invoiceDaysUntilDue(item);
+
+  if (daysUntilDue === null) {
+    return {
+      className: "due-status-neutral",
+      label: language === "sv" ? "Inget forfallodatum" : "No due date"
+    };
+  }
+
+  if (daysUntilDue < 0) {
+    return {
+      className: "due-status-overdue",
+      label: language === "sv" ? `Forfallen ${Math.abs(daysUntilDue)} dagar` : `${Math.abs(daysUntilDue)} days overdue`
+    };
+  }
+
+  if (daysUntilDue === 0) {
+    return {
+      className: "due-status-today",
+      label: language === "sv" ? "Forfaller idag" : "Due today"
+    };
+  }
+
+  if (daysUntilDue <= 5) {
+    return {
+      className: "due-status-soon",
+      label: language === "sv" ? `Forfaller om ${daysUntilDue} dagar` : `Due in ${daysUntilDue} days`
+    };
+  }
+
+  return {
+    className: "due-status-ok",
+    label: language === "sv" ? `Forfaller om ${daysUntilDue} dagar` : `Due in ${daysUntilDue} days`
+  };
+}
+
+function invoiceSortPriority(item) {
+  if (invoiceRemainingAmount(item) <= 0 || item.status === "PAID") {
+    return 5;
+  }
+
+  const daysUntilDue = invoiceDaysUntilDue(item);
+
+  if (daysUntilDue === null) {
+    return 4;
+  }
+
+  if (daysUntilDue < 0) {
+    return 0;
+  }
+
+  if (daysUntilDue === 0) {
+    return 1;
+  }
+
+  if (daysUntilDue <= 5) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function compareInvoices(first, second) {
+  const priorityDifference = invoiceSortPriority(first) - invoiceSortPriority(second);
+
+  if (priorityDifference !== 0) {
+    return priorityDifference;
+  }
+
+  const firstDueDate = first.dueDate ? new Date(first.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+  const secondDueDate = second.dueDate ? new Date(second.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+
+  if (firstDueDate !== secondDueDate) {
+    return firstDueDate - secondDueDate;
+  }
+
+  return new Date(second.createdAt || 0) - new Date(first.createdAt || 0);
+}
+
+function customerInvoices(customer, invoices) {
+  return invoices.filter((item) => String(item.customer?.id || "") === String(customer.id));
+}
+
+function customerOutstandingAmount(customer, invoices) {
+  return customerInvoices(customer, invoices).reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+}
+
+function customerUnpaidInvoiceCount(customer, invoices) {
+  return customerInvoices(customer, invoices).filter((item) => invoiceRemainingAmount(item) > 0).length;
+}
+
+function compareCustomers(first, second, invoices) {
+  const firstOutstanding = customerOutstandingAmount(first, invoices);
+  const secondOutstanding = customerOutstandingAmount(second, invoices);
+
+  if (firstOutstanding !== secondOutstanding) {
+    return secondOutstanding - firstOutstanding;
+  }
+
+  if (first.archived !== second.archived) {
+    return first.archived ? 1 : -1;
+  }
+
+  return String(first.name || "").localeCompare(String(second.name || ""), "sv");
+}
+
+function addDays(dateValue, days) {
+  const date = new Date(dateValue);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function addMonths(dateValue, months) {
+  const date = new Date(dateValue);
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function nextContractDate(dateValue, interval) {
+  if (interval === "quarterly") return addMonths(dateValue, 3);
+  if (interval === "yearly") return addMonths(dateValue, 12);
+  return addMonths(dateValue, 1);
+}
+
+function invoiceHasSentReminder(item, method) {
+  return item.reminders?.some((reminder) => reminder.method === method && reminder.status === "SENT");
+}
+
+function invoiceHistoryLabel(reminder, language) {
+  if (reminder.method === "INVOICE_EMAIL") {
+    return language === "sv" ? "Faktura skickad via e-post" : "Invoice sent by email";
+  }
+
+  if (reminder.method === "INVOICE_MARKED_SENT") {
+    return language === "sv" ? "Faktura markerad som skickad" : "Invoice marked as sent";
+  }
+
+  if (reminder.method === "EMAIL") {
+    return language === "sv" ? "Paminnelse skickad via e-post" : "Reminder sent by email";
+  }
+
+  if (reminder.method === "EMAIL_DRAFT") {
+    return language === "sv" ? "E-postutkast oppnat" : "Email draft opened";
+  }
+
+  if (reminder.method === "COPY") {
+    return language === "sv" ? "Paminnelsetext kopierad/sparad" : "Reminder text copied/saved";
+  }
+
+  if (reminder.method?.startsWith("AUTO_OVERDUE_EMAIL")) {
+    return language === "sv" ? "Automatisk forfallen paminnelse" : "Automatic overdue reminder";
+  }
+
+  if (reminder.method?.startsWith("AUTO_EMAIL")) {
+    return language === "sv" ? "Automatisk fakturapaminnelse" : "Automatic invoice reminder";
+  }
+
+  return reminder.method || "-";
+}
+
+function nextAutomaticReminderText(item, settings, language) {
+  if (invoiceRemainingAmount(item) <= 0 || !item.dueDate) {
+    return language === "sv" ? "Ingen automatisk paminnelse kvar." : "No automatic reminder remaining.";
+  }
+
+  if (settings?.automaticInvoiceRemindersEnabled === false) {
+    return language === "sv" ? "Automatiska paminnelser ar avstangda." : "Automatic reminders are turned off.";
+  }
+
+  const beforeDays = settings?.invoiceReminderDaysBeforeDue || 5;
+  const beforeMethod = `AUTO_EMAIL_${beforeDays}_DAYS`;
+  const beforeDate = addDays(item.dueDate, -beforeDays);
+
+  if (!invoiceHasSentReminder(item, beforeMethod) && !invoiceIsOverdue(item)) {
+    return language === "sv"
+      ? `Nasta auto-paminnelse: ${beforeDate} (${beforeDays} dagar fore forfallodatum).`
+      : `Next auto reminder: ${beforeDate} (${beforeDays} days before due date).`;
+  }
+
+  if (settings?.overdueInvoiceRemindersEnabled === false) {
+    return language === "sv" ? "Forfallen auto-paminnelse ar avstangd." : "Overdue auto reminder is turned off.";
+  }
+
+  const overdueDays = settings?.overdueInvoiceReminderDaysAfterDue || 3;
+  const overdueMethod = `AUTO_OVERDUE_EMAIL_${overdueDays}_DAYS`;
+  const overdueDate = addDays(item.dueDate, overdueDays);
+
+  if (!invoiceHasSentReminder(item, overdueMethod)) {
+    return language === "sv"
+      ? `Nasta forfallna auto-paminnelse: ${overdueDate} (${overdueDays} dagar efter forfallodatum).`
+      : `Next overdue auto reminder: ${overdueDate} (${overdueDays} days after due date).`;
+  }
+
+  return language === "sv" ? "Alla automatiska paminnelser ar skickade." : "All automatic reminders have been sent.";
+}
+
+function defaultInvoiceReminderTemplate() {
+  return [
+    "Hej {kundnamn},",
+    "",
+    "Vi vill paminna om faktura {fakturanummer}.",
+    "Forfallodatum: {forfallodatum}.",
+    "Kvar att betala: {belopp} SEK.",
+    "",
+    "Betalning kan goras till PlusGiro {plusgiro} med OCR {ocr}.",
+    "Betalningsmottagare: {betalningsmottagare}.",
+    "",
+    "Vanliga halsningar,",
+    "{foretag}",
+    "{kontaktEpost}"
+  ].join("\n");
+}
+
+function defaultInvoiceEmailTemplate() {
+  return [
+    "Hej {kundnamn},",
+    "",
+    "Bifogat finns faktura {fakturanummer}.",
+    "Forfallodatum: {forfallodatum}.",
+    "Att betala: {belopp} SEK.",
+    "",
+    "Betalning kan goras till PlusGiro {plusgiro} med OCR {ocr}.",
+    "Betalningsmottagare: {betalningsmottagare}.",
+    "",
+    "Vanliga halsningar,",
+    "{foretag}",
+    "{kontaktEpost}"
+  ].join("\n");
+}
+
+function defaultOverdueInvoiceReminderTemplate() {
+  return [
+    "Hej {kundnamn},",
+    "",
+    "Vi saknar fortfarande betalning for faktura {fakturanummer}.",
+    "Fakturan forfoll {forfallodatum}.",
+    "Kvar att betala: {belopp} SEK.",
+    "",
+    "Betala till PlusGiro {plusgiro} med OCR {ocr}.",
+    "Betalningsmottagare: {betalningsmottagare}.",
+    "",
+    "Kontakta oss om betalningen redan ar gjord.",
+    "",
+    "Vanliga halsningar,",
+    "{foretag}",
+    "{kontaktEpost}"
+  ].join("\n");
+}
+
+function renderInvoiceEmailText(item, settings, templateOverride = null) {
+  const template = templateOverride || settings?.invoiceEmailTemplate || defaultInvoiceEmailTemplate();
+
+  return template
+    .replaceAll("{kundnamn}", item.customerName || "")
+    .replaceAll("{fakturanummer}", invoiceNumber(item))
+    .replaceAll("{forfallodatum}", item.dueDate || "")
+    .replaceAll("{belopp}", String(invoiceRemainingAmount(item)))
+    .replaceAll("{plusgiro}", item.plusGiro || "418 76 01-2")
+    .replaceAll("{ocr}", item.ocrNumber || "1055065900139")
+    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "Bank Norwegian")
+    .replaceAll("{foretag}", settings?.companyName || "AliBooks")
+    .replaceAll("{kontaktEpost}", settings?.contactEmail || "");
+}
+
+function renderInvoiceReminderText(item, settings, templateOverride = null) {
+  const template = templateOverride || settings?.invoiceReminderTemplate || defaultInvoiceReminderTemplate();
+
+  return template
+    .replaceAll("{kundnamn}", item.customerName || "")
+    .replaceAll("{fakturanummer}", invoiceNumber(item))
+    .replaceAll("{forfallodatum}", item.dueDate || "")
+    .replaceAll("{belopp}", String(invoiceRemainingAmount(item)))
+    .replaceAll("{plusgiro}", item.plusGiro || "418 76 01-2")
+    .replaceAll("{ocr}", item.ocrNumber || "1055065900139")
+    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "Bank Norwegian")
+    .replaceAll("{foretag}", settings?.companyName || "AliBooks")
+    .replaceAll("{kontaktEpost}", settings?.contactEmail || "");
+}
+
+function demoInvoiceForReminderPreview(settings) {
+  return {
+    id: 24,
+    customerName: "Maria Pettersson",
+    invoiceNumber: "F-2026-0024",
+    dueDate: "2026-07-17",
+    totalAmount: 1188,
+    paidAmount: 104,
+    plusGiro: settings?.plusGiro || "418 76 01-2",
+    ocrNumber: settings?.defaultOcr || "1055065900139",
+    paymentRecipient: settings?.paymentRecipient || "Bank Norwegian"
+  };
+}
+
+function invoiceReminderSubject(item) {
+  return `Paminnelse faktura ${invoiceNumber(item)}`;
+}
+
+function invoiceCustomerEmail(item) {
+  return item.customer?.email || "";
+}
+
+function invoiceNumber(item) {
+  return item.invoiceNumber || `F-${new Date().getFullYear()}-${String(item.id).padStart(4, "0")}`;
+}
+
+function expenseHasReceipt(expense) {
+  return Boolean(expense.hasReceipt || expense.receiptFileName || expense.receiptStoragePath);
+}
+
+function expenseCategoryLabel(category) {
+  const labels = {
+    "5420": "5420 Programvaror",
+    "5410": "5410 Forbrukningsinventarier",
+    "5800": "5800 Resekostnader",
+    "6570": "6570 Bankkostnader",
+    "4010": "4010 Inkop"
+  };
+
+  return labels[category] || category || "-";
+}
+
+function accountCompanyTypeLabel(companyType, language) {
+  if (companyType === "SOLE_TRADER") {
+    return language === "sv" ? "Enskild firma" : "Sole trader";
+  }
+
+  if (companyType === "LIMITED_COMPANY") {
+    return language === "sv" ? "Aktiebolag" : "Limited company";
+  }
+
+  return language === "sv" ? "Bada" : "Both";
+}
+
+function statusLabel(status, language) {
+  const value = status || "DRAFT";
+
+  if (language === "sv") {
+    if (value === "PAID") return "Betald";
+    if (value === "PARTIALLY_PAID") return "Delbetald";
+    if (value === "SENT") return "Skickad";
+    if (value === "CREDITED") return "Krediterad";
+    return "Utkast";
+  }
+
+  if (value === "PAID") return "Paid";
+  if (value === "PARTIALLY_PAID") return "Partially paid";
+  if (value === "SENT") return "Sent";
+  if (value === "CREDITED") return "Credited";
+  return "Draft";
+}
+
+function apiErrorMessage(data, fallback) {
+  return data?.message || data?.detail || data?.error || fallback;
+}
+
+function normalizeNameValue(value) {
+  return value
+    .toLowerCase()
+    .replaceAll("\u00e5", "a")
+    .replaceAll("\u00e4", "a")
+    .replaceAll("\u00f6", "o")
+    .replaceAll("\u00e5", "a")
+    .replaceAll("\u00e4", "a")
+    .replaceAll("\u00f6", "o")
+    .replaceAll("å", "a")
+    .replaceAll("ä", "a")
+    .replaceAll("ö", "o")
+    .replace(/[^a-z0-9\s]/g, " ");
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("sv-SE", {
+    dateStyle: "short",
+    timeStyle: "short"
+  });
+}
+
+function formatDateOnly(value) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleDateString("sv-SE");
+}
+
+function formatMonthLabel(monthKey, language) {
+  if (!monthKey) return "-";
+
+  const date = new Date(`${monthKey}-01T12:00:00`);
+
+  return date.toLocaleDateString(language === "sv" ? "sv-SE" : "en-GB", {
+    year: "numeric",
+    month: "long"
+  });
+}
+
+function dateInputString(date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  return {
+    from: dateInputString(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: dateInputString(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+  };
+}
+
+function monthRangeFromKey(monthKey) {
+  const [year, month] = String(monthKey || "").split("-").map(Number);
+
+  if (!year || !month) {
+    return { from: "", to: "" };
+  }
+
+  return {
+    from: dateInputString(new Date(year, month - 1, 1)),
+    to: dateInputString(new Date(year, month, 0))
+  };
+}
+
+function splitCsvLine(line, separator) {
+  const cells = [];
+  let current = "";
+  let quoted = false;
+
+  for (const character of line) {
+    if (character === "\"") {
+      quoted = !quoted;
+    } else if (character === separator && !quoted) {
+      cells.push(current.trim().replace(/^"|"$/g, ""));
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  cells.push(current.trim().replace(/^"|"$/g, ""));
+  return cells;
+}
+
+function normalizeHeader(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replaceAll("\u00e5", "a")
+    .replaceAll("\u00e4", "a")
+    .replaceAll("\u00f6", "o")
+    .replaceAll("å", "a")
+    .replaceAll("ä", "a")
+    .replaceAll("ö", "o")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function parseMoneyValue(value) {
+  const normalized = String(value || "")
+    .replace(/\s/g, "")
+    .replace("SEK", "")
+    .replace("kr", "")
+    .replace(",", ".");
+  const amount = Number(normalized.replace(/[^0-9.-]/g, ""));
+
+  return Number.isFinite(amount) ? Math.round(amount) : 0;
+}
+
+function parseBankCsv(text) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const separator = lines[0].includes(";") ? ";" : ",";
+  const headers = splitCsvLine(lines[0], separator).map(normalizeHeader);
+  const findHeader = (names) => {
+    return headers.findIndex((header) => names.some((name) => (name.length <= 2 ? header === name : header.includes(name))));
+  };
+  const dateIndex = findHeader(["datum", "date", "bokforingsdag", "transaktionsdag"]);
+  const descriptionIndex = findHeader(["text", "beskrivning", "description", "meddelande", "namn"]);
+  const referenceIndex = findHeader(["referens", "reference", "ocr", "meddelande"]);
+  const amountIndex = findHeader(["belopp", "amount", "summa"]);
+  const creditIndex = findHeader(["in", "credit", "kredit", "insattning", "insatt"]);
+  const debitIndex = findHeader(["ut", "debit", "debet", "uttag"]);
+
+  return lines.slice(1).map((line, index) => {
+    const cells = splitCsvLine(line, separator);
+    const fallbackDescription = cells.filter(Boolean).join(" ");
+    const singleAmount = amountIndex >= 0 ? parseMoneyValue(cells[amountIndex]) : 0;
+    const creditAmount = creditIndex >= 0 ? parseMoneyValue(cells[creditIndex]) : 0;
+    const debitAmount = debitIndex >= 0 ? parseMoneyValue(cells[debitIndex]) : 0;
+    const amount = singleAmount || creditAmount || -Math.abs(debitAmount) || parseMoneyValue(cells.at(-1));
+
+    return {
+      id: `bank-${Date.now()}-${index}`,
+      date: cells[dateIndex] || "",
+      description: cells[descriptionIndex] || fallbackDescription,
+      reference: cells[referenceIndex] || "",
+      amount,
+      raw: line
+    };
+  }).filter((row) => row.description || row.amount);
+}
+
+function currentQuarterRange() {
+  const now = new Date();
+  const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+  return {
+    from: dateInputString(new Date(now.getFullYear(), quarterStartMonth, 1)),
+    to: dateInputString(new Date(now.getFullYear(), quarterStartMonth + 3, 0))
+  };
+}
+
+function currentYearRange() {
+  const now = new Date();
+  return {
+    from: dateInputString(new Date(now.getFullYear(), 0, 1)),
+    to: dateInputString(new Date(now.getFullYear(), 11, 31))
+  };
+}
+
+const viewKeys = [
+  "overview",
+  "customers",
+  "invoices",
+  "contracts",
+  "services",
+  "payments",
+  "uploaded",
+  "bookkeeping",
+  "accounts",
+  "vat",
+  "reports",
+  "settings"
+];
+
+const invoiceFilterKeys = ["all", "draft", "sent", "paid", "unpaid", "overdue", "dueSoon"];
+const expenseFilterKeys = ["all", "withReceipt", "missingReceipt"];
+const customerFilterKeys = ["active", "archived", "all", "outstanding"];
+const paymentOverviewFilterKeys = ["open", "overdue", "dueSoon", "partiallyPaid", "sent"];
+const bookkeepingFilterKeys = ["all", "original", "corrections", "corrected"];
+const expenseCategoryKeys = ["5420", "5410", "5800", "6570", "4010"];
+const localPreferenceKeys = [
+  "alibooks-language",
+  "alibooks-active-view",
+  "alibooks-invoice-filter",
+  "alibooks-invoice-date-from",
+  "alibooks-invoice-date-to",
+  "alibooks-invoice-search",
+  "alibooks-expense-filter",
+  "alibooks-expense-category-filter",
+  "alibooks-expense-date-from",
+  "alibooks-expense-date-to",
+  "alibooks-expense-search",
+  "alibooks-customer-filter",
+  "alibooks-customer-search",
+  "alibooks-payment-overview-filter",
+  "alibooks-payment-overview-search",
+  "alibooks-bookkeeping-filter",
+  "alibooks-bookkeeping-search",
+  "alibooks-bookkeeping-date-from",
+  "alibooks-bookkeeping-date-to",
+  "alibooks-selected-customer-id",
+  "alibooks-selected-service-id",
+  "alibooks-invoice-quantity",
+  "alibooks-contracts",
+  "alibooks-expense-category",
+  "alibooks-ai-assistant-messages"
+];
+
+function App() {
+  const authFormRef = useRef(null);
+  const [services, setServices] = useState([]);
+  const [adminServices, setAdminServices] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [vatReport, setVatReport] = useState(null);
+  const [expenses, setExpenses] = useState([]);
+  const [reminders, setReminders] = useState([]);
+  const [advisorSummary, setAdvisorSummary] = useState(null);
+  const [aiAssistantQuestion, setAiAssistantQuestion] = useState("");
+  const [aiAssistantMessages, setAiAssistantMessages] = useState(() => {
+    try {
+      const savedMessages = JSON.parse(localStorage.getItem("alibooks-ai-assistant-messages") || "[]");
+      return Array.isArray(savedMessages) ? savedMessages.slice(-8) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const [aiAssistantLoading, setAiAssistantLoading] = useState(false);
+  const [automaticReminderMessage, setAutomaticReminderMessage] = useState("");
+  const [automaticReminderResult, setAutomaticReminderResult] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [generatedJwtSecret, setGeneratedJwtSecret] = useState("");
+  const [profitAndLoss, setProfitAndLoss] = useState(null);
+  const [balanceReport, setBalanceReport] = useState(null);
+  const [settingsMessage, setSettingsMessage] = useState("");
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseNetAmount, setExpenseNetAmount] = useState("");
+  const [expenseVatAmount, setExpenseVatAmount] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState(() => {
+    const savedCategory = localStorage.getItem("alibooks-expense-category");
+    return expenseCategoryKeys.includes(savedCategory) ? savedCategory : "5420";
+  });
+  const [expenseReceiptFile, setExpenseReceiptFile] = useState(null);
+  const [manualVoucherDate, setManualVoucherDate] = useState(new Date().toISOString().slice(0, 10));
+  const [manualDescription, setManualDescription] = useState("");
+  const [manualDebitAccount, setManualDebitAccount] = useState("");
+  const [manualCreditAccount, setManualCreditAccount] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPersonalNumber, setCustomerPersonalNumber] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerPostalCode, setCustomerPostalCode] = useState("");
+  const [customerCity, setCustomerCity] = useState("");
+  const [editingCustomerId, setEditingCustomerId] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(() => localStorage.getItem("alibooks-selected-customer-id") || "");
+  const [selectedServiceId, setSelectedServiceId] = useState(() => localStorage.getItem("alibooks-selected-service-id") || "");
+  const [invoiceQuantity, setInvoiceQuantity] = useState(() => {
+    const savedQuantity = localStorage.getItem("alibooks-invoice-quantity");
+    return Number(savedQuantity) > 0 ? savedQuantity : "1";
+  });
+  const [contracts, setContracts] = useState([]);
+  const [contractCustomerId, setContractCustomerId] = useState("");
+  const [contractServiceId, setContractServiceId] = useState("");
+  const [contractQuantity, setContractQuantity] = useState("1");
+  const [contractInterval, setContractInterval] = useState("monthly");
+  const [contractNextDate, setContractNextDate] = useState(new Date().toISOString().slice(0, 10));
+  const [contractMessage, setContractMessage] = useState("");
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [serviceName, setServiceName] = useState("");
+  const [serviceDescription, setServiceDescription] = useState("");
+  const [servicePrice, setServicePrice] = useState("");
+  const [serviceDiscountPrice, setServiceDiscountPrice] = useState("");
+  const [serviceDiscountLabel, setServiceDiscountLabel] = useState("");
+  const [serviceActive, setServiceActive] = useState(true);
+  const [serviceMessage, setServiceMessage] = useState("");
+  const [invoice, setInvoice] = useState(null);
+  const [error, setError] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [token, setToken] = useState(localStorage.getItem("alibooks-token") || "");
+  const [currentEmail, setCurrentEmail] = useState(localStorage.getItem("alibooks-email") || "");
+  const [language, setLanguage] = useState(() => {
+    const savedLanguage = localStorage.getItem("alibooks-language");
+    return savedLanguage === "en" ? "en" : "sv";
+  });
+  const [customerMessage, setCustomerMessage] = useState("");
+  const [activeView, setActiveView] = useState(() => {
+    const savedView = localStorage.getItem("alibooks-active-view");
+    return viewKeys.includes(savedView) ? savedView : "overview";
+  });
+  const [invoiceFilter, setInvoiceFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-invoice-filter");
+    return invoiceFilterKeys.includes(savedFilter) ? savedFilter : "all";
+  });
+  const [invoiceDateFrom, setInvoiceDateFrom] = useState(() => localStorage.getItem("alibooks-invoice-date-from") || "");
+  const [invoiceDateTo, setInvoiceDateTo] = useState(() => localStorage.getItem("alibooks-invoice-date-to") || "");
+  const [customerFilter, setCustomerFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-customer-filter");
+    return customerFilterKeys.includes(savedFilter) ? savedFilter : "active";
+  });
+  const [paymentOverviewFilter, setPaymentOverviewFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-payment-overview-filter");
+    return paymentOverviewFilterKeys.includes(savedFilter) ? savedFilter : "open";
+  });
+  const [paymentOverviewSearch, setPaymentOverviewSearch] = useState(() => localStorage.getItem("alibooks-payment-overview-search") || "");
+  const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
+    return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
+  });
+  const [bookkeepingSearch, setBookkeepingSearch] = useState(() => localStorage.getItem("alibooks-bookkeeping-search") || "");
+  const [bookkeepingDateFrom, setBookkeepingDateFrom] = useState(() => localStorage.getItem("alibooks-bookkeeping-date-from") || "");
+  const [bookkeepingDateTo, setBookkeepingDateTo] = useState(() => localStorage.getItem("alibooks-bookkeeping-date-to") || "");
+  const [expenseFilter, setExpenseFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-expense-filter");
+    return expenseFilterKeys.includes(savedFilter) ? savedFilter : "all";
+  });
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState(() => localStorage.getItem("alibooks-expense-category-filter") || "all");
+  const [expenseDateFrom, setExpenseDateFrom] = useState(() => localStorage.getItem("alibooks-expense-date-from") || "");
+  const [expenseDateTo, setExpenseDateTo] = useState(() => localStorage.getItem("alibooks-expense-date-to") || "");
+  const [expenseSearch, setExpenseSearch] = useState(() => localStorage.getItem("alibooks-expense-search") || "");
+  const [customerSearch, setCustomerSearch] = useState(() => localStorage.getItem("alibooks-customer-search") || "");
+  const [invoiceSearch, setInvoiceSearch] = useState(() => localStorage.getItem("alibooks-invoice-search") || "");
+  const [paymentDates, setPaymentDates] = useState({});
+  const [paymentAmounts, setPaymentAmounts] = useState({});
+  const [paymentReferences, setPaymentReferences] = useState({});
+  const [bankImportRows, setBankImportRows] = useState([]);
+  const [bankImportFilter, setBankImportFilter] = useState("all");
+  const [bankImportSearch, setBankImportSearch] = useState("");
+  const [bankImportMessage, setBankImportMessage] = useState("");
+  const [bankImportExpenseCategories, setBankImportExpenseCategories] = useState({});
+  const [bankImportExpenseVatRates, setBankImportExpenseVatRates] = useState({});
+  const [bankImportExpenseDescriptions, setBankImportExpenseDescriptions] = useState({});
+  const [lastCreatedBankImportExpense, setLastCreatedBankImportExpense] = useState(null);
+  const [skippedBankImportRows, setSkippedBankImportRows] = useState([]);
+  const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
+  const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
+  const [stripePayoutFeeAmount, setStripePayoutFeeAmount] = useState("");
+  const [stripePayoutReference, setStripePayoutReference] = useState("");
+  const [stripePayoutMessage, setStripePayoutMessage] = useState("");
+  const [stripePayouts, setStripePayouts] = useState([]);
+  const [stripeWebsiteSaleDate, setStripeWebsiteSaleDate] = useState(new Date().toISOString().slice(0, 10));
+  const [stripeWebsiteSaleAmount, setStripeWebsiteSaleAmount] = useState("");
+  const [stripeWebsiteSaleReference, setStripeWebsiteSaleReference] = useState("");
+  const [stripeWebsiteSaleMessage, setStripeWebsiteSaleMessage] = useState("");
+  const [copiedPaymentInfoId, setCopiedPaymentInfoId] = useState(null);
+  const [copiedExpenseInfoId, setCopiedExpenseInfoId] = useState(null);
+  const [copiedAiMessageId, setCopiedAiMessageId] = useState(null);
+  const t = copy[language];
+  const accountingLockedThroughDate = settings?.accountingLockedThroughDate || "";
+  const manualVoucherDateIsLocked = Boolean(
+    accountingLockedThroughDate
+      && manualVoucherDate
+      && manualVoucherDate <= accountingLockedThroughDate
+  );
+  const expenseDateIsLocked = isAccountingDateLocked(expenseDate);
+
+  useEffect(() => {
+    loadServices();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-language", language);
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-active-view", activeView);
+  }, [activeView]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-invoice-filter", invoiceFilter);
+    localStorage.setItem("alibooks-invoice-date-from", invoiceDateFrom);
+    localStorage.setItem("alibooks-invoice-date-to", invoiceDateTo);
+    localStorage.setItem("alibooks-invoice-search", invoiceSearch);
+  }, [invoiceFilter, invoiceDateFrom, invoiceDateTo, invoiceSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-expense-filter", expenseFilter);
+    localStorage.setItem("alibooks-expense-category-filter", expenseCategoryFilter);
+    localStorage.setItem("alibooks-expense-date-from", expenseDateFrom);
+    localStorage.setItem("alibooks-expense-date-to", expenseDateTo);
+    localStorage.setItem("alibooks-expense-search", expenseSearch);
+  }, [expenseFilter, expenseCategoryFilter, expenseDateFrom, expenseDateTo, expenseSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-customer-filter", customerFilter);
+    localStorage.setItem("alibooks-customer-search", customerSearch);
+  }, [customerFilter, customerSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-payment-overview-filter", paymentOverviewFilter);
+    localStorage.setItem("alibooks-payment-overview-search", paymentOverviewSearch);
+  }, [paymentOverviewFilter, paymentOverviewSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
+    localStorage.setItem("alibooks-bookkeeping-search", bookkeepingSearch);
+    localStorage.setItem("alibooks-bookkeeping-date-from", bookkeepingDateFrom);
+    localStorage.setItem("alibooks-bookkeeping-date-to", bookkeepingDateTo);
+  }, [bookkeepingFilter, bookkeepingSearch, bookkeepingDateFrom, bookkeepingDateTo]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-ai-assistant-messages", JSON.stringify(aiAssistantMessages.slice(-8)));
+  }, [aiAssistantMessages]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-selected-customer-id", selectedCustomerId);
+  }, [selectedCustomerId]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-selected-service-id", selectedServiceId);
+  }, [selectedServiceId]);
+
+  useEffect(() => {
+    if (Number(invoiceQuantity) > 0) {
+      localStorage.setItem("alibooks-invoice-quantity", invoiceQuantity);
+    }
+  }, [invoiceQuantity]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-expense-category", expenseCategory);
+  }, [expenseCategory]);
+
+  useEffect(() => {
+    if (token) {
+      loadAdminServices();
+      loadInvoices();
+      loadCustomers();
+      loadJournalEntries();
+      loadAccounts();
+      loadVatReport();
+      loadExpenses();
+      loadReminders();
+      loadAdvisorSummary();
+      loadSettings();
+      loadSystemStatus();
+      loadProfitAndLoss();
+      loadBalanceReport();
+      loadContracts();
+      loadStripePayouts();
+    }
+  }, [token]);
+
+  function authHeaders(authToken = token) {
+    return {
+      Authorization: `Bearer ${authToken}`
+    };
+  }
+
+  function isAccountingDateLocked(date) {
+    return Boolean(accountingLockedThroughDate && date && date <= accountingLockedThroughDate);
+  }
+
+  function lockedAccountingMessage(date) {
+    const formattedDate = formatDateOnly(accountingLockedThroughDate || date);
+    return language === "sv"
+      ? `Perioden ar last till och med ${formattedDate}. Valj ett senare datum.`
+      : `The period is locked through ${formattedDate}. Choose a later date.`;
+  }
+
+  async function loadServices() {
+    try {
+      const response = await fetch(`${apiUrl}/services`);
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setServices([]);
+        setError(apiErrorMessage(data, "Could not load services."));
+        return;
+      }
+      setServices(data);
+      setSelectedServiceId((current) => {
+        if (data.some((service) => String(service.id) === String(current))) {
+          return current;
+        }
+
+        return String(data[0]?.id || "");
+      });
+    } catch {
+      setError("Could not load services.");
+    }
+  }
+
+  async function loadAdminServices(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/products/admin`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setAdminServices([]);
+        setError(apiErrorMessage(data, "Could not load service admin."));
+        return;
+      }
+      setAdminServices(data);
+    } catch {
+      setError("Could not load service admin.");
+    }
+  }
+
+  async function loadVatReport(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/vat-report`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setVatReport(data);
+    } catch {
+      setError("Could not load VAT report.");
+    }
+  }
+
+  async function loadExpenses(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/expenses`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setExpenses([]);
+        setError(apiErrorMessage(data, "Could not load expenses."));
+        return;
+      }
+      setExpenses(data);
+    } catch {
+      setError("Could not load expenses.");
+    }
+  }
+
+  async function loadContracts(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/contracts`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setContracts([]);
+        setError(apiErrorMessage(data, "Could not load contracts."));
+        return;
+      }
+      setContracts(data);
+    } catch {
+      setError("Could not load contracts.");
+    }
+  }
+
+  async function loadReminders(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/reminders`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setReminders(data);
+    } catch {
+      setError("Could not load reminders.");
+    }
+  }
+
+  async function loadAdvisorSummary(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/advisor-summary`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setAdvisorSummary(data);
+    } catch {
+      setError("Could not load advisor summary.");
+    }
+  }
+
+  async function runAutomaticInvoiceReminders() {
+    setError("");
+    setAutomaticReminderMessage("");
+    setAutomaticReminderResult(null);
+
+    const response = await fetch(`${apiUrl}/reminders/automatic/run`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        setError(language === "sv"
+          ? "Automatik-endpointen hittades inte. Stoppa och starta om CloudShopApplication i IntelliJ sa nya backend-koden laddas."
+          : "Automation endpoint was not found. Stop and restart CloudShopApplication in IntelliJ so the new backend code is loaded.");
+        return;
+      }
+
+      setError(apiErrorMessage(data, "Could not run automatic reminders."));
+      return;
+    }
+
+    const automationDisabled = settings?.automaticInvoiceRemindersEnabled === false;
+    setAutomaticReminderResult(data);
+    setAutomaticReminderMessage(
+      automationDisabled
+        ? (language === "sv" ? "Automatiken ar avstangd i Installningar." : "Automation is turned off in Settings.")
+        : (language === "sv"
+          ? `Automatik klar: ${data.checked} kontrollerade, ${data.sent} skickade, ${data.skipped} hoppades over.`
+          : `Automation complete: ${data.checked} checked, ${data.sent} sent, ${data.skipped} skipped.`)
+    );
+    loadInvoices();
+    loadReminders();
+  }
+
+  async function loadSettings(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/settings`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setSettings(data);
+    } catch {
+      setError("Could not load settings.");
+    }
+  }
+
+  async function loadSystemStatus() {
+    try {
+      const response = await fetch(`${apiUrl}/system/status`);
+      if (!response.ok) {
+        setSystemStatus({
+          backend: { ok: false },
+          database: { ok: false },
+          email: { configured: false },
+          stripe: { configured: false },
+          error: response.status === 404
+            ? (language === "sv"
+              ? "Status-endpointen hittades inte. Starta om CloudShopApplication i IntelliJ."
+              : "Status endpoint was not found. Restart CloudShopApplication in IntelliJ.")
+            : (language === "sv" ? "Kunde inte hamta systemstatus." : "Could not load system status.")
+        });
+        return;
+      }
+
+      const data = await response.json();
+      setSystemStatus(data);
+    } catch {
+      setSystemStatus({
+        backend: { ok: false },
+        database: { ok: false },
+        email: { configured: false },
+        stripe: { configured: false },
+        error: language === "sv"
+          ? "Backend svarar inte just nu."
+          : "Backend is not responding right now."
+      });
+    }
+  }
+
+  async function loadProfitAndLoss(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/profit-and-loss`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setProfitAndLoss(data);
+    } catch {
+      setError("Could not load profit and loss report.");
+    }
+  }
+
+  async function loadBalanceReport(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/balance-report`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      setBalanceReport(data);
+    } catch {
+      setError("Could not load balance report.");
+    }
+  }
+
+  async function loadJournalEntries(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/journal-entries`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setJournalEntries([]);
+        setError(apiErrorMessage(data, "Could not load journal entries."));
+        return;
+      }
+      setJournalEntries(data);
+    } catch {
+      setError("Could not load journal entries.");
+    }
+  }
+
+  async function loadStripePayouts(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/stripe-payouts`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setStripePayouts([]);
+        return;
+      }
+      setStripePayouts(data);
+    } catch {
+      setStripePayouts([]);
+    }
+  }
+
+  async function loadAccounts(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/accounts`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setAccounts([]);
+        setError(apiErrorMessage(data, "Could not load accounts."));
+        return;
+      }
+      setAccounts(data);
+    } catch {
+      setError("Could not load accounts.");
+    }
+  }
+
+  async function loadCustomers(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/customers`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setCustomers([]);
+        setError(apiErrorMessage(data, "Could not load customers."));
+        return;
+      }
+      setCustomers(data);
+      setSelectedCustomerId((current) => {
+        if (data.some((customer) => String(customer.id) === String(current))) {
+          return current;
+        }
+
+        return String(data[0]?.id || "");
+      });
+    } catch {
+      setError("Could not load customers.");
+    }
+  }
+
+  async function loadInvoices(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/invoices`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setInvoices([]);
+        setError(apiErrorMessage(data, "Could not load invoices."));
+        return;
+      }
+      setInvoices(data);
+    } catch {
+      setError("Could not load invoices.");
+    }
+  }
+
+  async function createInvoiceRequest({ customerId, serviceId, quantity }) {
+    setError("");
+    setInvoice(null);
+
+    const invoiceQuantityValue = Number(quantity || 1);
+
+    if (invoiceQuantityValue <= 0) {
+      setError(language === "sv" ? "Antal maste vara minst 1." : "Quantity must be at least 1.");
+      return null;
+    }
+
+    const invoiceDate = new Date().toISOString().slice(0, 10);
+    if (isAccountingDateLocked(invoiceDate)) {
+      setError(lockedAccountingMessage(invoiceDate));
+      return null;
+    }
+
+    const response = await fetch(`${apiUrl}/invoices`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        customerId: customerId || null,
+        productId: serviceId,
+        quantity: invoiceQuantityValue
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create invoice."));
+      return null;
+    }
+
+    setInvoice(data);
+    loadInvoices();
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+    return data;
+  }
+
+  async function handleCreateInvoice(event) {
+    event.preventDefault();
+    await createInvoiceRequest({
+      customerId: selectedCustomerId,
+      serviceId: selectedServiceId,
+      quantity: invoiceQuantity
+    });
+  }
+
+  async function handleCreateContract(event) {
+    event.preventDefault();
+    setContractMessage("");
+    setError("");
+
+    if (!contractCustomerId || !contractServiceId) {
+      setContractMessage(language === "sv" ? "Valj kund och tjanst for avtalet." : "Choose customer and service for the contract.");
+      return;
+    }
+
+    if (Number(contractQuantity || 1) <= 0) {
+      setContractMessage(language === "sv" ? "Antal maste vara minst 1." : "Quantity must be at least 1.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/contracts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        customerId: Number(contractCustomerId),
+        serviceId: Number(contractServiceId),
+        quantity: Number(contractQuantity || 1),
+        interval: contractInterval,
+        nextInvoiceDate: contractNextDate
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create contract."));
+      return;
+    }
+
+    setContracts((current) => [data, ...current]);
+    setContractMessage(language === "sv" ? "Avtal sparades." : "Contract saved.");
+  }
+
+  async function createContractInvoice(contract) {
+    setContractMessage("");
+    setError("");
+
+    const response = await fetch(`${apiUrl}/contracts/${contract.id}/invoice`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create contract invoice."));
+      return;
+    }
+
+    setInvoice(data);
+    loadContracts();
+    loadInvoices();
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+    setContractMessage(language === "sv" ? "Avtalsfaktura skapades." : "Contract invoice created.");
+  }
+
+  async function createAllDueContractInvoices() {
+    setContractMessage("");
+    setError("");
+
+    if (dueContracts.length === 0) {
+      setContractMessage(language === "sv" ? "Inga avtal ar redo att fakturera." : "No contracts are due for invoicing.");
+      return;
+    }
+
+    let createdCount = 0;
+
+    for (const contract of dueContracts) {
+      const response = await fetch(`${apiUrl}/contracts/${contract.id}/invoice`, {
+        method: "POST",
+        headers: authHeaders()
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(apiErrorMessage(data, "Could not create all due contract invoices."));
+        break;
+      }
+
+      setInvoice(data);
+      createdCount += 1;
+    }
+
+    loadContracts();
+    loadInvoices();
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+
+    if (createdCount > 0) {
+      setContractMessage(language === "sv"
+        ? `${createdCount} avtalsfaktura/avtalsfakturor skapades.`
+        : `${createdCount} contract invoice(s) created.`);
+    }
+  }
+
+  async function toggleContractActive(contract) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/contracts/${contract.id}/status`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({ active: !contract.active })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not update contract."));
+      return;
+    }
+
+    setContracts((current) => current.map((item) => (item.id === contract.id ? data : item)));
+  }
+
+  async function deleteContract(contractId) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/contracts/${contractId}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not delete contract."));
+      return;
+    }
+
+    setContracts((current) => current.filter((item) => item.id !== contractId));
+  }
+
+  async function handleSaveSettings(event) {
+    event.preventDefault();
+    setError("");
+    setSettingsMessage("");
+
+    const response = await fetch(`${apiUrl}/settings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify(settings)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not save settings."));
+      return;
+    }
+
+    setSettings(data);
+    setSettingsMessage(t.settingsSaved);
+    loadAccounts();
+    loadBalanceReport();
+  }
+
+  async function sendSettingsTestEmail() {
+    setError("");
+    setSettingsMessage("");
+
+    const response = await fetch(`${apiUrl}/settings/test-email`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not send test email."));
+      return;
+    }
+
+    setSettings(data);
+    setSettingsMessage(language === "sv"
+      ? `Testmail skickat till ${data.contactEmail}.`
+      : `Test email sent to ${data.contactEmail}.`);
+  }
+
+  async function copyConfigValue(value) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setSettingsMessage(
+        value.includes("\n")
+          ? (language === "sv" ? "Konfigurationsblock kopierat." : "Configuration block copied.")
+          : (language === "sv" ? "Konfigurationsrad kopierad." : "Configuration line copied.")
+      );
+    } catch {
+      setError(language === "sv" ? "Kunde inte kopiera raden." : "Could not copy the line.");
+    }
+  }
+
+  function generateJwtSecret() {
+    const bytes = new Uint8Array(48);
+    window.crypto.getRandomValues(bytes);
+    const secret = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    setGeneratedJwtSecret(secret);
+    setSettingsMessage(language === "sv" ? "Ny JWT-hemlighet genererad." : "New JWT secret generated.");
+    return secret;
+  }
+
+  function jwtSecretConfigLine() {
+    return `JWT_SECRET=${generatedJwtSecret || "change_me_to_a_long_random_secret"}`;
+  }
+
+  function missingConfigLines() {
+    const lines = [];
+
+    if (!systemStatus?.security?.jwtStrong) {
+      lines.push(jwtSecretConfigLine());
+    }
+
+    if (!systemStatus?.stripe?.configured) {
+      lines.push("STRIPE_SECRET_KEY=sk_test_...");
+    }
+
+    if (!systemStatus?.stripe?.webhookConfigured) {
+      lines.push("STRIPE_WEBHOOK_SECRET=whsec_...");
+    }
+
+    if (!systemStatus?.email?.configured) {
+      lines.push(
+        "SPRING_MAIL_HOST=smtp.gmail.com",
+        "SPRING_MAIL_PORT=587",
+        "SPRING_MAIL_USERNAME=din-email@gmail.com",
+        "SPRING_MAIL_PASSWORD=app-losenord-fran-google"
+      );
+    }
+
+    return lines;
+  }
+
+  function copyMissingConfigValues() {
+    const lines = missingConfigLines();
+
+    if (lines.length === 0) {
+      setSettingsMessage(language === "sv" ? "Alla konfigurationsvarden finns redan." : "All configuration values are already set.");
+      return;
+    }
+
+    copyConfigValue(lines.join("\n"));
+  }
+
+  async function clearTestData() {
+    setError("");
+    setSettingsMessage("");
+
+    const confirmed = window.confirm(
+      language === "sv"
+        ? "Rensa alla kunder, fakturor, kostnader och bokforingsrader? Detta ar bara for testdata."
+        : "Clear all customers, invoices, expenses and bookkeeping rows? This is only for test data."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/test-data`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not clear test data."));
+      return;
+    }
+
+    setInvoices([]);
+    setCustomers([]);
+    setSelectedCustomerId("");
+    setJournalEntries([]);
+    setExpenses([]);
+    setVatReport(null);
+    setProfitAndLoss(null);
+    setBalanceReport(null);
+    setSettingsMessage(t.testDataCleared);
+  }
+
+  function clearLocalPreferences() {
+    localPreferenceKeys.forEach((key) => localStorage.removeItem(key));
+    setLanguage("sv");
+    setActiveView("overview");
+    setInvoiceFilter("all");
+    setInvoiceDateFrom("");
+    setInvoiceDateTo("");
+    setInvoiceSearch("");
+    setCustomerFilter("active");
+    setCustomerSearch("");
+    setPaymentOverviewFilter("open");
+    setPaymentOverviewSearch("");
+    setBookkeepingFilter("all");
+    setBookkeepingSearch("");
+    setBookkeepingDateFrom("");
+    setBookkeepingDateTo("");
+    setExpenseFilter("all");
+    setExpenseCategoryFilter("all");
+    setExpenseDateFrom("");
+    setExpenseDateTo("");
+    setExpenseSearch("");
+    setSelectedCustomerId(customers[0]?.id ? String(customers[0].id) : "");
+    setSelectedServiceId(services[0]?.id ? String(services[0].id) : "");
+    setInvoiceQuantity("1");
+    setExpenseCategory("5420");
+    setSettingsMessage(language === "sv" ? "Lokala val har aterstallts." : "Local preferences reset.");
+  }
+
+  async function handleCreateExpense(event) {
+    event.preventDefault();
+    setError("");
+
+    if (expenseDateIsLocked) {
+      setError(lockedAccountingMessage(expenseDate));
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/expenses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        expenseDate,
+        description: expenseDescription,
+        netAmount: Number(expenseNetAmount),
+        vatAmount: Number(expenseVatAmount),
+        category: expenseCategory,
+        paidFrom: "1930"
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create expense."));
+      return;
+    }
+
+    let savedExpense = data;
+
+    if (expenseReceiptFile) {
+      const uploadedExpense = await uploadExpenseReceipt(data.id, expenseReceiptFile);
+      savedExpense = uploadedExpense || data;
+    }
+
+    setExpenses((current) => [...current, savedExpense]);
+    setExpenseDescription("");
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setExpenseNetAmount("");
+    setExpenseVatAmount("");
+    setExpenseReceiptFile(null);
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function handleCreateManualJournalEntry(event) {
+    event.preventDefault();
+    setError("");
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        voucherDate: manualVoucherDate,
+        description: manualDescription,
+        debitAccountNumber: manualDebitAccount,
+        creditAccountNumber: manualCreditAccount,
+        amount: Number(manualAmount)
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create manual voucher."));
+      return;
+    }
+
+    setJournalEntries((current) => [...current, ...data]);
+    setManualDescription("");
+    setManualVoucherDate(new Date().toISOString().slice(0, 10));
+    setManualAmount("");
+    loadJournalEntries();
+    loadStripePayouts();
+    loadVatReport();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function createCorrectionVoucher(voucherNumber) {
+    setError("");
+
+    const correctionDate = new Date().toISOString().slice(0, 10);
+    if (isAccountingDateLocked(correctionDate)) {
+      setError(lockedAccountingMessage(correctionDate));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      language === "sv"
+        ? `Skapa en rattelseverifikation som vander ${voucherNumber}?`
+        : `Create a correction voucher that reverses ${voucherNumber}?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/${encodeURIComponent(voucherNumber)}/correction`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({ voucherDate: correctionDate })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create correction voucher."));
+      return;
+    }
+
+    if (Array.isArray(data)) {
+      setJournalEntries((current) => [...current, ...data]);
+    }
+
+    loadJournalEntries();
+    loadVatReport();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function uploadExpenseReceipt(expenseId, file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${apiUrl}/expenses/${expenseId}/receipt`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not upload receipt."));
+      return null;
+    }
+
+    return data;
+  }
+
+  async function openExpenseReceipt(expenseId) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/expenses/${expenseId}/receipt`, {
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not open receipt."));
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function attachReceiptToExpense(expenseId, file) {
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    const uploadedExpense = await uploadExpenseReceipt(expenseId, file);
+
+    if (uploadedExpense) {
+      setExpenses((current) => current.map((expense) => (expense.id === expenseId ? uploadedExpense : expense)));
+      loadExpenses();
+    }
+  }
+
+  async function handleCreateCustomer(event) {
+    event.preventDefault();
+    setError("");
+    setCustomerMessage("");
+
+    const isEditingCustomer = Boolean(editingCustomerId);
+    const response = await fetch(`${apiUrl}/customers${isEditingCustomer ? `/${editingCustomerId}` : ""}`, {
+      method: isEditingCustomer ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: customerName,
+        email: customerEmail,
+        personalNumber: customerPersonalNumber,
+        address: customerAddress,
+        phone: customerPhone,
+        postalCode: customerPostalCode,
+        city: customerCity
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create customer."));
+      return;
+    }
+
+    setCustomers((current) => {
+      if (isEditingCustomer) {
+        return current.map((customer) => (customer.id === data.id ? data : customer));
+      }
+
+      return [...current, data];
+    });
+    setSelectedCustomerId(String(data.id));
+    setEditingCustomerId(null);
+    setCustomerName("");
+    setCustomerEmail("");
+    setCustomerPersonalNumber("");
+    setCustomerAddress("");
+    setCustomerPhone("");
+    setCustomerPostalCode("");
+    setCustomerCity("");
+    setCustomerMessage(isEditingCustomer ? (language === "sv" ? "Kunden uppdaterades." : "Customer updated.") : t.customerSaved);
+  }
+
+  function startEditCustomer(customer) {
+    setEditingCustomerId(customer.id);
+    setSelectedCustomerId(String(customer.id));
+    setCustomerName(customer.name || "");
+    setCustomerEmail(customer.email || "");
+    setCustomerPersonalNumber(customer.personalNumber || "");
+    setCustomerAddress(customer.address || "");
+    setCustomerPhone(customer.phone || "");
+    setCustomerPostalCode(customer.postalCode || "");
+    setCustomerCity(customer.city || "");
+    setCustomerMessage("");
+    setError("");
+  }
+
+  function cancelEditCustomer() {
+    setEditingCustomerId(null);
+    setCustomerName("");
+    setCustomerEmail("");
+    setCustomerPersonalNumber("");
+    setCustomerAddress("");
+    setCustomerPhone("");
+    setCustomerPostalCode("");
+    setCustomerCity("");
+  }
+
+  async function handleSaveService(event) {
+    event.preventDefault();
+    setError("");
+    setServiceMessage("");
+
+    const price = Number(servicePrice || 0);
+    const discountPrice = Number(serviceDiscountPrice || 0);
+
+    if (serviceName.trim().length < 2) {
+      setError(language === "sv" ? "Tjanstens namn maste innehalla minst 2 tecken." : "Service name must contain at least 2 characters.");
+      return;
+    }
+
+    if (price < 0 || discountPrice < 0) {
+      setError(language === "sv" ? "Pris kan inte vara negativt." : "Price cannot be negative.");
+      return;
+    }
+
+    if (discountPrice > 0 && discountPrice >= price) {
+      setError(language === "sv" ? "Rabattpriset maste vara lagre an ordinarie pris." : "Discount price must be lower than ordinary price.");
+      return;
+    }
+
+    const isEditingService = Boolean(editingServiceId);
+    const response = await fetch(`${apiUrl}/products${isEditingService ? `/${editingServiceId}` : ""}`, {
+      method: isEditingService ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        name: serviceName,
+        description: serviceDescription,
+        price,
+        discountPrice,
+        discountLabel: serviceDiscountLabel,
+        active: serviceActive
+      })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not save service."));
+      return;
+    }
+
+    setServiceMessage(t.serviceSaved);
+    resetServiceForm();
+    loadServices();
+    loadAdminServices();
+  }
+
+  function startEditService(service) {
+    setEditingServiceId(service.id);
+    setServiceName(service.name || "");
+    setServiceDescription(service.description || "");
+    setServicePrice(String(service.price || 0));
+    setServiceDiscountPrice(service.discountPrice ? String(service.discountPrice) : "");
+    setServiceDiscountLabel(service.discountLabel || "");
+    setServiceActive(service.active !== false);
+    setServiceMessage("");
+    setError("");
+  }
+
+  function resetServiceForm() {
+    setEditingServiceId(null);
+    setServiceName("");
+    setServiceDescription("");
+    setServicePrice("");
+    setServiceDiscountPrice("");
+    setServiceDiscountLabel("");
+    setServiceActive(true);
+  }
+
+  async function updateCustomerArchive(id, archived) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/customers/${id}/${archived ? "archive" : "restore"}`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, archived ? "Could not archive customer." : "Could not restore customer."));
+      return;
+    }
+
+    setCustomers((current) => current.map((customer) => (customer.id === data.id ? data : customer)));
+    setSelectedCustomerId(String(data.id));
+  }
+
+  async function deleteCustomer(id) {
+    setError("");
+
+    const customer = customers.find((item) => item.id === id);
+    const confirmed = window.confirm(
+      language === "sv"
+        ? `Ta bort kunden ${customer?.name || ""} permanent? Detta fungerar bara om kunden saknar fakturor.`
+        : `Delete customer ${customer?.name || ""} permanently? This only works if the customer has no invoices.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/customers/${id}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(
+        data,
+        language === "sv"
+          ? "Kunden har fakturor och ska arkiveras istallet for att tas bort."
+          : "Customer has invoices and should be archived instead of deleted."
+      ));
+      return;
+    }
+
+    setCustomers((current) => current.filter((customerItem) => customerItem.id !== id));
+    setSelectedCustomerId("");
+  }
+
+  async function updateInvoiceStatus(id, status, paymentOverride = {}) {
+    setError("");
+    const isPaid = status.toLowerCase() === "paid";
+    const paymentDate = paymentOverride.paymentDate || paymentDates[id] || new Date().toISOString().slice(0, 10);
+    const invoiceToPay = invoices.find((item) => item.id === id);
+    const remainingAmount = invoiceRemainingAmount(invoiceToPay || {});
+    const paidAmount = Number(paymentOverride.paidAmount || paymentAmounts[id] || remainingAmount);
+    const paymentReference = paymentOverride.paymentReference || paymentReferences[id] || "";
+
+    if (isPaid && !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      setError(language === "sv" ? "Betalningsdatum maste vara YYYY-MM-DD." : "Payment date must be YYYY-MM-DD.");
+      return;
+    }
+
+    if (isPaid && isAccountingDateLocked(paymentDate)) {
+      setError(lockedAccountingMessage(paymentDate));
+      return;
+    }
+
+    if (isPaid && paidAmount <= 0) {
+      setError(language === "sv" ? "Betalt belopp maste vara storre an 0." : "Paid amount must be greater than 0.");
+      return;
+    }
+
+    if (isPaid && paidAmount > remainingAmount) {
+      setError(language === "sv" ? "Betalt belopp kan inte vara storre an kvar att betala." : "Paid amount cannot be greater than remaining amount.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/invoices/${id}/${status.toLowerCase()}`, {
+      method: "POST",
+      headers: {
+        ...(isPaid ? { "Content-Type": "application/json" } : {}),
+        Authorization: `Bearer ${token}`
+      },
+      body: isPaid ? JSON.stringify({ paymentDate, paidAmount, paymentReference }) : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not update invoice."));
+      return;
+    }
+
+    setInvoices((current) => current.map((item) => (item.id === id ? data : item)));
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function createStripePayout() {
+    setError("");
+    setStripePayoutMessage("");
+
+    const grossAmount = Number(stripePayoutGrossAmount);
+    const feeAmount = Number(stripePayoutFeeAmount || 0);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(stripePayoutDate)) {
+      setError(language === "sv" ? "Utbetalningsdatum maste vara YYYY-MM-DD." : "Payout date must be YYYY-MM-DD.");
+      return;
+    }
+
+    if (isAccountingDateLocked(stripePayoutDate)) {
+      setError(lockedAccountingMessage(stripePayoutDate));
+      return;
+    }
+
+    if (!Number.isFinite(grossAmount) || grossAmount <= 0) {
+      setError(language === "sv" ? "Bruttobelopp fran Stripe maste vara storre an 0." : "Stripe gross amount must be greater than 0.");
+      return;
+    }
+
+    if (!Number.isFinite(feeAmount) || feeAmount < 0) {
+      setError(language === "sv" ? "Stripe-avgift kan inte vara negativ." : "Stripe fee cannot be negative.");
+      return;
+    }
+
+    if (feeAmount > grossAmount) {
+      setError(language === "sv" ? "Stripe-avgift kan inte vara storre an bruttobeloppet." : "Stripe fee cannot be greater than the gross amount.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/stripe-payout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        payoutDate: stripePayoutDate,
+        grossAmount,
+        feeAmount,
+        reference: stripePayoutReference
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora Stripe-utbetalning." : "Could not book Stripe payout."));
+      return;
+    }
+
+    setStripePayoutMessage(
+      language === "sv"
+        ? `Stripe-utbetalning bokford: ${grossAmount - feeAmount} SEK till bank och ${feeAmount} SEK avgift.`
+        : `Stripe payout booked: ${grossAmount - feeAmount} SEK to bank and ${feeAmount} SEK fee.`
+    );
+    setStripePayoutGrossAmount("");
+    setStripePayoutFeeAmount("");
+    setStripePayoutReference("");
+    loadJournalEntries();
+    loadVatReport();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function createStripeWebsiteSale() {
+    setError("");
+    setStripeWebsiteSaleMessage("");
+
+    const totalAmount = Number(stripeWebsiteSaleAmount);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(stripeWebsiteSaleDate)) {
+      setError(language === "sv" ? "Forsaljningsdatum maste vara YYYY-MM-DD." : "Sale date must be YYYY-MM-DD.");
+      return;
+    }
+
+    if (isAccountingDateLocked(stripeWebsiteSaleDate)) {
+      setError(lockedAccountingMessage(stripeWebsiteSaleDate));
+      return;
+    }
+
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      setError(language === "sv" ? "Stripe-forsaljning maste vara storre an 0." : "Stripe sale amount must be greater than 0.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/stripe-website-sale`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        saleDate: stripeWebsiteSaleDate,
+        totalAmount,
+        reference: stripeWebsiteSaleReference
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora Stripe-forsaljning." : "Could not book Stripe website sale."));
+      return;
+    }
+
+    setStripeWebsiteSaleMessage(
+      language === "sv"
+        ? `Stripe-forsaljning bokford: ${totalAmount} SEK.`
+        : `Stripe website sale booked: ${totalAmount} SEK.`
+    );
+    setStripeWebsiteSaleAmount("");
+    setStripeWebsiteSaleReference("");
+    loadJournalEntries();
+    loadVatReport();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  function handleBankCsvUpload(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rows = parseBankCsv(reader.result);
+      setBankImportRows(rows);
+      setBankImportExpenseCategories({});
+      setBankImportExpenseVatRates({});
+      setBankImportExpenseDescriptions({});
+      setLastCreatedBankImportExpense(null);
+      setSkippedBankImportRows([]);
+      setBankImportMessage(
+        rows.length > 0
+          ? (language === "sv" ? `${rows.length} bankhandelser lastes in.` : `${rows.length} bank transactions imported.`)
+          : (language === "sv" ? "Kunde inte hitta bankhandelser i filen." : "Could not find bank transactions in the file.")
+      );
+    };
+    reader.onerror = () => {
+      setBankImportMessage(language === "sv" ? "Kunde inte lasa bankfilen." : "Could not read the bank file.");
+    };
+    reader.readAsText(file, "utf-8");
+    event.target.value = "";
+  }
+
+  function findBankImportMatch(row) {
+    if ((row.amount || 0) <= 0) {
+      return null;
+    }
+
+    const haystack = `${row.description || ""} ${row.reference || ""}`.toLowerCase();
+    const amount = row.amount || 0;
+    const openInvoices = invoices.filter((item) => invoiceRemainingAmount(item) > 0);
+
+    return openInvoices.find((item) => {
+      return Boolean(item.ocrNumber && haystack.includes(String(item.ocrNumber).toLowerCase()))
+        || Boolean(invoiceNumber(item) && haystack.includes(invoiceNumber(item).toLowerCase()))
+        || Boolean(item.customerName && haystack.includes(String(item.customerName).toLowerCase()))
+        || amount === invoiceRemainingAmount(item);
+    }) || null;
+  }
+
+  function bankImportPaymentDate(row) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(row.date || "")
+      ? row.date
+      : new Date().toISOString().slice(0, 10);
+  }
+
+  function suggestExpenseCategoryFromBankRow(row) {
+    const text = `${row.description || ""} ${row.reference || ""}`.toLowerCase();
+
+    if (text.includes("bank") || text.includes("avgift") || text.includes("fee")) {
+      return "6570";
+    }
+
+    if (text.includes("resa") || text.includes("travel") || text.includes("taxi") || text.includes("train") || text.includes("flyg")) {
+      return "5800";
+    }
+
+    if (text.includes("program") || text.includes("software") || text.includes("subscription") || text.includes("abonnemang")) {
+      return "5420";
+    }
+
+    if (text.includes("inventarie") || text.includes("utrustning") || text.includes("equipment")) {
+      return "5410";
+    }
+
+    return "4010";
+  }
+
+  function bankImportExpenseCategory(row) {
+    return bankImportExpenseCategories[row.id] || suggestExpenseCategoryFromBankRow(row);
+  }
+
+  function defaultBankImportVatRate(category) {
+    return category === "6570" ? 0 : 25;
+  }
+
+  function bankImportExpenseVatRate(row, category = bankImportExpenseCategory(row)) {
+    const savedRate = bankImportExpenseVatRates[row.id];
+    return savedRate === undefined ? defaultBankImportVatRate(category) : Number(savedRate);
+  }
+
+  function bankImportExpenseDescription(row) {
+    return (bankImportExpenseDescriptions[row.id] || row.description || row.reference || "Bank CSV").trim();
+  }
+
+  function bankImportExpenseAmounts(row, category = bankImportExpenseCategory(row), vatRate = bankImportExpenseVatRate(row, category)) {
+    const total = Math.abs(row.amount || 0);
+
+    if (vatRate <= 0) {
+      return { netAmount: total, vatAmount: 0 };
+    }
+
+    const netAmount = Math.round(total / (1 + (vatRate / 100)));
+    return {
+      netAmount,
+      vatAmount: total - netAmount
+    };
+  }
+
+  function normalizeBankImportMatchText(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replaceAll("\u00e5", "a")
+      .replaceAll("\u00e4", "a")
+      .replaceAll("\u00f6", "o")
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function findExistingExpenseForBankRow(row) {
+    if ((row.amount || 0) >= 0) {
+      return null;
+    }
+
+    const rowDate = bankImportPaymentDate(row);
+    const rowAmount = Math.abs(row.amount || 0);
+    const rowText = normalizeBankImportMatchText(`${bankImportExpenseDescription(row)}${row.reference || ""}`);
+
+    return expenses.find((expense) => {
+      const expenseText = normalizeBankImportMatchText(expense.description);
+      const sameDate = (expense.expenseDate || "") === rowDate;
+      const sameAmount = (expense.totalAmount || 0) === rowAmount;
+      const similarText = rowText && expenseText && (rowText.includes(expenseText) || expenseText.includes(rowText));
+
+      return sameDate && sameAmount && similarText;
+    }) || null;
+  }
+
+  function removeBankImportRow(rowId) {
+    setBankImportRows((current) => current.filter((item) => item.id !== rowId));
+    setBankImportExpenseCategories((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    setBankImportExpenseVatRates((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    setBankImportExpenseDescriptions((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  }
+
+  function skipBankImportRow(row) {
+    removeBankImportRow(row.id);
+    setSkippedBankImportRows((current) => [row, ...current].slice(0, 8));
+    setLastCreatedBankImportExpense(null);
+    setBankImportMessage(language === "sv" ? "Bankrad hoppades over." : "Bank row skipped.");
+  }
+
+  function restoreSkippedBankImportRow(row) {
+    setBankImportRows((current) => [row, ...current]);
+    setSkippedBankImportRows((current) => current.filter((item) => item.id !== row.id));
+    setBankImportMessage(language === "sv" ? "Bankrad aterstalldes." : "Bank row restored.");
+  }
+
+  async function registerBankImportPayment(row, invoiceItem) {
+    const paidAmount = Math.min(Math.abs(row.amount || 0), invoiceRemainingAmount(invoiceItem));
+
+    await updateInvoiceStatus(invoiceItem.id, "PAID", {
+      paymentDate: bankImportPaymentDate(row),
+      paidAmount,
+      paymentReference: row.reference || row.description || "Bank CSV"
+    });
+
+    removeBankImportRow(row.id);
+    setBankImportMessage(language === "sv" ? "Bankbetalning registrerad." : "Bank payment registered.");
+    setLastCreatedBankImportExpense(null);
+  }
+
+  async function createExpenseFromBankImport(row) {
+    setError("");
+
+    if ((row.amount || 0) >= 0) {
+      setBankImportMessage(language === "sv" ? "Endast utbetalningar kan bli kostnader." : "Only outgoing payments can become expenses.");
+      return;
+    }
+
+    const existingExpense = findExistingExpenseForBankRow(row);
+
+    if (existingExpense) {
+      setBankImportMessage(language === "sv" ? "Bankraden verkar redan vara bokford som kostnad." : "This bank row looks like it is already booked as an expense.");
+      return;
+    }
+
+    const category = bankImportExpenseCategory(row);
+    const vatRate = bankImportExpenseVatRate(row, category);
+    const amounts = bankImportExpenseAmounts(row, category, vatRate);
+
+    const response = await fetch(`${apiUrl}/expenses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        expenseDate: bankImportPaymentDate(row),
+        description: bankImportExpenseDescription(row),
+        netAmount: amounts.netAmount,
+        vatAmount: amounts.vatAmount,
+        category,
+        paidFrom: "1930"
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create expense from bank row."));
+      return;
+    }
+
+    setExpenses((current) => [...current, data]);
+    removeBankImportRow(row.id);
+    setBankImportMessage(language === "sv" ? "Kostnad skapad fran bankrad." : "Expense created from bank row.");
+    setLastCreatedBankImportExpense(data);
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  function openLastBankImportExpenseReceipts() {
+    if (!lastCreatedBankImportExpense) {
+      return;
+    }
+
+    setActiveView("uploaded");
+    setExpenseFilter("missingReceipt");
+    setExpenseCategoryFilter("all");
+    setExpenseDateFrom("");
+    setExpenseDateTo("");
+    setExpenseSearch(lastCreatedBankImportExpense.description || "");
+  }
+
+  async function openStripeCheckout(id) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/invoices/${id}/checkout-session`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not start Stripe Checkout."));
+      return;
+    }
+
+    window.location.href = data.url;
+  }
+
+  async function openInvoicePdf(id) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/invoices/${id}/pdf`, {
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not open invoice PDF."));
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function saveInvoiceReminderStatus(item) {
+    const response = await fetch(`${apiUrl}/invoices/${item.id}/reminder`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not save reminder status."));
+      return;
+    }
+
+    const updatedInvoice = await response.json();
+    setInvoices((current) => current.map((invoiceItem) => (
+      invoiceItem.id === updatedInvoice.id ? updatedInvoice : invoiceItem
+    )));
+  }
+
+  async function copyInvoiceReminder(item) {
+    setError("");
+    const text = renderInvoiceReminderText(item, settings);
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(language === "sv" ? "Kopiera paminnelsen:" : "Copy reminder:", text);
+    }
+
+    await saveInvoiceReminderStatus(item);
+  }
+
+  async function copyPaymentInfo(item) {
+    setError("");
+    const text = [
+      `${language === "sv" ? "Faktura" : "Invoice"}: ${invoiceNumber(item)}`,
+      `${language === "sv" ? "Kund" : "Customer"}: ${item.customerName || item.customer?.name || "-"}`,
+      `${t.personalNumber}: ${item.customer?.personalNumber || "-"}`,
+      `${language === "sv" ? "Kvar att betala" : "Remaining"}: ${invoiceRemainingAmount(item)} SEK`,
+      `OCR: ${item.ocrNumber || "-"}`,
+      `${language === "sv" ? "Referens" : "Reference"}: ${item.paymentReference || "-"}`,
+      `PlusGiro: ${item.plusGiro || "418 76 01-2"}`,
+      `${language === "sv" ? "Betalningsmottagare" : "Payment recipient"}: ${item.paymentRecipient || "Bank Norwegian"}`
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(language === "sv" ? "Kopiera betalinfo:" : "Copy payment info:", text);
+    }
+
+    setCopiedPaymentInfoId(item.id);
+    window.setTimeout(() => {
+      setCopiedPaymentInfoId((currentId) => (currentId === item.id ? null : currentId));
+    }, 2500);
+  }
+
+  async function copyExpenseInfo(expense) {
+    setError("");
+    const text = [
+      `${language === "sv" ? "Datum" : "Date"}: ${expense.expenseDate || "-"}`,
+      `${t.description}: ${expense.description || "-"}`,
+      `${t.category}: ${expenseCategoryLabel(expense.category)}`,
+      `${t.net}: ${expense.netAmount || 0} SEK`,
+      `${t.vat}: ${expense.vatAmount || 0} SEK`,
+      `${t.total}: ${expense.totalAmount || 0} SEK`,
+      `${t.receipt}: ${expenseHasReceipt(expense) ? (expense.receiptFileName || (language === "sv" ? "Sparat" : "Saved")) : (language === "sv" ? "Saknas" : "Missing")}`
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(language === "sv" ? "Kopiera kostnadsinfo:" : "Copy expense info:", text);
+    }
+
+    setCopiedExpenseInfoId(expense.id);
+    window.setTimeout(() => {
+      setCopiedExpenseInfoId((currentId) => (currentId === expense.id ? null : currentId));
+    }, 2500);
+  }
+
+  async function copyAiAssistantMessage(message, messageId) {
+    const text = message.text || "";
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(language === "sv" ? "Kopiera AI-svar:" : "Copy AI answer:", text);
+    }
+
+    setCopiedAiMessageId(messageId);
+    window.setTimeout(() => {
+      setCopiedAiMessageId((currentId) => (currentId === messageId ? null : currentId));
+    }, 2500);
+  }
+
+  async function openInvoiceReminderEmail(item) {
+    setError("");
+    const customerEmail = invoiceCustomerEmail(item);
+
+    if (!customerEmail) {
+      setError(language === "sv" ? "Kunden saknar e-postadress." : "Customer has no email address.");
+      return;
+    }
+
+    const mailtoUrl = `mailto:${encodeURIComponent(customerEmail)}?subject=${encodeURIComponent(invoiceReminderSubject(item))}&body=${encodeURIComponent(renderInvoiceReminderText(item, settings))}`;
+    window.location.href = mailtoUrl;
+
+    const response = await fetch(`${apiUrl}/invoices/${item.id}/reminder-draft`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not save reminder status."));
+      return;
+    }
+
+    const updatedInvoice = await response.json();
+    setInvoices((current) => current.map((invoiceItem) => (
+      invoiceItem.id === updatedInvoice.id ? updatedInvoice : invoiceItem
+    )));
+  }
+
+  async function sendInvoiceReminderEmail(item) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/invoices/${item.id}/reminder-email`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not send reminder email."));
+      return;
+    }
+
+    const updatedInvoice = await response.json();
+    setInvoices((current) => current.map((invoiceItem) => (
+      invoiceItem.id === updatedInvoice.id ? updatedInvoice : invoiceItem
+    )));
+  }
+
+  async function sendInvoiceEmail(item) {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/invoices/${item.id}/email`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skicka fakturan via e-post." : "Could not send invoice email."));
+      return;
+    }
+
+    const updatedInvoice = await response.json();
+    setInvoices((current) => current.map((invoiceItem) => (
+      invoiceItem.id === updatedInvoice.id ? updatedInvoice : invoiceItem
+    )));
+  }
+
+  async function deleteInvoice(id) {
+    setError("");
+
+    const confirmed = window.confirm(
+      language === "sv"
+        ? "Ta bort fakturan och dess bokforingsrader? Anvand detta bara for test/gamla felaktiga fakturor."
+        : "Delete the invoice and its bookkeeping rows? Use this only for test/old incorrect invoices."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/invoices/${id}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, "Could not delete invoice."));
+      return;
+    }
+
+    setInvoices((current) => current.filter((item) => item.id !== id));
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function createCreditInvoice(id) {
+    setError("");
+
+    const confirmed = window.confirm(language === "sv" ? "Skapa kreditfaktura?" : "Create credit invoice?");
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/invoices/${id}/credit`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Could not create credit invoice."));
+      return;
+    }
+
+    loadInvoices();
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+    setInvoiceSearch(invoiceNumber(data));
+  }
+
+  async function downloadJournalCsv() {
+    setError("");
+
+    const rows = [
+      [
+        "Verifikat",
+        "Datum",
+        "Typ",
+        "Rattelse av",
+        "Konto",
+        "Kontonamn",
+        "Beskrivning",
+        "Debet",
+        "Kredit"
+      ]
+    ];
+
+    filteredJournalGroups.forEach((group) => {
+      const voucherType = group.correctionOfVoucherNumber
+        ? "Rattelse"
+        : group.hasCorrection
+          ? "Original med rattelse"
+          : "Original";
+
+      group.rows.forEach((entry) => {
+        rows.push([
+          group.voucherNumber,
+          group.voucherDate || formatDateOnly(group.createdAt),
+          voucherType,
+          group.correctionOfVoucherNumber || "",
+          entry.accountNumber || "",
+          entry.accountName || "",
+          entry.description || group.description || "",
+          entry.debit || 0,
+          entry.credit || 0
+        ]);
+      });
+    });
+
+    rows.push([]);
+    rows.push(["Sammanfattning", "", "", "", "", "", "Verifikationer", filteredJournalGroups.length, ""]);
+    rows.push(["Sammanfattning", "", "", "", "", "", "Debet", filteredJournalDebit, ""]);
+    rows.push(["Sammanfattning", "", "", "", "", "", "Kredit", filteredJournalCredit, ""]);
+    rows.push(["Sammanfattning", "", "", "", "", "", "Differens", filteredJournalDifference, ""]);
+
+    rows.push([]);
+    rows.push(["Kontosammanfattning", "", "", "", "Konto", "Kontonamn", "Saldo", "Debet", "Kredit"]);
+    filteredJournalAccountSummary.forEach((account) => {
+      rows.push([
+        "Kontosammanfattning",
+        "",
+        "",
+        "",
+        account.accountNumber,
+        account.accountName,
+        account.debit - account.credit,
+        account.debit,
+        account.credit
+      ]);
+    });
+
+    downloadLocalCsv("journal-entries-filtered.csv", rows);
+  }
+
+  function downloadActiveAccountLedgerCsv() {
+    setError("");
+
+    if (!bookkeepingAccountSearch) {
+      setError(language === "sv" ? "Valj ett konto forst." : "Choose an account first.");
+      return;
+    }
+
+    const accountName = activeBookkeepingAccount?.accountName || activeBookkeepingAccount?.name || "";
+    const rows = [
+      ["Konto", bookkeepingAccountSearch, accountName],
+      ["Datum fran", bookkeepingDateFrom || "-", "Datum till", bookkeepingDateTo || "-"],
+      [],
+      ["Datum", "Verifikat", "Beskrivning", "Debet", "Kredit", "Lopande saldo"]
+    ];
+
+    if (bookkeepingDateFrom) {
+      rows.push([
+        bookkeepingDateFrom,
+        "Ingaende",
+        "Ingaende saldo fore perioden",
+        0,
+        0,
+        activeAccountOpeningBalance
+      ]);
+    }
+
+    activeAccountLedgerRows.forEach((row) => {
+      rows.push([
+        row.voucherDate || "",
+        row.voucherNumber || "",
+        row.description || "",
+        row.debit || 0,
+        row.credit || 0,
+        row.balance || 0
+      ]);
+    });
+
+    rows.push([]);
+    rows.push([
+      "Summa",
+      "",
+      "",
+      activeAccountPeriodDebit,
+      activeAccountPeriodCredit,
+      activeAccountClosingBalance
+    ]);
+
+    downloadLocalCsv(`ledger-${bookkeepingAccountSearch}.csv`, rows);
+  }
+
+  async function downloadCsv(path, filename, fallbackMessage) {
+    const response = await fetch(`${apiUrl}${path}`, {
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(apiErrorMessage(data, fallbackMessage));
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadLocalCsv(filename, rows) {
+    const csv = rows.map((row) => row.map((value) => {
+      const text = String(value ?? "");
+      return `"${text.replaceAll("\"", "\"\"")}"`;
+    }).join(";")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadBankImportExampleCsv() {
+    const exampleInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0);
+    const exampleAmount = exampleInvoice ? invoiceRemainingAmount(exampleInvoice) : 999;
+    const exampleReference = exampleInvoice?.ocrNumber || exampleInvoice?.invoiceNumber || "1055065900139";
+    const exampleCustomer = exampleInvoice?.customerName || "Exempel Kund";
+
+    downloadLocalCsv("bankimport-exempel.csv", [
+      ["Datum", "Beskrivning", "Referens", "Belopp"],
+      [new Date().toISOString().slice(0, 10), `Inbetalning ${exampleCustomer}`, exampleReference, exampleAmount],
+      [new Date().toISOString().slice(0, 10), "Bankavgift", "BANKAVGIFT", -49]
+    ]);
+  }
+
+  async function downloadProfitAndLossCsv() {
+    setError("");
+    await downloadCsv("/profit-and-loss/export", "profit-and-loss.csv", "Could not export profit and loss report.");
+  }
+
+  async function downloadBalanceReportCsv() {
+    setError("");
+    await downloadCsv("/balance-report/export", "balance-report.csv", "Could not export balance report.");
+  }
+
+  async function downloadCustomersCsv() {
+    setError("");
+    await downloadCsv("/customers/export", "customers.csv", "Could not export customers.");
+  }
+
+  function downloadCustomerLedgerCsv() {
+    setError("");
+    const rows = [
+      ["Kund", "E-post", "Personnummer", "Aktiv/Arkiverad", "Fakturor", "Obetalda fakturor", "Fakturerat totalt", "Utestaende"]
+    ];
+
+    [...customers].sort((first, second) => compareCustomers(first, second, invoices)).forEach((customer) => {
+      const customerInvoiceList = customerInvoices(customer, invoices);
+      rows.push([
+        customer.name || "",
+        customer.email || "",
+        customer.personalNumber || "",
+        customer.archived ? "Arkiverad" : "Aktiv",
+        customerInvoiceList.length,
+        customerUnpaidInvoiceCount(customer, invoices),
+        customerInvoiceList.reduce((sum, item) => sum + invoiceTotalAmount(item), 0),
+        customerOutstandingAmount(customer, invoices)
+      ]);
+    });
+
+    downloadLocalCsv("customer-ledger.csv", rows);
+  }
+
+  function downloadAgingReportCsv() {
+    setError("");
+    const rows = [
+      ["Grupp", "Fakturanummer", "Kund", "Fakturadatum", "Forfallodatum", "Dagar till/sedan forfall", "Status", "Total", "Betalt", "Kvar att betala"]
+    ];
+
+    agingBuckets.forEach((bucket) => {
+      bucket.items.forEach((item) => {
+        rows.push([
+          bucket.title,
+          invoiceNumber(item),
+          item.customerName || item.customer?.name || "",
+          formatDateOnly(item.createdAt),
+          formatDateOnly(item.dueDate),
+          invoiceDaysUntilDue(item) ?? "",
+          statusLabel(item.status, language),
+          invoiceTotalAmount(item),
+          invoicePaidAmount(item),
+          invoiceRemainingAmount(item)
+        ]);
+      });
+    });
+
+    downloadLocalCsv("aging-report.csv", rows);
+  }
+
+  function downloadVatReportCsv() {
+    setError("");
+    const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
+    const rows = [
+      ["Rad", "Konto", "Belopp"],
+      [t.outputVat, "2611", report.outputVat || 0],
+      [t.inputVat, "2641", report.inputVat || 0],
+      [t.vatToPay, "", report.vatToPay || 0]
+    ];
+
+    downloadLocalCsv("vat-report.csv", rows);
+  }
+
+  function downloadExpensesCsv() {
+    setError("");
+    const rows = [
+      ["Filter", expenseFilter, "Kategori", expenseCategoryFilter === "all" ? t.all : expenseCategoryLabel(expenseCategoryFilter)],
+      ["Fran datum", expenseDateFrom || "-", "Till datum", expenseDateTo || "-", "Sokning", expenseSearch || "-"],
+      ["Sparade underlag", filteredExpensesWithReceipt.length, "Sparat belopp", filteredReceiptTotal],
+      ["Saknar kvitto", filteredExpensesMissingReceipt.length, "Saknar kvitto belopp", filteredMissingReceiptTotal],
+      [],
+      ["Datum", "Beskrivning", "Kategori", "Netto", "Moms", "Totalt", "Kvitto sparat", "Filnamn"]
+    ];
+
+    filteredExpenses.forEach((expense) => {
+      rows.push([
+        expense.expenseDate || "",
+        expense.description || "",
+        expenseCategoryLabel(expense.category),
+        expense.netAmount || 0,
+        expense.vatAmount || 0,
+        expense.totalAmount || 0,
+        expenseHasReceipt(expense) ? (language === "sv" ? "Ja" : "Yes") : (language === "sv" ? "Nej" : "No"),
+        expense.receiptFileName || ""
+      ]);
+    });
+
+    downloadLocalCsv("expenses.csv", rows);
+  }
+
+  function downloadInvoicesCsv() {
+    setError("");
+    const rows = [
+      ["Statusfilter", invoiceFilter, "Fran datum", invoiceDateFrom || "-", "Till datum", invoiceDateTo || "-", "Sokning", invoiceSearch || "-"],
+      [],
+      ["Fakturanummer", "Kund", "Fakturadatum", "Forfallodatum", "Status", "Tjanst", "Netto", "Moms", "Total", "Betalt", "Kvar att betala", "OCR"]
+    ];
+
+    filteredInvoices.forEach((item) => {
+      rows.push([
+        invoiceNumber(item),
+        item.customerName || item.customer?.name || "",
+        item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+        item.dueDate || "",
+        statusLabel(item.status, language),
+        item.product?.name || "",
+        invoiceNetAmount(item),
+        invoiceVatAmount(item),
+        invoiceTotalAmount(item),
+        invoicePaidAmount(item),
+        invoiceRemainingAmount(item),
+        item.ocrNumber || ""
+      ]);
+    });
+
+    downloadLocalCsv("invoices.csv", rows);
+  }
+
+  function downloadPaymentOverviewCsv() {
+    setError("");
+    const rows = [
+      ["Betalningsfilter", paymentOverviewFilter, "Sokning", paymentOverviewSearch || "-", "Antal fakturor", paymentOverviewInvoices.length, "Kvar att betala", paymentOverviewOutstanding],
+      [],
+      ["Fakturanummer", "Kund", "Personnummer", "Status", "Forfallostatus", "Fakturadatum", "Forfallodatum", "Total", "Betalt", "Kvar att betala", "Senaste paminnelse", "OCR", "Referens"]
+    ];
+
+    paymentOverviewInvoices.forEach((item) => {
+      const dueStatus = invoiceDueStatus(item, language);
+      rows.push([
+        invoiceNumber(item),
+        item.customerName || item.customer?.name || "",
+        item.customer?.personalNumber || "",
+        statusLabel(item.status, language),
+        dueStatus.label,
+        item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+        item.dueDate || "",
+        invoiceTotalAmount(item),
+        invoicePaidAmount(item),
+        invoiceRemainingAmount(item),
+        item.reminderSentDate || "",
+        item.ocrNumber || "",
+        item.paymentReference || ""
+      ]);
+    });
+
+    downloadLocalCsv("payment-overview.csv", rows);
+  }
+
+  function downloadStripePayoutsCsv() {
+    setError("");
+    const sortedPayouts = stripePayouts
+      .slice()
+      .sort((a, b) => String(b.payoutDate || "").localeCompare(String(a.payoutDate || "")));
+    const sortedWebsiteSales = stripeWebsiteSaleEntries
+      .slice()
+      .sort((a, b) => String(b.voucherDate || "").localeCompare(String(a.voucherDate || "")));
+    const rows = [
+      ["Stripe-forsaljning hemsida", stripeWebsiteSaleTotal, "Saldo 1580", stripeReceivableBalance, "Brutto utbetalt", stripePayoutGrossTotal, "Stripe-avgifter", stripePayoutFeeTotal, "Netto till bank", stripePayoutNetTotal],
+      [],
+      ["Stripe-forsaljningar fran hemsidan"],
+      ["Datum", "Beskrivning", "Verifikat", "Belopp"],
+    ];
+
+    sortedWebsiteSales.forEach((entry) => {
+      rows.push([
+        entry.voucherDate || "",
+        entry.description || "",
+        entry.voucherNumber || "",
+        entry.debit || 0
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Stripe-utbetalningar"],
+      ["Datum", "Referens", "Verifikat", "Brutto", "Stripe-avgift", "Netto till bank", "Skapad"]
+    );
+
+    sortedPayouts.forEach((payout) => {
+      rows.push([
+        payout.payoutDate || "",
+        payout.reference || "",
+        payout.voucherNumber || "",
+        payout.grossAmount || 0,
+        payout.feeAmount || 0,
+        payout.netAmount || 0,
+        payout.createdAt ? formatDateTime(payout.createdAt) : ""
+      ]);
+    });
+
+    downloadLocalCsv("stripe-payouts.csv", rows);
+  }
+
+  async function handleAuth(event) {
+    event.preventDefault();
+    setError("");
+    setInvoice(null);
+
+    const response = await fetch(`${apiUrl}/auth/${authMode}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, "Authentication failed."));
+      return;
+    }
+
+    localStorage.setItem("alibooks-token", data.token);
+    localStorage.setItem("alibooks-email", data.email);
+    setToken(data.token);
+    setCurrentEmail(data.email);
+    setEmail("");
+    setPassword("");
+    loadInvoices(data.token);
+    loadCustomers(data.token);
+    loadJournalEntries(data.token);
+    loadAccounts(data.token);
+    loadVatReport(data.token);
+    loadExpenses(data.token);
+    loadReminders(data.token);
+    loadAdvisorSummary(data.token);
+    loadSettings(data.token);
+    loadProfitAndLoss(data.token);
+    loadBalanceReport(data.token);
+    loadStripePayouts(data.token);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("alibooks-token");
+    localStorage.removeItem("alibooks-email");
+    setToken("");
+    setCurrentEmail("");
+    setInvoices([]);
+    setCustomers([]);
+    setJournalEntries([]);
+    setAccounts([]);
+    setExpenses([]);
+    setContracts([]);
+    setReminders([]);
+    setAdvisorSummary(null);
+    setSettings(null);
+    setProfitAndLoss(null);
+    setBalanceReport(null);
+    setVatReport(null);
+    setStripePayouts([]);
+  }
+
+  function focusAuthForm(mode) {
+    setAuthMode(mode);
+    window.requestAnimationFrame(() => {
+      authFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      authFormRef.current?.querySelector("input")?.focus();
+    });
+  }
+
+  const unpaidInvoices = invoices.filter((item) => item.status !== "PAID");
+  const partiallyPaidInvoices = invoices.filter((item) => item.status === "PARTIALLY_PAID");
+  const paidInvoices = invoices.filter((item) => item.status === "PAID");
+  const overdueInvoices = invoices.filter(invoiceIsOverdue);
+  const dueSoonInvoices = invoices.filter((item) => invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && !invoiceIsOverdue(item));
+  const totalOutstanding = invoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const totalPaid = invoices.reduce((sum, item) => sum + invoicePaidAmount(item), 0);
+  const paymentOverviewInvoices = invoices.filter((item) => invoiceRemainingAmount(item) > 0).filter((item) => {
+    if (paymentOverviewFilter === "overdue") return invoiceIsOverdue(item);
+    if (paymentOverviewFilter === "dueSoon") return invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && !invoiceIsOverdue(item);
+    if (paymentOverviewFilter === "partiallyPaid") return item.status === "PARTIALLY_PAID";
+    if (paymentOverviewFilter === "sent") return item.status === "SENT";
+    return true;
+  }).filter((item) => {
+    const query = paymentOverviewSearch.toLowerCase().trim();
+    if (!query) return true;
+    return [
+      invoiceNumber(item),
+      item.customerName,
+      item.customer?.name,
+      item.customer?.personalNumber,
+      item.status,
+      item.ocrNumber,
+      item.paymentReference
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  }).sort(compareInvoices);
+  const paymentOverviewOutstanding = paymentOverviewInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const activeContracts = contracts.filter((contract) => contract.active);
+  const dueContracts = activeContracts.filter((contract) => contract.nextInvoiceDate <= new Date().toISOString().slice(0, 10));
+  const bankImportMatchedCount = bankImportRows.filter((row) => findBankImportMatch(row)).length;
+  const bankImportTotalAmount = bankImportRows.reduce((sum, row) => sum + (row.amount || 0), 0);
+  const bankImportIncomingAmount = bankImportRows.filter((row) => (row.amount || 0) > 0).reduce((sum, row) => sum + (row.amount || 0), 0);
+  const bankImportOutgoingAmount = bankImportRows.filter((row) => (row.amount || 0) < 0).reduce((sum, row) => sum + Math.abs(row.amount || 0), 0);
+  const stripeReceivableEntries = journalEntries.filter((entry) => entry.accountNumber === "1580");
+  const stripeWebsiteSaleEntries = stripeReceivableEntries.filter((entry) =>
+    (entry.debit || 0) > 0 && String(entry.description || "").toLowerCase().includes("stripe website sale")
+  );
+  const stripeWebsiteSaleTotal = stripeWebsiteSaleEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+  const stripeReceivableBalance = stripeReceivableEntries.reduce((sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0), 0);
+  const stripePayoutGrossTotal = stripePayouts.reduce((sum, payout) => sum + (payout.grossAmount || 0), 0);
+  const stripePayoutFeeTotal = stripePayouts.reduce((sum, payout) => sum + (payout.feeAmount || 0), 0);
+  const stripePayoutNetTotal = stripePayouts.reduce((sum, payout) => sum + (payout.netAmount || 0), 0);
+  const filteredBankImportRows = bankImportRows.filter((row) => {
+    const match = findBankImportMatch(row);
+    const hasMatch = Boolean(match);
+
+    if (bankImportFilter === "matched") return hasMatch;
+    if (bankImportFilter === "unmatched") return !hasMatch;
+    return true;
+  }).filter((row) => {
+    const query = bankImportSearch.toLowerCase().trim();
+    const match = findBankImportMatch(row);
+
+    if (!query) return true;
+
+    return [
+      row.date,
+      row.description,
+      row.reference,
+      row.amount,
+      match ? invoiceNumber(match) : "",
+      match?.customerName,
+      match?.ocrNumber
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const agingInvoices = unpaidInvoices.filter((item) => invoiceRemainingAmount(item) > 0);
+  const agingBuckets = [
+    {
+      key: "no-due-date",
+      title: language === "sv" ? "Utan forfallodatum" : "No due date",
+      items: agingInvoices.filter((item) => invoiceDaysUntilDue(item) === null).sort(compareInvoices)
+    },
+    {
+      key: "not-due",
+      title: language === "sv" ? "Ej forfallen" : "Not overdue",
+      items: agingInvoices.filter((item) => {
+        const days = invoiceDaysUntilDue(item);
+        return days !== null && days >= 0;
+      }).sort(compareInvoices)
+    },
+    {
+      key: "overdue-1-7",
+      title: language === "sv" ? "Forfallen 1-7 dagar" : "Overdue 1-7 days",
+      items: agingInvoices.filter((item) => {
+        const days = invoiceDaysUntilDue(item);
+        return days !== null && days < 0 && Math.abs(days) <= 7;
+      }).sort(compareInvoices)
+    },
+    {
+      key: "overdue-8-30",
+      title: language === "sv" ? "Forfallen 8-30 dagar" : "Overdue 8-30 days",
+      items: agingInvoices.filter((item) => {
+        const days = invoiceDaysUntilDue(item);
+        return days !== null && days < 0 && Math.abs(days) > 7 && Math.abs(days) <= 30;
+      }).sort(compareInvoices)
+    },
+    {
+      key: "overdue-30",
+      title: language === "sv" ? "Forfallen over 30 dagar" : "Overdue more than 30 days",
+      items: agingInvoices.filter((item) => {
+        const days = invoiceDaysUntilDue(item);
+        return days !== null && days < -30;
+      }).sort(compareInvoices)
+    }
+  ];
+  const revenueNet = invoices.reduce((sum, item) => sum + invoiceNetAmount(item), 0);
+  const revenueTotal = invoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
+  const expenseNet = expenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
+  const expenseTotal = expenses.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  const profitNet = revenueNet - expenseNet;
+
+  function createAiAssistantAnswer(questionText) {
+    const normalizedQuestion = normalizeNameValue(questionText);
+    const openInvoiceCount = invoices.filter((item) => invoiceRemainingAmount(item) > 0).length;
+    const answerIntro = language === "sv" ? "AliBooks-assistenten:" : "AliBooks assistant:";
+    const createAnswer = (text, targetView = "") => ({ text, targetView });
+
+    if (!normalizedQuestion.trim()) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} Skriv en fraga, till exempel "hur ska jag bokfora en faktura?" eller "hur laddar jag upp underlag?".`
+        : `${answerIntro} Write a question, for example "how do I bookkeep an invoice?" or "how do I upload receipts?".`);
+    }
+
+    if (normalizedQuestion.includes("faktura") || normalizedQuestion.includes("invoice")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Nar fakturan skapas bokfors den automatiskt som 1510 debet, 3041 kredit och 2611 kredit. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
+        : `${answerIntro} For invoices: create or choose a customer, choose a service, create the invoice and send PDF/email. When an invoice is created it is booked automatically as 1510 debit, 3041 credit and 2611 credit. You currently have ${openInvoiceCount} open invoices and ${totalOutstanding} SEK outstanding.`, "invoices");
+    }
+
+    if (normalizedQuestion.includes("avtal") || normalizedQuestion.includes("aterkommande") || normalizedQuestion.includes("contract") || normalizedQuestion.includes("recurring")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For avtalsfakturering: ga till Avtal, valj kund, tjanst, intervall och nasta fakturadatum. Nar avtalet ar redo klickar du Skapa faktura, sa skapas en vanlig faktura med automatisk bokforing och nasta datum flyttas fram. Du har ${activeContracts.length} aktiva avtal och ${dueContracts.length} redo att fakturera.`
+        : `${answerIntro} For contract invoicing: go to Contracts, choose customer, service, interval and next invoice date. When the contract is due, click Create invoice. A normal invoice is created with automatic bookkeeping, and the next date moves forward. You have ${activeContracts.length} active contracts and ${dueContracts.length} due.`, "contracts");
+    }
+
+    if (normalizedQuestion.includes("bokfor") || normalizedQuestion.includes("verifikat") || normalizedQuestion.includes("konto") || normalizedQuestion.includes("journal")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For bokforing: ga till Bokforing. Dar ser du verifikat, debet/kredit, huvudbok per konto, rattelser och manadsoversikt. Grundregeln ar att varje verifikat ska balansera: total debet ska vara samma som total kredit. Fakturor, betalningar, kostnader och kreditfakturor skapar redan bokforingsrader automatiskt.`
+        : `${answerIntro} For bookkeeping: go to Bookkeeping. There you can see vouchers, debit/credit, account ledger, corrections and monthly overview. The main rule is that every voucher must balance: total debit must equal total credit. Invoices, payments, expenses and credit invoices already create bookkeeping rows automatically.`, "bookkeeping");
+    }
+
+    if (normalizedQuestion.includes("underlag") || normalizedQuestion.includes("kvitto") || normalizedQuestion.includes("receipt") || normalizedQuestion.includes("attachment")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For underlag: ga till Underlag eller Kostnader. Ladda upp kvitto/faktura som fil, fyll datum, beskrivning, totalbelopp, moms och kategori. Underlaget sparas kopplat till kostnaden, och appen skapar bokforing automatiskt for kostnaden. Spara alltid kvitton och fakturor, normalt minst 7 ar.`
+        : `${answerIntro} For receipts: go to Uploaded or Expenses. Upload the receipt/invoice file, enter date, description, total, VAT and category. The file is linked to the expense, and the app creates bookkeeping automatically for the expense. Keep receipts and invoices, normally for at least 7 years.`, "uploaded");
+    }
+
+    if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For rapporter: ga till Rapporter for resultat- och balansrapport. I Bokforing kan du exportera verifikat och huvudbok som CSV. I Kunder, Fakturor, Betalningar och Kostnader finns ocksa exportknappar. Just nu visar appen resultat ${profitNet} SEK och moms att betala ${vatReport?.vatToPay || 0} SEK.`
+        : `${answerIntro} For reports: go to Reports for profit and loss and balance report. In Bookkeeping you can export vouchers and account ledger as CSV. Customers, Invoices, Payments and Expenses also have export buttons. The app currently shows profit ${profitNet} SEK and VAT to pay ${vatReport?.vatToPay || 0} SEK.`, "reports");
+    }
+
+    if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For moms: ga till Momsrapport. Appen summerar utgaende moms minus ingaende moms. Nuvarande moms att betala ar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
+        : `${answerIntro} For VAT: go to VAT report. The app summarizes output VAT minus input VAT. Current VAT to pay is ${vatReport?.vatToPay || 0} SEK. Always verify period and exact dates with the tax authority before filing.`, "vat");
+    }
+
+    if (normalizedQuestion.includes("bank") || normalizedQuestion.includes("csv") || normalizedQuestion.includes("betal") || normalizedQuestion.includes("payment")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For bank och betalningar: ga till Betalningar. Du kan registrera betalning manuellt, delbetala, anvanda Stripe eller importera bank-CSV. Bankimporten kan matcha mot OCR, fakturanummer, kundnamn eller belopp och sedan registrera betalningen. Importpanelen har ${bankImportRows.length} importerade rader just nu.`
+        : `${answerIntro} For bank and payments: go to Payments. You can register payment manually, partial-pay, use Stripe or import bank CSV. The bank import can match by OCR, invoice number, customer name or amount and then register the payment. The import panel currently has ${bankImportRows.length} imported rows.`, "payments");
+    }
+
+    if (normalizedQuestion.includes("installning") || normalizedQuestion.includes("smtp") || normalizedQuestion.includes("stripe") || normalizedQuestion.includes("settings")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For installningar: ga till Installningar. Dar styr du foretagstyp, e-postmallar, SMTP-test, automatiska paminnelser, betalningsinformation och lasning av bokforingsperiod. Stripe- och SMTP-hemligheter laggs sakrast i IntelliJ Run Configuration eller miljo variabler, inte synligt i koden.`
+        : `${answerIntro} For settings: go to Settings. There you control company type, email templates, SMTP test, automatic reminders, payment information and accounting period lock. Stripe and SMTP secrets should be stored in IntelliJ Run Configuration or environment variables, not visibly in code.`, "settings");
+    }
+
+    return createAnswer(language === "sv"
+      ? `${answerIntro} Jag kan hjalpa med fakturor, bokforing, moms, rapporter, underlag, bankimport, betalningar och installningar. Skriv garna mer konkret, till exempel "hur bokfor jag en kostnad?" eller "hur exporterar jag rapporter?".`
+      : `${answerIntro} I can help with invoices, bookkeeping, VAT, reports, receipts, bank import, payments and settings. Try asking more specifically, for example "how do I bookkeep an expense?" or "how do I export reports?".`);
+  }
+
+  function askAiAssistant(questionOverride) {
+    const questionText = questionOverride || aiAssistantQuestion;
+    const answer = createAiAssistantAnswer(questionText);
+
+    setAiAssistantMessages((current) => [
+      ...current,
+      { role: "user", text: questionText || (language === "sv" ? "Tom fraga" : "Empty question") }
+    ].slice(-8));
+    setAiAssistantQuestion("");
+    setAiAssistantOpen(true);
+    setAiAssistantLoading(true);
+
+    window.setTimeout(() => {
+      setAiAssistantMessages((current) => [
+        ...current,
+        { role: "assistant", text: answer.text, targetView: answer.targetView }
+      ].slice(-8));
+      setAiAssistantLoading(false);
+    }, 350);
+  }
+
+  function aiTargetLabel(targetView) {
+    const labels = {
+      invoices: t.invoices,
+      bookkeeping: t.bookkeeping,
+      uploaded: t.uploaded,
+      reports: t.reports,
+      vat: t.vatReport,
+      payments: t.payments,
+      settings: t.settings
+    };
+
+    return labels[targetView] || "";
+  }
+
+  function aiContextQuestions() {
+    const fallback = language === "sv"
+      ? ["Hur bokfor jag?", "Rapporter?", "Underlag?"]
+      : ["How do I bookkeep?", "Reports?", "Receipts?"];
+    const questionsByView = {
+      overview: language === "sv"
+        ? ["Vad ska jag kontrollera idag?", "Hur tolkar jag dashboarden?", "Vad betyder moms att betala?"]
+        : ["What should I check today?", "How do I read the dashboard?", "What does VAT to pay mean?"],
+      customers: language === "sv"
+        ? ["Hur skapar jag en kund?", "Varfor arkivera kund?", "Hur exporterar jag kunder?"]
+        : ["How do I create a customer?", "Why archive a customer?", "How do I export customers?"],
+      invoices: language === "sv"
+        ? ["Hur skapar jag faktura?", "Hur skickar jag PDF?", "Hur skapar jag kreditfaktura?"]
+        : ["How do I create an invoice?", "How do I send PDF?", "How do I create a credit invoice?"],
+      payments: language === "sv"
+        ? ["Hur registrerar jag betalning?", "Hur funkar bankimport?", "Hur gor jag delbetalning?"]
+        : ["How do I register payment?", "How does bank import work?", "How do I make partial payment?"],
+      uploaded: language === "sv"
+        ? ["Hur laddar jag upp underlag?", "Vilka kvitton maste sparas?", "Hur kopplas underlag till kostnad?"]
+        : ["How do I upload receipts?", "Which receipts must be kept?", "How are receipts linked to expenses?"],
+      bookkeeping: language === "sv"
+        ? ["Hur laser jag verifikat?", "Vad betyder debet och kredit?", "Hur skapar jag rattelse?"]
+        : ["How do I read vouchers?", "What do debit and credit mean?", "How do I create a correction?"],
+      accounts: language === "sv"
+        ? ["Vad ar kontoplan?", "Vilket konto ska jag anvanda?", "Hur laser jag huvudbok?"]
+        : ["What is a chart of accounts?", "Which account should I use?", "How do I read the ledger?"],
+      vat: language === "sv"
+        ? ["Hur fungerar momsrapport?", "Vad ar utgaende moms?", "Vad ar ingaende moms?"]
+        : ["How does VAT report work?", "What is output VAT?", "What is input VAT?"],
+      reports: language === "sv"
+        ? ["Hur laser jag resultatrapport?", "Hur laser jag balansrapport?", "Hur exporterar jag rapport?"]
+        : ["How do I read profit and loss?", "How do I read balance report?", "How do I export a report?"],
+      settings: language === "sv"
+        ? ["Hur staller jag in SMTP?", "Hur staller jag in Stripe?", "Vad betyder periodlasning?"]
+        : ["How do I set up SMTP?", "How do I set up Stripe?", "What is period locking?"]
+    };
+
+    return questionsByView[activeView] || fallback;
+  }
+
+  const expensesWithReceipt = expenses.filter((expense) => expenseHasReceipt(expense));
+  const expensesMissingReceipt = expenses.filter((expense) => !expenseHasReceipt(expense));
+  const expenseCategories = [...new Set(expenses.map((expense) => expense.category).filter(Boolean))]
+    .sort((first, second) => expenseCategoryLabel(first).localeCompare(expenseCategoryLabel(second), "sv"));
+  const filteredExpenses = expenses.filter((expense) => {
+    if (expenseFilter === "withReceipt" && !expenseHasReceipt(expense)) return false;
+    if (expenseFilter === "missingReceipt" && expenseHasReceipt(expense)) return false;
+    if (expenseCategoryFilter !== "all" && expense.category !== expenseCategoryFilter) return false;
+    if (expenseDateFrom && (!expense.expenseDate || expense.expenseDate < expenseDateFrom)) return false;
+    if (expenseDateTo && (!expense.expenseDate || expense.expenseDate > expenseDateTo)) return false;
+    const query = expenseSearch.toLowerCase().trim();
+    if (query) {
+      return [
+        expense.description,
+        expenseCategoryLabel(expense.category),
+        expense.expenseDate,
+        expense.receiptFileName,
+        expense.totalAmount,
+        expense.netAmount,
+        expense.vatAmount
+      ].some((value) => String(value || "").toLowerCase().includes(query));
+    }
+    return true;
+  }).sort((first, second) => new Date(second.expenseDate || 0) - new Date(first.expenseDate || 0));
+  const filteredExpenseNet = filteredExpenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
+  const filteredExpenseTotal = filteredExpenses.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  const filteredExpenseVat = filteredExpenses.reduce((sum, item) => sum + (item.vatAmount || 0), 0);
+  const filteredExpensesWithReceipt = filteredExpenses.filter((expense) => expenseHasReceipt(expense));
+  const filteredExpensesMissingReceipt = filteredExpenses.filter((expense) => !expenseHasReceipt(expense));
+  const filteredReceiptTotal = filteredExpensesWithReceipt.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  const filteredMissingReceiptTotal = filteredExpensesMissingReceipt.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  const expenseCategorySummary = Object.values(filteredExpenses.reduce((groups, expense) => {
+    const key = expense.category || "unknown";
+
+    if (!groups[key]) {
+      groups[key] = {
+        category: key,
+        label: expenseCategoryLabel(key),
+        count: 0,
+        net: 0,
+        vat: 0,
+        total: 0
+      };
+    }
+
+    groups[key].count += 1;
+    groups[key].net += expense.netAmount || 0;
+    groups[key].vat += expense.vatAmount || 0;
+    groups[key].total += expense.totalAmount || 0;
+
+    return groups;
+  }, {})).sort((first, second) => second.total - first.total);
+  const filteredInvoices = invoices.filter((item) => {
+    if (invoiceFilter === "draft") return (item.status || "DRAFT") === "DRAFT";
+    if (invoiceFilter === "sent") return item.status === "SENT";
+    if (invoiceFilter === "paid") return item.status === "PAID";
+    if (invoiceFilter === "unpaid") return item.status !== "PAID";
+    if (invoiceFilter === "overdue") return invoiceIsOverdue(item);
+    if (invoiceFilter === "dueSoon") return invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && !invoiceIsOverdue(item);
+    return true;
+  }).filter((item) => {
+    const invoiceDate = item.invoiceDate || String(item.createdAt || "").slice(0, 10);
+    if (invoiceDateFrom && (!invoiceDate || invoiceDate < invoiceDateFrom)) return false;
+    if (invoiceDateTo && (!invoiceDate || invoiceDate > invoiceDateTo)) return false;
+    return true;
+  }).filter((item) => {
+    const query = invoiceSearch.toLowerCase().trim();
+
+    if (!query) return true;
+
+    return [
+      invoiceNumber(item),
+      item.customerName,
+      item.status,
+      item.product?.name,
+      item.ocrNumber
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  }).sort(compareInvoices);
+  const filteredInvoiceTotal = filteredInvoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
+  const filteredInvoicePaid = filteredInvoices.reduce((sum, item) => sum + invoicePaidAmount(item), 0);
+  const filteredInvoiceOutstanding = filteredInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const filteredInvoiceVat = filteredInvoices.reduce((sum, item) => sum + invoiceVatAmount(item), 0);
+  const filteredCustomers = customers.filter((customer) => {
+    if (customerFilter === "active" && customer.archived) return false;
+    if (customerFilter === "archived" && !customer.archived) return false;
+    if (customerFilter === "outstanding" && customerOutstandingAmount(customer, invoices) <= 0) return false;
+
+    const query = customerSearch.toLowerCase().trim();
+
+    if (!query) return true;
+
+    return [
+      customer.name,
+      customer.email,
+      customer.personalNumber,
+      customer.phone,
+      customer.city
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  }).sort((first, second) => compareCustomers(first, second, invoices));
+  const selectedCustomer = customers.find((customer) => String(customer.id) === String(selectedCustomerId));
+  const selectedCustomerInvoices = selectedCustomer ? customerInvoices(selectedCustomer, invoices) : [];
+  const selectedCustomerPaidInvoices = selectedCustomerInvoices.filter((item) => item.status === "PAID");
+  const selectedCustomerUnpaidInvoices = selectedCustomerInvoices.filter((item) => item.status !== "PAID");
+  const selectedCustomerTotal = selectedCustomerInvoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
+  const selectedCustomerOutstanding = selectedCustomer ? customerOutstandingAmount(selectedCustomer, invoices) : 0;
+  const activeCustomers = customers.filter((customer) => !customer.archived);
+  const archivedCustomers = customers.filter((customer) => customer.archived);
+  const customersWithOutstanding = customers.filter((customer) => customerOutstandingAmount(customer, invoices) > 0);
+  const selectedService = services.find((service) => String(service.id) === String(selectedServiceId));
+  const invoicePreview = invoicePreviewFor(selectedService, invoiceQuantity);
+  const reminderPreviewInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0) || demoInvoiceForReminderPreview(settings);
+  const sortedJournalEntries = [...journalEntries].sort((first, second) => {
+    return new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0);
+  });
+  const correctedVoucherNumbers = new Set(
+    journalEntries
+      .map((entry) => entry.correctionOfVoucherNumber)
+      .filter(Boolean)
+  );
+  const journalGroups = Object.values(sortedJournalEntries.reduce((groups, entry) => {
+    const key = entry.voucherNumber || "Utan verifikat";
+
+    if (!groups[key]) {
+      groups[key] = {
+        voucherNumber: key,
+        createdAt: entry.createdAt,
+        voucherDate: entry.voucherDate,
+        description: entry.description,
+        correctionOfVoucherNumber: entry.correctionOfVoucherNumber || "",
+        hasCorrection: correctedVoucherNumbers.has(key),
+        rows: [],
+        debit: 0,
+        credit: 0
+      };
+    }
+
+    groups[key].rows.push(entry);
+    if (entry.correctionOfVoucherNumber) {
+      groups[key].correctionOfVoucherNumber = entry.correctionOfVoucherNumber;
+    }
+    groups[key].hasCorrection = correctedVoucherNumbers.has(key);
+    groups[key].debit += entry.debit || 0;
+    groups[key].credit += entry.credit || 0;
+
+    if (new Date(entry.voucherDate || entry.createdAt || 0) > new Date(groups[key].voucherDate || groups[key].createdAt || 0)) {
+      groups[key].createdAt = entry.createdAt;
+      groups[key].voucherDate = entry.voucherDate;
+      groups[key].description = entry.description;
+    }
+
+    return groups;
+  }, {})).sort((first, second) => new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0));
+  const filteredJournalGroups = journalGroups.filter((group) => {
+    if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
+    if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
+    if (bookkeepingFilter === "corrected") return group.hasCorrection;
+    return true;
+  }).filter((group) => {
+    const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
+    if (bookkeepingDateFrom && (!voucherDate || voucherDate < bookkeepingDateFrom)) return false;
+    if (bookkeepingDateTo && (!voucherDate || voucherDate > bookkeepingDateTo)) return false;
+    return true;
+  }).filter((group) => {
+    const query = bookkeepingSearch.toLowerCase().trim();
+
+    if (!query) return true;
+
+    return [
+      group.voucherNumber,
+      group.description,
+      group.voucherDate,
+      group.createdAt,
+      group.debit,
+      group.credit,
+      group.correctionOfVoucherNumber,
+      group.hasCorrection ? "har rattelse has correction" : "",
+      group.correctionOfVoucherNumber ? "rattelse correction" : "original"
+    ].some((value) => String(value || "").toLowerCase().includes(query))
+      || group.rows.some((entry) => [
+        entry.accountNumber,
+        entry.accountName,
+        entry.description,
+        entry.debit,
+        entry.credit,
+        entry.voucherDate,
+        entry.correctionOfVoucherNumber
+      ].some((value) => String(value || "").toLowerCase().includes(query)));
+  });
+  const filteredJournalDebit = filteredJournalGroups.reduce((sum, group) => sum + group.debit, 0);
+  const filteredJournalCredit = filteredJournalGroups.reduce((sum, group) => sum + group.credit, 0);
+  const filteredJournalDifference = filteredJournalDebit - filteredJournalCredit;
+  const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
+    const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
+    const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
+
+    if (!summary[monthKey]) {
+      summary[monthKey] = {
+        monthKey,
+        voucherCount: 0,
+        debit: 0,
+        credit: 0
+      };
+    }
+
+    summary[monthKey].voucherCount += 1;
+    summary[monthKey].debit += group.debit || 0;
+    summary[monthKey].credit += group.credit || 0;
+
+    return summary;
+  }, {})).sort((first, second) => String(second.monthKey).localeCompare(String(first.monthKey)));
+  const filteredJournalAccountSummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
+    group.rows.forEach((entry) => {
+      const key = entry.accountNumber || "unknown";
+
+      if (!summary[key]) {
+        summary[key] = {
+          accountNumber: entry.accountNumber || "-",
+          accountName: entry.accountName || "-",
+          debit: 0,
+          credit: 0
+        };
+      }
+
+      summary[key].debit += entry.debit || 0;
+      summary[key].credit += entry.credit || 0;
+    });
+
+    return summary;
+  }, {})).sort((first, second) => String(first.accountNumber).localeCompare(String(second.accountNumber)));
+  const bookkeepingAccountSearch = /^\d{4}$/.test(bookkeepingSearch.trim()) ? bookkeepingSearch.trim() : "";
+  const activeBookkeepingAccount = bookkeepingAccountSearch
+    ? filteredJournalAccountSummary.find((account) => account.accountNumber === bookkeepingAccountSearch)
+      || accounts.find((account) => account.number === bookkeepingAccountSearch)
+    : null;
+  const bookkeepingVoucherSearch = /^[A-Z]{1,4}-\d+$/i.test(bookkeepingSearch.trim())
+    ? bookkeepingSearch.trim().toUpperCase()
+    : "";
+  const activeBookkeepingVoucher = bookkeepingVoucherSearch
+    ? filteredJournalGroups.find((group) => group.voucherNumber === bookkeepingVoucherSearch)
+      || journalGroups.find((group) => group.voucherNumber === bookkeepingVoucherSearch)
+    : null;
+  const activeBookkeepingVoucherDifference = activeBookkeepingVoucher
+    ? activeBookkeepingVoucher.debit - activeBookkeepingVoucher.credit
+    : 0;
+  const matchesBookkeepingTypeFilter = (group) => {
+    if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
+    if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
+    if (bookkeepingFilter === "corrected") return group.hasCorrection;
+    return true;
+  };
+  const activeAccountOpeningBalance = bookkeepingAccountSearch && bookkeepingDateFrom
+    ? journalGroups
+      .filter(matchesBookkeepingTypeFilter)
+      .filter((group) => {
+        const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
+        return voucherDate && voucherDate < bookkeepingDateFrom;
+      })
+      .flatMap((group) => group.rows)
+      .filter((entry) => entry.accountNumber === bookkeepingAccountSearch)
+      .reduce((sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0), 0)
+    : 0;
+  let activeAccountRunningBalance = activeAccountOpeningBalance;
+  const activeAccountLedgerRows = bookkeepingAccountSearch
+    ? filteredJournalGroups
+      .flatMap((group) => group.rows
+        .filter((entry) => entry.accountNumber === bookkeepingAccountSearch)
+        .map((entry) => ({
+          voucherNumber: group.voucherNumber,
+          voucherDate: group.voucherDate || String(group.createdAt || "").slice(0, 10),
+          description: entry.description || group.description || "",
+          debit: entry.debit || 0,
+          credit: entry.credit || 0
+        })))
+      .sort((first, second) => {
+        const firstDate = new Date(first.voucherDate || 0);
+        const secondDate = new Date(second.voucherDate || 0);
+        if (firstDate.getTime() !== secondDate.getTime()) {
+          return firstDate - secondDate;
+        }
+
+        return String(first.voucherNumber).localeCompare(String(second.voucherNumber));
+      })
+      .map((row) => {
+        activeAccountRunningBalance += row.debit - row.credit;
+        return { ...row, balance: activeAccountRunningBalance };
+      })
+    : [];
+  const activeAccountPeriodDebit = activeAccountLedgerRows.reduce((sum, row) => sum + row.debit, 0);
+  const activeAccountPeriodCredit = activeAccountLedgerRows.reduce((sum, row) => sum + row.credit, 0);
+  const activeAccountPeriodChange = activeAccountPeriodDebit - activeAccountPeriodCredit;
+  const activeAccountClosingBalance = activeAccountLedgerRows.at(-1)?.balance ?? activeAccountOpeningBalance;
+  const customerValidationErrors = [];
+  const normalizedCustomerName = customerName.trim();
+  const customerNameParts = normalizeNameValue(normalizedCustomerName).trim().split(/\s+/).filter(Boolean);
+  const emailLocalPart = customerEmail.includes("@") ? normalizeNameValue(customerEmail.split("@")[0]) : "";
+  const emailMatchesName = customerNameParts.some((part) => part.length >= 3 && emailLocalPart.includes(part));
+
+  if (normalizedCustomerName && (normalizedCustomerName.length < 5 || !normalizedCustomerName.includes(" "))) {
+    customerValidationErrors.push(language === "sv" ? "Namn maste vara fornamn och efternamn." : "Name must include first and last name.");
+  }
+
+  if (normalizedCustomerName && !/^[A-Za-zÅÄÖåäö\s'-]+$/.test(normalizedCustomerName)) {
+    customerValidationErrors.push(language === "sv" ? "Namn far bara innehalla bokstaver." : "Name may only contain letters.");
+  }
+
+  if (customerEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(customerEmail)) {
+    customerValidationErrors.push(language === "sv" ? "E-post ar inte giltig." : "Email is not valid.");
+  }
+
+  if (customerEmail && normalizedCustomerName && !emailMatchesName) {
+    customerValidationErrors.push("E-post ska matcha namnet, t.ex. ali.wafa@gmail.com.");
+  }
+
+  if (customerPersonalNumber && !/^\d{8}-\d{4}$/.test(customerPersonalNumber)) {
+    customerValidationErrors.push("Personnummer maste vara YYYYMMDD-XXXX.");
+  }
+
+  if (customerAddress && (customerAddress.trim().length < 5 || !/.*\d.*/.test(customerAddress))) {
+    customerValidationErrors.push(language === "sv" ? "Adress maste innehalla gata och nummer." : "Address must include street and number.");
+  }
+
+  if (customerPostalCode && !/^\d{3}\s?\d{2}$/.test(customerPostalCode)) {
+    customerValidationErrors.push("Postnummer maste vara 123 45.");
+  }
+
+  if (customerCity && !/^[A-Za-zÅÄÖåäö\s'-]{2,}$/.test(customerCity)) {
+    customerValidationErrors.push(language === "sv" ? "Stad maste innehalla minst tva bokstaver." : "City must contain at least two letters.");
+  }
+
+  if (customerPhone && !/^[+\d][\d\s-]{6,}$/.test(customerPhone)) {
+    customerValidationErrors.push(language === "sv" ? "Telefonnummer ar inte giltigt." : "Phone number is not valid.");
+  }
+
+  const requiredCustomerFieldsFilled = Boolean(
+    normalizedCustomerName &&
+      customerEmail &&
+      customerPersonalNumber &&
+      customerAddress &&
+      customerPostalCode &&
+      customerCity
+  );
+  const canSaveCustomer = token && requiredCustomerFieldsFilled && customerValidationErrors.length === 0;
+
+  function navButton(view, label) {
+    return (
+      <button
+        type="button"
+        className={activeView === view ? "nav-button active" : "nav-button"}
+        onClick={() => setActiveView(view)}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function filterButton(filter, label) {
+    return (
+      <button
+        type="button"
+        className={invoiceFilter === filter ? "filter-button active" : "filter-button"}
+        onClick={() => setInvoiceFilter(filter)}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function renderSystemStatusItem(label, ok, detail) {
+    return (
+      <div className={ok ? "system-status-item system-status-ok" : "system-status-item system-status-warning"}>
+        <div>
+          <strong>{label}</strong>
+          {detail && <span>{detail}</span>}
+        </div>
+        <span className="system-status-pill">
+          {ok ? "OK" : (language === "sv" ? "Kontrollera" : "Check")}
+        </span>
+      </div>
+    );
+  }
+
+  function viewTitle() {
+    if (activeView === "customers") return t.customers;
+    if (activeView === "invoices") return t.invoices;
+    if (activeView === "contracts") return t.contracts;
+    if (activeView === "services") return t.services;
+    if (activeView === "payments") return t.payments;
+    if (activeView === "uploaded") return t.uploaded;
+    if (activeView === "bookkeeping") return t.bookkeeping;
+    if (activeView === "accounts") return t.chartOfAccounts;
+    if (activeView === "vat") return t.vatReport;
+    if (activeView === "reports") return t.reports;
+    if (activeView === "settings") return t.settings;
+    return t.overview;
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">AliBooks</div>
+        <button className="create-button" type="button">{t.createNew}</button>
+        <nav className="nav">
+          {navButton("overview", t.overview)}
+          {navButton("customers", t.customers)}
+          {navButton("invoices", t.invoices)}
+          {navButton("contracts", t.contracts)}
+          {navButton("services", t.services)}
+          {navButton("payments", t.payments)}
+          {navButton("uploaded", t.uploaded)}
+          {navButton("bookkeeping", t.bookkeeping)}
+          {navButton("accounts", t.chartOfAccounts)}
+          {navButton("vat", t.vatReport)}
+          {navButton("reports", t.reports)}
+          {navButton("settings", t.settings)}
+        </nav>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">{t.dashboard}</p>
+            <h1>{viewTitle()}</h1>
+          </div>
+          <div className="account-box">
+            {token ? (
+              <>
+                <select
+                  className="language-select"
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                >
+                  <option value="sv">Svenska</option>
+                  <option value="en">English</option>
+                </select>
+                <p className="signed-in">{t.signedIn} {currentEmail}</p>
+                <button type="button" className="secondary-button" onClick={handleLogout}>{t.logout}</button>
+              </>
+            ) : (
+              <form ref={authFormRef} onSubmit={handleAuth} className="auth-form">
+                <label className="auth-language-label">
+                  {language === "sv" ? "Sprak" : "Language"}
+                  <select
+                    className="language-select"
+                    value={language}
+                    onChange={(event) => setLanguage(event.target.value)}
+                  >
+                    <option value="sv">Svenska</option>
+                    <option value="en">English</option>
+                  </select>
+                </label>
+                <div className="tabs">
+                  <button
+                    type="button"
+                    className={authMode === "login" ? "active" : ""}
+                    onClick={() => setAuthMode("login")}
+                  >
+                    {t.login}
+                  </button>
+                  <button
+                    type="button"
+                    className={authMode === "register" ? "active" : ""}
+                    onClick={() => setAuthMode("register")}
+                  >
+                    {t.register}
+                  </button>
+                </div>
+
+                <label>
+                  {t.email}
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </label>
+
+                <label>
+                  {t.password}
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="At least 6 characters"
+                  />
+                </label>
+
+                <button type="submit">
+                  {authMode === "login" ? t.login : t.register}
+                </button>
+              </form>
+            )}
+          </div>
+        </header>
+
+        {error && <p className="message error">{error}</p>}
+
+        {!token && activeView === "overview" && (
+          <>
+            <HeroErrorBoundary language={language} resetKey={language}>
+              <Suspense fallback={<div className="liquid-metal-hero-loading">{language === "sv" ? "Laddar startsida..." : "Loading start page..."}</div>}>
+                <LiquidMetalHero
+                  badge={language === "sv" ? "AliBooks for Muscle&Focus" : "AliBooks for Muscle&Focus"}
+                  title={language === "sv" ? "Fakturering, bokforing och betalningar i ett flode" : "Invoices, bookkeeping and payments in one flow"}
+                  subtitle={language === "sv"
+                    ? "Skapa fakturor, folj betalningar, importera bankrader och hall koll pa underlag utan att tappa helheten."
+                    : "Create invoices, track payments, import bank rows and keep receipts organized without losing the full picture."}
+                  primaryCtaLabel={language === "sv" ? "Registrera konto" : "Create account"}
+                  secondaryCtaLabel={language === "sv" ? "Logga in" : "Log in"}
+                  onPrimaryCtaClick={() => focusAuthForm("register")}
+                  onSecondaryCtaClick={() => focusAuthForm("login")}
+                  features={language === "sv"
+                    ? ["Smart fakturering", "Bankimport CSV", "AI-assistent"]
+                    : ["Smart invoicing", "CSV bank import", "AI assistant"]}
+                />
+              </Suspense>
+            </HeroErrorBoundary>
+
+            <section className="landing-feature-panel">
+              <article>
+                <strong>{language === "sv" ? "Fakturering" : "Invoicing"}</strong>
+                <span>{language === "sv" ? "Kunder, tjanster, PDF, Stripe och e-postpaminnelser." : "Customers, services, PDF, Stripe and email reminders."}</span>
+              </article>
+              <article>
+                <strong>{language === "sv" ? "Bokforing" : "Bookkeeping"}</strong>
+                <span>{language === "sv" ? "Automatiska verifikat for fakturor, betalningar och kostnader." : "Automatic vouchers for invoices, payments and expenses."}</span>
+              </article>
+              <article>
+                <strong>{language === "sv" ? "Bankimport" : "Bank import"}</strong>
+                <span>{language === "sv" ? "CSV-matchning, kostnadsforslag och skydd mot dubbletter." : "CSV matching, expense suggestions and duplicate protection."}</span>
+              </article>
+              <article>
+                <strong>{language === "sv" ? "Rapporter" : "Reports"}</strong>
+                <span>{language === "sv" ? "Momsrapport, resultatrapport, balansrapport och export." : "VAT report, profit and loss, balance report and export."}</span>
+              </article>
+            </section>
+          </>
+        )}
+
+        {token && activeView === "overview" && <section className="stats">
+          <article>
+            <span>{language === "sv" ? "Intakter exkl. moms" : "Revenue net"}</span>
+            <strong>{revenueNet} SEK</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Kostnader exkl. moms" : "Expenses net"}</span>
+            <strong>{expenseNet} SEK</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Resultat" : "Profit"}</span>
+            <strong>{profitNet} SEK</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Moms att betala" : "VAT to pay"}</span>
+            <strong>{vatReport?.vatToPay || 0} SEK</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Obetalda fakturor" : "Unpaid invoices"}</span>
+            <strong>{unpaidInvoices.length}</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Avtal redo" : "Contracts due"}</span>
+            <strong>{dueContracts.length}</strong>
+          </article>
+          <article>
+            <span>{language === "sv" ? "Totalt inkl. moms" : "Total incl. VAT"}</span>
+            <strong>{revenueTotal - expenseTotal} SEK</strong>
+          </article>
+        </section>}
+
+        {token && activeView === "overview" && dueContracts.length > 0 && (
+          <section className="orders-section">
+            <div className="section-heading">
+              <div>
+                <h2>{language === "sv" ? "Avtal att fakturera" : "Contracts to invoice"}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Dessa avtal har natt sitt nasta fakturadatum."
+                    : "These contracts have reached their next invoice date."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="primary-small-button"
+                  disabled={!token || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                  onClick={createAllDueContractInvoices}
+                >
+                  {language === "sv" ? "Skapa alla redo fakturor" : "Create all due invoices"}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => setActiveView("contracts")}>
+                  {language === "sv" ? "Ga till Avtal" : "Go to Contracts"}
+                </button>
+              </div>
+            </div>
+            <div className="mini-list">
+              {dueContracts.map((contract) => (
+                <button
+                  type="button"
+                  className="mini-list-row"
+                  key={contract.id}
+                  onClick={() => setActiveView("contracts")}
+                >
+                  <span className="mini-list-main">
+                    <strong>{contract.customerName || "-"}</strong>
+                    <span>{contract.serviceName || "-"} | {language === "sv" ? "Nasta faktura" : "Next invoice"}: {contract.nextInvoiceDate}</span>
+                  </span>
+                  <span className="mini-list-amount">
+                    <strong>{language === "sv" ? "Redo" : "Due"}</strong>
+                    <span>{language === "sv" ? "Intervall" : "Interval"}: {contract.interval}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {token && activeView === "overview" && <section className="orders-section ai-assistant-section">
+          <div className="section-heading">
+            <div>
+              <h2>{language === "sv" ? "AI-assistent" : "AI assistant"}</h2>
+              <p className="automation-note">
+                {language === "sv"
+                  ? "Fraga om fakturor, bokforing, moms, rapporter, underlag, bankimport eller installningar."
+                  : "Ask about invoices, bookkeeping, VAT, reports, receipts, bank import or settings."}
+              </p>
+            </div>
+          </div>
+
+          <div className="ai-quick-questions">
+            {[
+              language === "sv" ? "Hur ska jag bokfora en faktura?" : "How do I bookkeep an invoice?",
+              language === "sv" ? "Hur laddar jag upp underlag?" : "How do I upload receipts?",
+              language === "sv" ? "Hur ser jag rapporter?" : "How do I view reports?",
+              language === "sv" ? "Hur funkar bankimport?" : "How does bank import work?",
+              language === "sv" ? "Hur funkar avtal?" : "How do contracts work?"
+            ].map((question) => (
+              <button type="button" className="secondary-button" key={question} onClick={() => askAiAssistant(question)}>
+                {question}
+              </button>
+            ))}
+          </div>
+
+          <div className="ai-assistant-chat">
+            {aiAssistantMessages.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Stall en fraga sa svarar assistenten steg for steg."
+                  : "Ask a question and the assistant will answer step by step."}
+              </p>
+            ) : aiAssistantMessages.map((message, index) => (
+              <article className={`ai-message ai-message-${message.role}`} key={`${message.role}-${index}`}>
+                <strong>{message.role === "user" ? (language === "sv" ? "Du" : "You") : "AliBooks"}</strong>
+                <p>{message.text}</p>
+                {message.role === "assistant" && (
+                  <div className="ai-message-actions">
+                    <button
+                      type="button"
+                      className="ai-message-action"
+                      onClick={() => copyAiAssistantMessage(message, `overview-${index}`)}
+                    >
+                      {copiedAiMessageId === `overview-${index}`
+                        ? (language === "sv" ? "Kopierad" : "Copied")
+                        : (language === "sv" ? "Kopiera" : "Copy")}
+                    </button>
+                    {message.targetView && (
+                      <button
+                        type="button"
+                        className="ai-message-action"
+                        onClick={() => setActiveView(message.targetView)}
+                      >
+                        {language === "sv" ? `Ga till ${aiTargetLabel(message.targetView)}` : `Go to ${aiTargetLabel(message.targetView)}`}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+
+          <form
+            className="ai-assistant-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              askAiAssistant();
+            }}
+          >
+            <textarea
+              value={aiAssistantQuestion}
+              onChange={(event) => setAiAssistantQuestion(event.target.value)}
+              placeholder={language === "sv" ? "Skriv din fraga har..." : "Write your question here..."}
+              rows="3"
+            />
+            <div className="button-row">
+              <button type="submit" className="primary-button">
+                {language === "sv" ? "Fraga assistenten" : "Ask assistant"}
+              </button>
+              {aiAssistantMessages.length > 0 && (
+                <button type="button" className="secondary-button" onClick={() => setAiAssistantMessages([])}>
+                  {language === "sv" ? "Rensa chatten" : "Clear chat"}
+                </button>
+              )}
+            </div>
+          </form>
+        </section>}
+
+        {token && activeView === "overview" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.reminders}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={() => loadReminders()}>
+                {t.refresh}
+              </button>
+              <button type="button" className="primary-small-button" onClick={runAutomaticInvoiceReminders}>
+                {language === "sv" ? "Kor automatiken nu" : "Run automation now"}
+              </button>
+            </div>
+          </div>
+
+          <p className="automation-note">
+            {settings?.automaticInvoiceRemindersEnabled === false
+              ? (language === "sv"
+                ? "Automatiska fakturapaminnelser ar avstangda i Installningar."
+                : "Automatic invoice reminders are turned off in Settings.")
+              : (language === "sv"
+                ? `Automatiken kor varje dag kl. 09:00 och skickar en e-postpaminnelse exakt ${settings?.invoiceReminderDaysBeforeDue || 5} dagar fore forfallodatum.`
+                : `Automation runs every day at 09:00 and sends an email reminder exactly ${settings?.invoiceReminderDaysBeforeDue || 5} days before the due date.`)}
+          </p>
+          {automaticReminderMessage && <p className="message success">{automaticReminderMessage}</p>}
+          {automaticReminderResult && (
+            <div className="automation-result">
+              <article>
+                <span>{language === "sv" ? "Senast kord" : "Last run"}</span>
+                <strong>{formatDateTime(automaticReminderResult.ranAt)}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{automaticReminderResult.enabled ? (language === "sv" ? "Pa" : "On") : (language === "sv" ? "Av" : "Off")}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Regel" : "Rule"}</span>
+                <strong>{automaticReminderResult.daysBeforeDue} {language === "sv" ? "dagar innan" : "days before"}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Skickade" : "Sent"}</span>
+                <strong>{automaticReminderResult.sent}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Hoppades over" : "Skipped"}</span>
+                <strong>{automaticReminderResult.skipped}</strong>
+              </article>
+            </div>
+          )}
+
+          {advisorSummary && (
+            <article className="advisor-card">
+              <strong>{advisorSummary.title}</strong>
+              <p>{advisorSummary.message}</p>
+            </article>
+          )}
+
+          {reminders.length === 0 ? (
+            <p className="empty-state">{t.customerRequiredLogin}</p>
+          ) : (
+            <div className="reminders">
+              {reminders.map((reminder) => (
+                <article className={`reminder reminder-${reminder.severity}`} key={`${reminder.type}-${reminder.title}`}>
+                  <strong>{reminder.title}</strong>
+                  <p>{reminder.message}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>}
+
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: activeView === "customers" ? "minmax(320px, 720px)" : undefined }}
+        >
+          <section style={{ display: activeView === "customers" ? undefined : "none" }}>
+            <div className="section-heading">
+              <h2>{t.customers}</h2>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadCustomersCsv}>
+                  {t.exportCsv}
+                </button>
+                <button type="button" className="secondary-button" onClick={downloadCustomerLedgerCsv}>
+                  {language === "sv" ? "Exportera reskontra" : "Export ledger"}
+                </button>
+              </div>
+            </div>
+            <form onSubmit={handleCreateCustomer} className="form">
+              <label>
+                {t.name}
+                <input
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  placeholder="Ali Wafa"
+                />
+              </label>
+
+              <label>
+                {t.email}
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(event) => setCustomerEmail(event.target.value)}
+                  placeholder="ali.wafa@gmail.com"
+                />
+              </label>
+
+              <label>
+                {t.personalNumber}
+                <input
+                  value={customerPersonalNumber}
+                  onChange={(event) => setCustomerPersonalNumber(event.target.value)}
+                  placeholder="YYYYMMDD-XXXX"
+                />
+              </label>
+
+              <label>
+                {t.address}
+                <input
+                  value={customerAddress}
+                  onChange={(event) => setCustomerAddress(event.target.value)}
+                  placeholder="Byvagen 56"
+                />
+              </label>
+
+              <div className="form-row">
+                <label>
+                  {t.postalCode}
+                  <input
+                    value={customerPostalCode}
+                    onChange={(event) => setCustomerPostalCode(event.target.value)}
+                    placeholder="123 45"
+                  />
+                </label>
+
+                <label>
+                  {t.city}
+                  <input
+                    value={customerCity}
+                    onChange={(event) => setCustomerCity(event.target.value)}
+                    placeholder="Stockholm"
+                  />
+                </label>
+              </div>
+
+              <label>
+                {t.phone}
+                <input
+                  value={customerPhone}
+                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  placeholder="+46..."
+                />
+              </label>
+
+              {customerValidationErrors.length > 0 && (
+                <div className="validation-list">
+                  {customerValidationErrors.map((validationError) => (
+                    <p key={validationError}>{validationError}</p>
+                  ))}
+                </div>
+              )}
+
+              <div className="button-row">
+                <button type="submit" disabled={!canSaveCustomer}>
+                  {editingCustomerId ? (language === "sv" ? "Spara andringar" : "Save changes") : t.saveCustomer}
+                </button>
+                {editingCustomerId && (
+                  <button type="button" className="secondary-button" onClick={cancelEditCustomer}>
+                    {language === "sv" ? "Avbryt" : "Cancel"}
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {customerMessage && <p className="message success">{customerMessage}</p>}
+
+            <div className="invoice-summary-cards customer-summary-cards">
+              <button type="button" className="invoice-summary-card" onClick={() => setCustomerFilter("active")}>
+                <span>{language === "sv" ? "Aktiva kunder" : "Active customers"}</span>
+                <strong>{activeCustomers.length}</strong>
+              </button>
+              <button type="button" className="invoice-summary-card danger-summary" onClick={() => setCustomerFilter("outstanding")}>
+                <span>{language === "sv" ? "Kunder med skuld" : "Customers with balance"}</span>
+                <strong>{customersWithOutstanding.length}</strong>
+              </button>
+              <button type="button" className="invoice-summary-card warning-summary" onClick={() => setCustomerFilter("outstanding")}>
+                <span>{language === "sv" ? "Utestaende totalt" : "Total outstanding"}</span>
+                <strong>{totalOutstanding} SEK</strong>
+              </button>
+              <button type="button" className="invoice-summary-card" onClick={() => setCustomerFilter("archived")}>
+                <span>{language === "sv" ? "Arkiverade" : "Archived"}</span>
+                <strong>{archivedCustomers.length}</strong>
+              </button>
+            </div>
+
+            <div className="filter-bar">
+              <button
+                type="button"
+                className={customerFilter === "active" ? "filter-button active" : "filter-button"}
+                onClick={() => setCustomerFilter("active")}
+              >
+                {language === "sv" ? "Aktiva" : "Active"}
+              </button>
+              <button
+                type="button"
+                className={customerFilter === "archived" ? "filter-button active" : "filter-button"}
+                onClick={() => setCustomerFilter("archived")}
+              >
+                {language === "sv" ? "Arkiverade" : "Archived"}
+              </button>
+              <button
+                type="button"
+                className={customerFilter === "all" ? "filter-button active" : "filter-button"}
+                onClick={() => setCustomerFilter("all")}
+              >
+                {t.all}
+              </button>
+              <button
+                type="button"
+                className={customerFilter === "outstanding" ? "filter-button active" : "filter-button"}
+                onClick={() => setCustomerFilter("outstanding")}
+              >
+                {language === "sv" ? "Med skuld" : "With balance"}
+              </button>
+              <button
+                type="button"
+                className="filter-button"
+                onClick={() => {
+                  setCustomerFilter("active");
+                  setCustomerSearch("");
+                }}
+              >
+                {language === "sv" ? "Rensa filter" : "Clear filters"}
+              </button>
+            </div>
+
+            <div className="search-box">
+              <label>
+              {t.searchCustomers}
+                <div className="search-actions">
+                  <input
+                    value={customerSearch}
+                    onChange={(event) => setCustomerSearch(event.target.value)}
+                    placeholder={language === "sv" ? "Namn, e-post, stad..." : "Name, email, city..."}
+                  />
+                  {customerSearch && (
+                    <button type="button" className="secondary-button" onClick={() => setCustomerSearch("")}>
+                      {language === "sv" ? "Rensa" : "Clear"}
+                    </button>
+                  )}
+                </div>
+              </label>
+            </div>
+
+            <div className="customer-list">
+              {filteredCustomers.map((customer) => (
+                <button
+                  type="button"
+                  className={selectedCustomerId === String(customer.id) ? "customer selected-product" : "customer"}
+                  key={customer.id}
+                  onClick={() => setSelectedCustomerId(String(customer.id))}
+                >
+                  <strong>{customer.name}</strong>
+                  {customer.archived && <span className="status">{language === "sv" ? "Arkiverad" : "Archived"}</span>}
+                  <span>{customer.email || t.noEmail}</span>
+                  <span>{customer.personalNumber || t.noPersonalNumber}</span>
+                  <span>{customer.address || ""} {customer.postalCode || ""} {customer.city || ""}</span>
+                  <span className={customerOutstandingAmount(customer, invoices) > 0 ? "customer-balance outstanding" : "customer-balance"}>
+                    {language === "sv" ? "Utestaende" : "Outstanding"}: {customerOutstandingAmount(customer, invoices)} SEK
+                    {" | "}
+                    {language === "sv" ? "Obetalda" : "Unpaid"}: {customerUnpaidInvoiceCount(customer, invoices)}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {selectedCustomer && (
+              <article className="customer-detail">
+                <div className="section-heading">
+                  <h2>{selectedCustomer.name}</h2>
+                  <div className="button-row">
+                    <span className="status">{selectedCustomerInvoices.length} {t.invoices}</span>
+                    <button type="button" className="secondary-button" onClick={() => startEditCustomer(selectedCustomer)}>
+                      {language === "sv" ? "Redigera" : "Edit"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => updateCustomerArchive(selectedCustomer.id, !selectedCustomer.archived)}
+                    >
+                      {selectedCustomer.archived
+                        ? (language === "sv" ? "Aterstall" : "Restore")
+                        : (language === "sv" ? "Arkivera" : "Archive")}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => deleteCustomer(selectedCustomer.id)}
+                    >
+                      {language === "sv" ? "Ta bort permanent" : "Delete permanently"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="detail-grid">
+                  <p><strong>{t.email}</strong><span>{selectedCustomer.email || "-"}</span></p>
+                  <p><strong>{t.personalNumber}</strong><span>{selectedCustomer.personalNumber || "-"}</span></p>
+                  <p><strong>{t.address}</strong><span>{selectedCustomer.address || "-"}</span></p>
+                  <p><strong>{t.postalCode}</strong><span>{selectedCustomer.postalCode || "-"}</span></p>
+                  <p><strong>{t.city}</strong><span>{selectedCustomer.city || "-"}</span></p>
+                  <p><strong>{t.phone}</strong><span>{selectedCustomer.phone || "-"}</span></p>
+                </div>
+
+                <div className="stats compact-stats customer-stats">
+                  <article>
+                    <span>{t.invoices}</span>
+                    <strong>{selectedCustomerInvoices.length}</strong>
+                  </article>
+                  <article>
+                    <span>{t.paid}</span>
+                    <strong>{selectedCustomerPaidInvoices.length}</strong>
+                  </article>
+                  <article>
+                    <span>{t.unpaid}</span>
+                    <strong>{selectedCustomerUnpaidInvoices.length}</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Utestaende" : "Outstanding"}</span>
+                    <strong>{selectedCustomerOutstanding} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{t.total}</span>
+                    <strong>{selectedCustomerTotal} SEK</strong>
+                  </article>
+                </div>
+
+                {selectedCustomerInvoices.length > 0 && (
+                  <div className="mini-list">
+                    {selectedCustomerInvoices.map((item) => {
+                      const dueStatus = invoiceDueStatus(item, language);
+
+                      return (
+                        <button
+                          type="button"
+                          className="mini-list-row"
+                          key={item.id}
+                          onClick={() => {
+                            setActiveView("invoices");
+                            setInvoiceSearch(invoiceNumber(item));
+                          }}
+                        >
+                          <span className="mini-list-main">
+                            <strong>{invoiceNumber(item)}</strong>
+                            <span>
+                              {language === "sv" ? "Datum" : "Date"}: {formatDateOnly(item.createdAt)}
+                              {" | "}
+                              {language === "sv" ? "Forfallodatum" : "Due date"}: {formatDateOnly(item.dueDate)}
+                            </span>
+                          </span>
+                          <span className="mini-list-amount">
+                            <strong>{invoiceRemainingAmount(item)} SEK</strong>
+                            <span>{language === "sv" ? "kvar av" : "left of"} {invoiceTotalAmount(item)} SEK</span>
+                          </span>
+                          <span className={`due-status ${dueStatus.className}`}>{dueStatus.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </article>
+            )}
+          </section>
+
+          <section style={{ display: activeView === "invoices" ? undefined : "none" }}>
+            <h2>{t.services}</h2>
+            {services.length === 0 && <p className="empty-state">{t.noServices}</p>}
+            <div className="products">
+              {services.map((service) => (
+                <button
+                  type="button"
+                  className={selectedServiceId === String(service.id) ? "product selected-product" : "product"}
+                  key={service.id}
+                  disabled={!serviceHasInvoicePrice(service)}
+                  onClick={() => setSelectedServiceId(String(service.id))}
+                >
+                  <h3>{service.name}</h3>
+                  <p>{service.description}</p>
+                  <strong>{servicePriceLabel(service, language)}</strong>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={{ display: activeView === "invoices" ? undefined : "none" }}>
+            <h2>{t.createInvoice}</h2>
+            <form onSubmit={handleCreateInvoice} className="form">
+              <label>
+                {t.customers}
+                <select
+                  value={selectedCustomerId}
+                  onChange={(event) => setSelectedCustomerId(event.target.value)}
+                >
+                  <option value="">{t.chooseCustomer}</option>
+                  {activeCustomers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t.services}
+                <select
+                  value={selectedServiceId}
+                  onChange={(event) => setSelectedServiceId(event.target.value)}
+                >
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id} disabled={!serviceHasInvoicePrice(service)}>
+                      {service.name} - {servicePriceLabel(service, language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t.quantity}
+                <input
+                  type="number"
+                  min="1"
+                  value={invoiceQuantity}
+                  onChange={(event) => setInvoiceQuantity(event.target.value)}
+                />
+              </label>
+
+              {invoicePreview && (
+                <div className="invoice-preview">
+                  <strong>{language === "sv" ? "Forhandsgranskning" : "Preview"}</strong>
+                  <p>
+                    <span>{selectedService.name}</span>
+                    <span>{invoicePreview.quantity} x {servicePriceLabel(selectedService, language)}</span>
+                  </p>
+                  {invoicePreview.discountAmount > 0 && (
+                    <>
+                      <p>
+                        <span>{language === "sv" ? "Ordinarie pris" : "Regular price"}</span>
+                        <span>{invoicePreview.ordinaryPrice} SEK</span>
+                      </p>
+                      <p className="discount-line">
+                        <span>
+                          {language === "sv" ? "Rabatt" : "Discount"}
+                          {invoicePreview.discountLabel ? ` (${invoicePreview.discountLabel})` : ""}
+                        </span>
+                        <span>-{invoicePreview.discountAmount} SEK</span>
+                      </p>
+                    </>
+                  )}
+                  <p>
+                    <span>{t.net}</span>
+                    <span>{invoicePreview.netAmount} SEK</span>
+                  </p>
+                  <p>
+                    <span>{t.vat} 25%</span>
+                    <span>{invoicePreview.vatAmount} SEK</span>
+                  </p>
+                  <p className="invoice-preview-total">
+                    <span>{t.total}</span>
+                    <span>{invoicePreview.totalAmount} SEK</span>
+                  </p>
+                </div>
+              )}
+
+              {isAccountingDateLocked(new Date().toISOString().slice(0, 10)) && (
+                <p className="message warning">{lockedAccountingMessage(new Date().toISOString().slice(0, 10))}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!token || !selectedCustomerId || !selectedServiceId || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+              >
+                {t.createInvoice}
+              </button>
+            </form>
+
+            {invoice && (
+              <p className="message success">
+                {language === "sv" ? "Faktura" : "Invoice"} #{invoice.id} {language === "sv" ? "skapad for" : "created for"} {invoice.customerName}.
+              </p>
+            )}
+          </section>
+        </div>
+
+        {activeView === "contracts" && (
+          <section className="orders-section">
+            <div className="section-heading">
+              <div>
+                <h2>{language === "sv" ? "Avtalsfakturering" : "Contract invoicing"}</h2>
+                <p className="muted-line">
+                  {language === "sv"
+                    ? "Skapa enkla aterkommande fakturaplaner och fakturera nar planen ar redo."
+                  : "Create simple recurring invoice plans and invoice when the plan is due."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className="status">{dueContracts.length} {language === "sv" ? "redo" : "due"}</span>
+                <button
+                  type="button"
+                  className="primary-small-button"
+                  disabled={!token || dueContracts.length === 0 || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                  onClick={createAllDueContractInvoices}
+                >
+                  {language === "sv" ? "Skapa alla redo fakturor" : "Create all due invoices"}
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateContract} className="form contract-form">
+              <label>
+                {t.customers}
+                <select value={contractCustomerId} onChange={(event) => setContractCustomerId(event.target.value)}>
+                  <option value="">{t.chooseCustomer}</option>
+                  {activeCustomers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>{customer.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t.services}
+                <select value={contractServiceId} onChange={(event) => setContractServiceId(event.target.value)}>
+                  <option value="">{t.chooseService}</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id} disabled={!serviceHasInvoicePrice(service)}>
+                      {service.name} - {servicePriceLabel(service, language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t.quantity}
+                <input
+                  type="number"
+                  min="1"
+                  value={contractQuantity}
+                  onChange={(event) => setContractQuantity(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Intervall" : "Interval"}
+                <select value={contractInterval} onChange={(event) => setContractInterval(event.target.value)}>
+                  <option value="monthly">{language === "sv" ? "Manad" : "Monthly"}</option>
+                  <option value="quarterly">{language === "sv" ? "Kvartal" : "Quarterly"}</option>
+                  <option value="yearly">{language === "sv" ? "Ar" : "Yearly"}</option>
+                </select>
+              </label>
+              <label>
+                {language === "sv" ? "Nasta fakturadatum" : "Next invoice date"}
+                <input
+                  type="date"
+                  value={contractNextDate}
+                  onChange={(event) => setContractNextDate(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={!token || !contractCustomerId || !contractServiceId}>
+                {language === "sv" ? "Spara avtal" : "Save contract"}
+              </button>
+            </form>
+
+            {contractMessage && <p className="message success">{contractMessage}</p>}
+
+            <div className="contract-list">
+              {contracts.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga avtal annu." : "No contracts yet."}</p>
+              ) : contracts.map((contract) => {
+                const isDue = contract.active && contract.nextInvoiceDate <= new Date().toISOString().slice(0, 10);
+
+                return (
+                  <article className={isDue ? "contract-card due" : "contract-card"} key={contract.id}>
+                    <div>
+                      <h3>{contract.customerName || "-"}</h3>
+                      <span>{contract.serviceName || "-"}</span>
+                      <span>{t.quantity}: {contract.quantity}</span>
+                      <span>{language === "sv" ? "Intervall" : "Interval"}: {contract.interval}</span>
+                      {contract.lastInvoiceNumber && <span>{language === "sv" ? "Senaste faktura" : "Last invoice"}: {contract.lastInvoiceNumber}</span>}
+                    </div>
+                    <div>
+                      <strong>{language === "sv" ? "Nasta faktura" : "Next invoice"}: {contract.nextInvoiceDate}</strong>
+                      <span className={`due-status ${isDue ? "due-status-soon" : "due-status-neutral"}`}>
+                        {contract.active
+                          ? (isDue ? (language === "sv" ? "Redo att fakturera" : "Ready to invoice") : (language === "sv" ? "Aktiv" : "Active"))
+                          : (language === "sv" ? "Pausad" : "Paused")}
+                      </span>
+                      <button
+                        type="button"
+                        className="primary-small-button"
+                        disabled={!token || !contract.active || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                        onClick={() => createContractInvoice(contract)}
+                      >
+                        {language === "sv" ? "Skapa faktura" : "Create invoice"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => toggleContractActive(contract)}>
+                        {contract.active ? (language === "sv" ? "Pausa" : "Pause") : (language === "sv" ? "Aktivera" : "Activate")}
+                      </button>
+                      <button type="button" className="danger-button" onClick={() => deleteContract(contract.id)}>
+                        {language === "sv" ? "Ta bort" : "Delete"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {activeView === "services" && (
+          <section className="orders-section">
+            <div className="section-heading">
+              <h2>{t.serviceAdmin}</h2>
+              <button type="button" className="secondary-button" onClick={() => {
+                loadServices();
+                loadAdminServices();
+              }}>
+                {t.refresh}
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveService} className="form service-form">
+              <label>
+                {t.serviceName}
+                <input
+                  value={serviceName}
+                  onChange={(event) => setServiceName(event.target.value)}
+                  placeholder="PT online Fokus 12"
+                />
+              </label>
+
+              <label>
+                {t.serviceDescription}
+                <textarea
+                  rows="4"
+                  value={serviceDescription}
+                  onChange={(event) => setServiceDescription(event.target.value)}
+                  placeholder={language === "sv" ? "Kort beskrivning av tjansten" : "Short service description"}
+                />
+              </label>
+
+              <div className="form-row">
+                <label>
+                  {t.ordinaryPrice}
+                  <input
+                    type="number"
+                    min="0"
+                    value={servicePrice}
+                    onChange={(event) => setServicePrice(event.target.value)}
+                    placeholder="2469"
+                  />
+                </label>
+
+                <label>
+                  {t.discountPrice}
+                  <input
+                    type="number"
+                    min="0"
+                    value={serviceDiscountPrice}
+                    onChange={(event) => setServiceDiscountPrice(event.target.value)}
+                    placeholder="2215"
+                  />
+                </label>
+              </div>
+
+              <label>
+                {t.discountLabel}
+                <input
+                  value={serviceDiscountLabel}
+                  onChange={(event) => setServiceDiscountLabel(event.target.value)}
+                  placeholder={language === "sv" ? "Sommarkampanj" : "Summer campaign"}
+                />
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={serviceActive}
+                  onChange={(event) => setServiceActive(event.target.checked)}
+                />
+                {t.activeService}
+              </label>
+
+              <div className="button-row">
+                <button type="submit" disabled={!token}>
+                  {editingServiceId ? t.saveService : t.newService}
+                </button>
+                {editingServiceId && (
+                  <button type="button" className="secondary-button" onClick={resetServiceForm}>
+                    {language === "sv" ? "Avbryt" : "Cancel"}
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {serviceMessage && <p className="message success">{serviceMessage}</p>}
+
+            <div className="service-admin-list">
+              {adminServices.length === 0 ? (
+                <p className="empty-state">{t.noServices}</p>
+              ) : (
+                adminServices.map((service) => (
+                  <article className={service.active === false ? "service-admin-row inactive-service" : "service-admin-row"} key={service.id}>
+                    <div>
+                      <h3>{service.name}</h3>
+                      <p>{service.description}</p>
+                      {service.discountLabel && <span className="discount-badge">{service.discountLabel}</span>}
+                      {service.active === false && <span className="status">{t.inactive}</span>}
+                    </div>
+                    <div className="service-price-box">
+                      <strong>{servicePriceLabel(service, language)}</strong>
+                      <span>{t.ordinaryPrice}: {service.price || 0} SEK</span>
+                    </div>
+                    <button type="button" className="secondary-button" onClick={() => startEditService(service)}>
+                      {t.edit}
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeView === "payments" && (
+          <section className="orders-section">
+            <div className="section-heading">
+              <h2>{t.payments}</h2>
+              <button type="button" className="secondary-button" onClick={loadInvoices}>
+                {t.refresh}
+              </button>
+            </div>
+
+            <div className="stats compact-stats">
+              <article>
+                <span>{t.unpaid}</span>
+                <strong>{unpaidInvoices.length}</strong>
+              </article>
+              <article>
+                <span>{t.paid}</span>
+                <strong>{paidInvoices.length}</strong>
+              </article>
+            </div>
+          </section>
+        )}
+
+        {(activeView === "invoices" || activeView === "payments") && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.invoices}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={loadInvoices}>
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadInvoicesCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="invoice-summary-cards">
+            <button type="button" className="invoice-summary-card danger-summary" onClick={() => setInvoiceFilter("overdue")}>
+              <span>{t.overdue}</span>
+              <strong>{overdueInvoices.length}</strong>
+            </button>
+            <button type="button" className="invoice-summary-card warning-summary" onClick={() => setInvoiceFilter("dueSoon")}>
+              <span>{t.dueSoon}</span>
+              <strong>{dueSoonInvoices.length}</strong>
+            </button>
+            <button type="button" className="invoice-summary-card" onClick={() => setInvoiceFilter("unpaid")}>
+              <span>{t.unpaid}</span>
+              <strong>{unpaidInvoices.length}</strong>
+            </button>
+            <button type="button" className="invoice-summary-card" onClick={() => setInvoiceFilter("unpaid")}>
+              <span>{language === "sv" ? "Kvar att betala" : "Outstanding"}</span>
+              <strong>{totalOutstanding} SEK</strong>
+            </button>
+          </div>
+
+          <div className="filter-bar">
+            {filterButton("all", t.all)}
+            {filterButton("draft", t.draft)}
+            {filterButton("sent", t.sent)}
+            {filterButton("paid", t.paid)}
+            {filterButton("unpaid", t.unpaid)}
+            {filterButton("overdue", t.overdue)}
+            {filterButton("dueSoon", t.dueSoon)}
+          </div>
+
+          <div className="invoice-filter-panel">
+            <label>
+              {language === "sv" ? "Fakturadatum fran" : "Invoice date from"}
+              <input
+                type="date"
+                value={invoiceDateFrom}
+                onChange={(event) => setInvoiceDateFrom(event.target.value)}
+              />
+            </label>
+
+            <label>
+              {language === "sv" ? "Fakturadatum till" : "Invoice date to"}
+              <input
+                type="date"
+                value={invoiceDateTo}
+                onChange={(event) => setInvoiceDateTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentMonthRange();
+                setInvoiceDateFrom(range.from);
+                setInvoiceDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Denna manad" : "This month"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentQuarterRange();
+                setInvoiceDateFrom(range.from);
+                setInvoiceDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Detta kvartal" : "This quarter"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentYearRange();
+                setInvoiceDateFrom(range.from);
+                setInvoiceDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "I ar" : "This year"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setInvoiceFilter("all");
+                setInvoiceDateFrom("");
+                setInvoiceDateTo("");
+                setInvoiceSearch("");
+              }}
+            >
+              {language === "sv" ? "Rensa filter" : "Clear filters"}
+            </button>
+          </div>
+
+          <div className="search-box">
+            <label>
+              {t.searchInvoices}
+              <div className="search-actions">
+                <input
+                  value={invoiceSearch}
+                  onChange={(event) => setInvoiceSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Fakturanummer, kund, status..." : "Invoice number, customer, status..."}
+                />
+                {invoiceSearch && (
+                  <button type="button" className="secondary-button" onClick={() => setInvoiceSearch("")}>
+                    {language === "sv" ? "Rensa" : "Clear"}
+                  </button>
+                )}
+              </div>
+            </label>
+          </div>
+
+          <div className="expense-summary-grid invoice-selection-summary">
+            <article>
+              <span>{language === "sv" ? "Fakturor i urval" : "Invoices in selection"}</span>
+              <strong>{filteredInvoices.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Fakturerat totalt" : "Invoiced total"}</span>
+              <strong>{filteredInvoiceTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Betalt" : "Paid"}</span>
+              <strong>{filteredInvoicePaid} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Moms i urval" : "VAT in selection"}</span>
+              <strong>{filteredInvoiceVat} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kvar att betala" : "Outstanding"}</span>
+              <strong>{filteredInvoiceOutstanding} SEK</strong>
+            </article>
+          </div>
+
+          {filteredInvoices.length === 0 ? (
+            <p className="empty-state">{t.noInvoices}</p>
+          ) : (
+            <div className="orders">
+              {filteredInvoices.map((item) => (
+                <article className="order-card" key={item.id}>
+                  <div>
+                    <h3>{invoiceNumber(item)}</h3>
+                    <p>{item.customerName}</p>
+                    <p>{t.date}: {item.invoiceDate || new Date().toISOString().slice(0, 10)}</p>
+                    <p>{t.dueDate}: {item.dueDate || "-"}</p>
+                    <p>{t.paymentTerms}: {item.paymentTermsDays || 30} {t.days}</p>
+                    {item.ftaxApproved !== false && <p>{t.approvedForFtax}</p>}
+                    {item.customer && (
+                      <div className="invoice-customer">
+                        <span>{t.email}: {item.customer.email || "-"}</span>
+                        <span>{t.personalNumber}: {item.customer.personalNumber || "-"}</span>
+                        <span>{t.address}: {item.customer.address || "-"}</span>
+                        <span>{t.postalCode}: {item.customer.postalCode || "-"}</span>
+                        <span>{t.city}: {item.customer.city || "-"}</span>
+                        <span>Tel: {item.customer.phone || "-"}</span>
+                      </div>
+                    )}
+                    <span className={`status status-${(item.status || "DRAFT").toLowerCase()}`}>
+                      {statusLabel(item.status, language)}
+                    </span>
+                    <span className={`due-status ${invoiceDueStatus(item, language).className}`}>
+                      {invoiceDueStatus(item, language).label}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>{item.product?.name || t.serviceMissing}</strong>
+                    <span>{t.quantity}: {item.quantity || 1}</span>
+                    {invoiceDiscountAmount(item) > 0 && (
+                      <>
+                        <span>{language === "sv" ? "Ordinarie pris" : "Regular price"}: {invoiceOrdinaryPrice(item)} SEK</span>
+                        <span className="discount-line">
+                          {language === "sv" ? "Rabatt" : "Discount"}
+                          {item.discountLabel ? ` (${item.discountLabel})` : ""}: -{invoiceDiscountAmount(item)} SEK
+                        </span>
+                      </>
+                    )}
+                    <span>{t.net}: {invoiceNetAmount(item)} SEK</span>
+                    <span>{t.vat} 25%: {invoiceVatAmount(item)} SEK</span>
+                    <span>{t.total}: {invoiceTotalAmount(item)} SEK</span>
+                    <div className="payment-info">
+                      <strong>{t.payment}</strong>
+                      <span>PlusGiro: {item.plusGiro || "418 76 01-2"}</span>
+                      <span>OCR: {item.ocrNumber || "1055065900139"}</span>
+                      <span>{t.paymentRecipient}: {item.paymentRecipient || "Bank Norwegian"}</span>
+                      {(item.status === "PAID" || item.status === "PARTIALLY_PAID") && (
+                        <>
+                          <span>{language === "sv" ? "Betaldatum" : "Payment date"}: {item.paidDate || "-"}</span>
+                          <span>{language === "sv" ? "Betalt belopp" : "Paid amount"}: {invoicePaidAmount(item)} SEK</span>
+                          <span>{language === "sv" ? "Kvar att betala" : "Remaining"}: {invoiceRemainingAmount(item)} SEK</span>
+                          <span>{language === "sv" ? "Referens" : "Reference"}: {item.paymentReference || "-"}</span>
+                        </>
+                      )}
+                      {item.payments?.length > 0 && (
+                        <div className="payment-history">
+                          <strong>{language === "sv" ? "Betalningshistorik" : "Payment history"}</strong>
+                          {item.payments.map((payment) => (
+                            <span key={payment.id}>
+                              {payment.paymentDate || "-"} - {payment.amount} SEK - {payment.reference || "-"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="invoice-history">
+                        <strong>{language === "sv" ? "Fakturahistorik" : "Invoice history"}</strong>
+                        <span>
+                          {formatDateTime(item.createdAt)} - {language === "sv" ? "Faktura skapad" : "Invoice created"} - {item.customerName || "-"}
+                        </span>
+                        {[...(item.reminders || [])]
+                          .sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0))
+                          .map((reminder) => (
+                            <span key={reminder.id}>
+                              {formatDateTime(reminder.createdAt)} - {invoiceHistoryLabel(reminder, language)} - {reminder.status} - {reminder.recipientEmail || "-"}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                    <div className="invoice-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!token || item.status === "SENT" || item.status === "PAID"}
+                        onClick={() => updateInvoiceStatus(item.id, "sent")}
+                      >
+                        {t.markSent}
+                      </button>
+                      <label className="inline-date">
+                        {language === "sv" ? "Betaldatum" : "Payment date"}
+                        <input
+                          type="date"
+                          value={paymentDates[item.id] || new Date().toISOString().slice(0, 10)}
+                          onChange={(event) => setPaymentDates({ ...paymentDates, [item.id]: event.target.value })}
+                          disabled={!token || item.status === "PAID"}
+                        />
+                      </label>
+                      {isAccountingDateLocked(paymentDates[item.id] || new Date().toISOString().slice(0, 10)) && (
+                        <p className="message warning">{lockedAccountingMessage(paymentDates[item.id] || new Date().toISOString().slice(0, 10))}</p>
+                      )}
+                      <label className="inline-date">
+                        {language === "sv" ? "Belopp" : "Amount"}
+                        <input
+                          type="number"
+                          value={paymentAmounts[item.id] || invoiceRemainingAmount(item)}
+                          onChange={(event) => setPaymentAmounts({ ...paymentAmounts, [item.id]: event.target.value })}
+                          disabled={!token || item.status === "PAID"}
+                        />
+                      </label>
+                      <label className="inline-date">
+                        {language === "sv" ? "Referens" : "Reference"}
+                        <input
+                          value={paymentReferences[item.id] || ""}
+                          onChange={(event) => setPaymentReferences({ ...paymentReferences, [item.id]: event.target.value })}
+                          disabled={!token || item.status === "PAID"}
+                          placeholder={language === "sv" ? "Bank/Swish/Stripe" : "Bank/Swish/Stripe"}
+                        />
+                      </label>
+                      <p className="payment-hint">
+                        {language === "sv"
+                          ? "Belopp = det kunden betalade. Referens = Swish, Bank, Stripe eller transaktions-ID."
+                          : "Amount = what the customer paid. Reference = Swish, Bank, Stripe or transaction ID."}
+                      </p>
+                      {invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && (
+                        <div className="invoice-reminder-panel">
+                          <strong>{language === "sv" ? "Fakturapaminnelse" : "Invoice reminder"}</strong>
+                          <span>{invoiceReminderRuleText(item, language)}</span>
+                          <span>{t.email}: {invoiceCustomerEmail(item) || "-"}</span>
+                          <span className="next-reminder-line">{nextAutomaticReminderText(item, settings, language)}</span>
+                          {item.reminderSentDate && (
+                            <span className="reminder-copy-status">
+                              {language === "sv" ? "Paminnelse sparad" : "Reminder saved"}: {item.reminderSentDate}
+                            </span>
+                          )}
+                          <div className="payment-reminder-actions">
+                            <button type="button" className="primary-small-button" disabled={!token} onClick={() => sendInvoiceReminderEmail(item)}>
+                              {language === "sv" ? "Skicka e-post" : "Send email"}
+                            </button>
+                            <button type="button" className="secondary-button" disabled={!token} onClick={() => openInvoiceReminderEmail(item)}>
+                              {language === "sv" ? "Oppna e-post" : "Open email"}
+                            </button>
+                            <button type="button" className="secondary-button" disabled={!token} onClick={() => copyInvoiceReminder(item)}>
+                              {language === "sv" ? "Kopiera text" : "Copy text"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!token || item.status === "PAID" || isAccountingDateLocked(paymentDates[item.id] || new Date().toISOString().slice(0, 10))}
+                        onClick={() => updateInvoiceStatus(item.id, "paid")}
+                      >
+                        {t.markPaid}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!token || item.status === "PAID" || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                        onClick={() => openStripeCheckout(item.id)}
+                      >
+                        Stripe
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!token}
+                        onClick={() => openInvoicePdf(item.id)}
+                      >
+                        PDF
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-small-button"
+                        disabled={!token || !invoiceCustomerEmail(item)}
+                        onClick={() => sendInvoiceEmail(item)}
+                      >
+                        {language === "sv" ? "Skicka faktura" : "Send invoice"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={!token}
+                        onClick={() => deleteInvoice(item.id)}
+                      >
+                        {language === "sv" ? "Ta bort faktura" : "Delete invoice"}
+                      </button>
+                      {(item.status === "SENT" || item.status === "PAID") && !item.creditInvoice && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={!token}
+                          onClick={() => createCreditInvoice(item.id)}
+                        >
+                          {language === "sv" ? "Kreditera" : "Credit"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>}
+
+        {activeView === "payments" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.payments}</h2>
+            <button type="button" className="secondary-button" onClick={loadInvoices}>
+              {t.refresh}
+            </button>
+          </div>
+
+          <div className="stats compact-stats">
+            <article>
+              <span>{t.unpaid}</span>
+              <strong>{unpaidInvoices.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Delbetalda" : "Partially paid"}</span>
+              <strong>{partiallyPaidInvoices.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Forfallna" : "Overdue"}</span>
+              <strong>{overdueInvoices.length}</strong>
+            </article>
+            <article>
+              <span>{t.paid}</span>
+              <strong>{paidInvoices.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kvar att betala" : "Outstanding"}</span>
+              <strong>{totalOutstanding} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Betalt" : "Paid amount"}</span>
+              <strong>{totalPaid} SEK</strong>
+            </article>
+          </div>
+
+          <div className="payment-filter-row">
+            <div className="filter-bar">
+              <button
+                type="button"
+                className={paymentOverviewFilter === "open" ? "filter-button active" : "filter-button"}
+                onClick={() => setPaymentOverviewFilter("open")}
+              >
+                {language === "sv" ? "Alla oppna" : "All open"}
+              </button>
+              <button
+                type="button"
+                className={paymentOverviewFilter === "overdue" ? "filter-button active" : "filter-button"}
+                onClick={() => setPaymentOverviewFilter("overdue")}
+              >
+                {language === "sv" ? "Forfallna" : "Overdue"}
+              </button>
+              <button
+                type="button"
+                className={paymentOverviewFilter === "dueSoon" ? "filter-button active" : "filter-button"}
+                onClick={() => setPaymentOverviewFilter("dueSoon")}
+              >
+                {language === "sv" ? "Forfaller snart" : "Due soon"}
+              </button>
+              <button
+                type="button"
+                className={paymentOverviewFilter === "partiallyPaid" ? "filter-button active" : "filter-button"}
+                onClick={() => setPaymentOverviewFilter("partiallyPaid")}
+              >
+                {language === "sv" ? "Delbetalda" : "Partially paid"}
+              </button>
+              <button
+                type="button"
+                className={paymentOverviewFilter === "sent" ? "filter-button active" : "filter-button"}
+                onClick={() => setPaymentOverviewFilter("sent")}
+              >
+                {t.sent}
+              </button>
+            </div>
+            <div className="button-row">
+              <span className="status">
+                {paymentOverviewInvoices.length} {language === "sv" ? "fakturor" : "invoices"} - {paymentOverviewOutstanding} SEK
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadPaymentOverviewCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="search-box">
+            <label>
+              {language === "sv" ? "Sok betalningar" : "Search payments"}
+              <div className="search-actions">
+                <input
+                  value={paymentOverviewSearch}
+                  onChange={(event) => setPaymentOverviewSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Fakturanummer, kund, personnummer, OCR..." : "Invoice number, customer, personal number, OCR..."}
+                />
+                {paymentOverviewSearch && (
+                  <button type="button" className="secondary-button" onClick={() => setPaymentOverviewSearch("")}>
+                    {language === "sv" ? "Rensa" : "Clear"}
+                  </button>
+                )}
+              </div>
+            </label>
+          </div>
+
+          <div className="bank-import-panel">
+            <div className="section-heading compact-heading">
+              <div>
+                <h3>{language === "sv" ? "Stripe-utbetalning till bank" : "Stripe payout to bank"}</h3>
+                <p>
+                  {language === "sv"
+                    ? "Nar Stripe betalar ut pengar till ditt bankkonto bokfor du bruttobeloppet, Stripe-avgiften och referensen fran Stripe."
+                    : "When Stripe pays money to your bank account, book the gross amount, Stripe fee and Stripe reference."}
+                </p>
+              </div>
+              <button type="button" className="secondary-button" onClick={downloadStripePayoutsCsv} disabled={stripePayouts.length === 0}>
+                {t.exportCsv}
+              </button>
+            </div>
+            <div className="expense-summary-grid bank-import-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Stripe-forsaljning hemsida" : "Website Stripe sales"}</span>
+                <strong>{stripeWebsiteSaleTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Saldo 1580" : "Account 1580 balance"}</span>
+                <strong>{stripeReceivableBalance} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Stripe brutto utbetalt" : "Stripe gross paid out"}</span>
+                <strong>{stripePayoutGrossTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Stripe-avgifter" : "Stripe fees"}</span>
+                <strong>{stripePayoutFeeTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Netto till bank" : "Net to bank"}</span>
+                <strong>{stripePayoutNetTotal} SEK</strong>
+              </article>
+            </div>
+            <p className={stripeReceivableBalance < 0 ? "warning-text" : "status"}>
+              {stripeReceivableBalance > 0
+                ? (language === "sv"
+                  ? `${stripeReceivableBalance} SEK ligger kvar som fordran hos Stripe och ska stämmas av mot kommande utbetalningar.`
+                  : `${stripeReceivableBalance} SEK remains as a Stripe receivable and should be reconciled against upcoming payouts.`)
+                : stripeReceivableBalance < 0
+                  ? (language === "sv"
+                    ? "Konto 1580 ar negativt. Kontrollera om en Stripe-utbetalning bokforts utan motsvarande Stripe-forsaljning."
+                    : "Account 1580 is negative. Check if a Stripe payout was booked without a matching Stripe sale.")
+                  : (language === "sv"
+                    ? "Konto 1580 ar avstamt just nu."
+                    : "Account 1580 is reconciled right now.")}
+            </p>
+            <div className="stripe-manual-sale-panel">
+              <div>
+                <strong>{language === "sv" ? "Manuell Stripe-forsaljning fran hemsidan" : "Manual website Stripe sale"}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Anvand detta som fallback om webhooken inte ar kopplad annu eller om du vill testa bokforingsflodet."
+                    : "Use this as a fallback if the webhook is not connected yet, or to test the bookkeeping flow."}
+                </p>
+              </div>
+              <div className="form-grid">
+                <label>
+                  {language === "sv" ? "Forsaljningsdatum" : "Sale date"}
+                  <input
+                    type="date"
+                    value={stripeWebsiteSaleDate}
+                    onChange={(event) => setStripeWebsiteSaleDate(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {language === "sv" ? "Belopp inkl. moms" : "Amount incl. VAT"}
+                  <input
+                    type="number"
+                    min="0"
+                    value={stripeWebsiteSaleAmount}
+                    onChange={(event) => setStripeWebsiteSaleAmount(event.target.value)}
+                    placeholder="999"
+                  />
+                </label>
+                <label>
+                  {language === "sv" ? "Stripe-referens" : "Stripe reference"}
+                  <input
+                    type="text"
+                    value={stripeWebsiteSaleReference}
+                    onChange={(event) => setStripeWebsiteSaleReference(event.target.value)}
+                    placeholder={language === "sv" ? "pi_ eller cs_" : "pi_ or cs_"}
+                  />
+                </label>
+              </div>
+              <div className="button-row">
+                <span className="status">
+                  {language === "sv"
+                    ? "Bokfor: 1580 debet, 3041 kredit, 2611 kredit"
+                    : "Books: 1580 debit, 3041 credit, 2611 credit"}
+                </span>
+                <button type="button" className="primary-small-button" onClick={createStripeWebsiteSale}>
+                  {language === "sv" ? "Bokfor Stripe-forsaljning" : "Book Stripe sale"}
+                </button>
+              </div>
+              {stripeWebsiteSaleMessage && <strong className="status">{stripeWebsiteSaleMessage}</strong>}
+            </div>
+            <div className="form-grid">
+              <label>
+                {language === "sv" ? "Utbetalningsdatum" : "Payout date"}
+                <input
+                  type="date"
+                  value={stripePayoutDate}
+                  onChange={(event) => setStripePayoutDate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Bruttobelopp fran Stripe" : "Gross amount from Stripe"}
+                <input
+                  type="number"
+                  min="0"
+                  value={stripePayoutGrossAmount}
+                  onChange={(event) => setStripePayoutGrossAmount(event.target.value)}
+                  placeholder="1000"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Stripe-avgift" : "Stripe fee"}
+                <input
+                  type="number"
+                  min="0"
+                  value={stripePayoutFeeAmount}
+                  onChange={(event) => setStripePayoutFeeAmount(event.target.value)}
+                  placeholder="29"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Referens" : "Reference"}
+                <input
+                  type="text"
+                  value={stripePayoutReference}
+                  onChange={(event) => setStripePayoutReference(event.target.value)}
+                  placeholder={language === "sv" ? "Stripe payout ID" : "Stripe payout ID"}
+                />
+              </label>
+            </div>
+            <div className="button-row">
+              <span className="status">
+                {language === "sv"
+                  ? `Netto till bank: ${Math.max(Number(stripePayoutGrossAmount || 0) - Number(stripePayoutFeeAmount || 0), 0)} SEK`
+                  : `Net to bank: ${Math.max(Number(stripePayoutGrossAmount || 0) - Number(stripePayoutFeeAmount || 0), 0)} SEK`}
+              </span>
+              <button type="button" className="primary-small-button" onClick={createStripePayout}>
+                {language === "sv" ? "Bokfor Stripe-utbetalning" : "Book Stripe payout"}
+              </button>
+            </div>
+            {stripePayoutMessage && <strong className="status">{stripePayoutMessage}</strong>}
+            {stripeWebsiteSaleEntries.length > 0 && (
+              <div className="stripe-payout-history stripe-sale-history">
+                <strong>{language === "sv" ? "Senaste Stripe-forsaljningar fran hemsidan" : "Recent website Stripe sales"}</strong>
+                {stripeWebsiteSaleEntries
+                  .slice()
+                  .sort((a, b) => String(b.voucherDate || "").localeCompare(String(a.voucherDate || "")))
+                  .slice(0, 5)
+                  .map((entry) => (
+                    <article key={entry.id}>
+                      <div>
+                        <strong>{entry.voucherDate || "-"}</strong>
+                        <span>{entry.description || "-"}</span>
+                      </div>
+                      <div>
+                        <span>{language === "sv" ? "Verifikat" : "Voucher"}: {entry.voucherNumber || "-"}</span>
+                        <strong>{language === "sv" ? "Belopp" : "Amount"}: {entry.debit || 0} SEK</strong>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            )}
+            {stripePayouts.length > 0 && (
+              <div className="stripe-payout-history">
+                <strong>{language === "sv" ? "Senaste Stripe-utbetalningar" : "Recent Stripe payouts"}</strong>
+                {stripePayouts
+                  .slice()
+                  .sort((a, b) => String(b.payoutDate || "").localeCompare(String(a.payoutDate || "")))
+                  .slice(0, 5)
+                  .map((payout) => (
+                    <article key={payout.id}>
+                      <div>
+                        <strong>{payout.payoutDate || "-"}</strong>
+                        <span>{payout.reference || "-"}</span>
+                      </div>
+                      <div>
+                        <span>{language === "sv" ? "Verifikat" : "Voucher"}: {payout.voucherNumber || "-"}</span>
+                        <span>{language === "sv" ? "Brutto" : "Gross"}: {payout.grossAmount} SEK</span>
+                        <span>{language === "sv" ? "Avgift" : "Fee"}: {payout.feeAmount} SEK</span>
+                        <strong>{language === "sv" ? "Netto" : "Net"}: {payout.netAmount} SEK</strong>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bank-import-panel">
+            <div>
+              <h3>{language === "sv" ? "Bankimport CSV" : "Bank import CSV"}</h3>
+              <p>
+                {language === "sv"
+                  ? "Ladda upp en CSV-fil fran banken for att hitta betalningar som matchar fakturor. Filen sparas inte annu."
+                  : "Upload a CSV file from your bank to find payments that match invoices. The file is not saved yet."}
+              </p>
+            </div>
+            <div className="button-row bank-import-actions">
+              <label className="file-upload-button">
+                {language === "sv" ? "Valj bankfil" : "Choose bank file"}
+                <input type="file" accept=".csv,text/csv" onChange={handleBankCsvUpload} />
+              </label>
+              <button type="button" className="secondary-button" onClick={downloadBankImportExampleCsv}>
+                {language === "sv" ? "Ladda ner exempel" : "Download example"}
+              </button>
+              {bankImportRows.length > 0 && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setBankImportRows([]);
+                    setBankImportFilter("all");
+                    setBankImportSearch("");
+                    setBankImportMessage("");
+                    setBankImportExpenseCategories({});
+                    setBankImportExpenseVatRates({});
+                    setBankImportExpenseDescriptions({});
+                    setLastCreatedBankImportExpense(null);
+                    setSkippedBankImportRows([]);
+                  }}
+                >
+                  {language === "sv" ? "Rensa import" : "Clear import"}
+                </button>
+              )}
+            </div>
+            {bankImportMessage && <strong className="status">{bankImportMessage}</strong>}
+            {skippedBankImportRows.length > 0 && (
+              <div className="bank-import-skipped-panel">
+                <strong>
+                  {skippedBankImportRows.length} {language === "sv" ? "overhoppad rad/overhoppade rader" : "skipped row(s)"}
+                </strong>
+                <div>
+                  {skippedBankImportRows.map((row) => (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      key={row.id}
+                      onClick={() => restoreSkippedBankImportRow(row)}
+                    >
+                      {language === "sv" ? "Aterstall" : "Restore"} {row.date || "-"} {row.amount} SEK
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {lastCreatedBankImportExpense && (
+              <div className="bank-import-follow-up">
+                <span>
+                  {language === "sv"
+                    ? "Kostnaden saknar fortfarande kvitto/underlag."
+                    : "The expense still needs a receipt/document."}
+                </span>
+                <button type="button" className="secondary-button" onClick={openLastBankImportExpenseReceipts}>
+                  {language === "sv" ? "Oppna underlag" : "Open receipts"}
+                </button>
+              </div>
+            )}
+            {bankImportRows.length > 0 && (
+              <>
+                <div className="expense-summary-grid bank-import-summary-grid">
+                  <article>
+                    <span>{language === "sv" ? "Importerade rader" : "Imported rows"}</span>
+                    <strong>{bankImportRows.length}</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Matchade fakturor" : "Matched invoices"}</span>
+                    <strong>{bankImportMatchedCount}</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Utan matchning" : "Unmatched"}</span>
+                    <strong>{bankImportRows.length - bankImportMatchedCount}</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Inbetalningar" : "Incoming"}</span>
+                    <strong>{bankImportIncomingAmount} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Utbetalningar" : "Outgoing"}</span>
+                    <strong>{bankImportOutgoingAmount} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Netto bankfil" : "Bank file net"}</span>
+                    <strong>{bankImportTotalAmount} SEK</strong>
+                  </article>
+                </div>
+                <div className="filter-bar bank-import-filter-bar">
+                  <button
+                    type="button"
+                    className={bankImportFilter === "all" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("all")}
+                  >
+                    {language === "sv" ? "Alla" : "All"}
+                  </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "matched" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("matched")}
+                  >
+                    {language === "sv" ? "Matchade" : "Matched"}
+                  </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "unmatched" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("unmatched")}
+                  >
+                    {language === "sv" ? "Utan matchning" : "Unmatched"}
+                  </button>
+                  <span className="status">
+                    {filteredBankImportRows.length} {language === "sv" ? "visas" : "shown"}
+                  </span>
+                </div>
+                <AnimatedGlowingSearchBar
+                  label={language === "sv" ? "Sok i bankimport" : "Search bank import"}
+                  value={bankImportSearch}
+                  onChange={(event) => setBankImportSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Datum, text, referens, OCR, belopp..." : "Date, text, reference, OCR, amount..."}
+                  onClear={() => setBankImportSearch("")}
+                  clearLabel={language === "sv" ? "Rensa" : "Clear"}
+                  name="bank-import-search"
+                />
+                <div className="bank-import-list">
+                  {filteredBankImportRows.map((row) => {
+                    const match = findBankImportMatch(row);
+                    const selectedExpenseCategory = bankImportExpenseCategory(row);
+                    const selectedVatRate = bankImportExpenseVatRate(row, selectedExpenseCategory);
+                    const suggestedExpenseAmounts = bankImportExpenseAmounts(row, selectedExpenseCategory, selectedVatRate);
+                    const existingExpenseMatch = findExistingExpenseForBankRow(row);
+
+                    return (
+                      <article className={match ? "bank-import-row matched" : "bank-import-row"} key={row.id}>
+                        <div>
+                          <strong>{row.date || "-"}</strong>
+                          <span>{row.description || "-"}</span>
+                          <span>{language === "sv" ? "Referens" : "Reference"}: {row.reference || "-"}</span>
+                        </div>
+                        <div>
+                          <strong>{row.amount} SEK</strong>
+                          {match ? (
+                            <>
+                              <span>{language === "sv" ? "Matchar" : "Matches"}: {invoiceNumber(match)}</span>
+                              <span>{match.customerName}</span>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setPaymentOverviewSearch(invoiceNumber(match));
+                                  setPaymentDates((current) => ({ ...current, [match.id]: bankImportPaymentDate(row) }));
+                                  setPaymentAmounts((current) => ({ ...current, [match.id]: Math.abs(row.amount || 0) }));
+                                  setPaymentReferences((current) => ({ ...current, [match.id]: row.reference || row.description || "Bank CSV" }));
+                                }}
+                              >
+                                {language === "sv" ? "Anvand forslag" : "Use suggestion"}
+                              </button>
+                              <button
+                                type="button"
+                                className="primary-small-button"
+                                onClick={() => registerBankImportPayment(row, match)}
+                              >
+                                {language === "sv" ? "Registrera betalning" : "Register payment"}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => skipBankImportRow(row)}
+                              >
+                                {language === "sv" ? "Hoppa over rad" : "Skip row"}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="warning-text">{language === "sv" ? "Ingen fakturamatchning" : "No invoice match"}</span>
+                              {(row.amount || 0) < 0 && (
+                                <>
+                                  <label className="bank-import-category-select">
+                                    <span>{language === "sv" ? "Kostnadskategori" : "Expense category"}</span>
+                                    <select
+                                      value={selectedExpenseCategory}
+                                      onChange={(event) => {
+                                        setBankImportExpenseCategories((current) => ({
+                                          ...current,
+                                          [row.id]: event.target.value
+                                        }));
+                                        setBankImportExpenseVatRates((current) => ({
+                                          ...current,
+                                          [row.id]: defaultBankImportVatRate(event.target.value)
+                                        }));
+                                      }}
+                                    >
+                                      <option value="5420">5420 Programvaror</option>
+                                      <option value="5410">5410 Forbrukningsinventarier</option>
+                                      <option value="5800">5800 Resekostnader</option>
+                                      <option value="6570">6570 Bankkostnader</option>
+                                      <option value="4010">4010 Inkop</option>
+                                    </select>
+                                  </label>
+                                  <label className="bank-import-category-select">
+                                    <span>{language === "sv" ? "Moms" : "VAT"}</span>
+                                    <select
+                                      value={selectedVatRate}
+                                      onChange={(event) => {
+                                        setBankImportExpenseVatRates((current) => ({
+                                          ...current,
+                                          [row.id]: Number(event.target.value)
+                                        }));
+                                      }}
+                                    >
+                                      <option value={25}>25%</option>
+                                      <option value={12}>12%</option>
+                                      <option value={6}>6%</option>
+                                      <option value={0}>0%</option>
+                                    </select>
+                                  </label>
+                                  <label className="bank-import-description-input">
+                                    <span>{language === "sv" ? "Beskrivning i bokforingen" : "Bookkeeping description"}</span>
+                                    <input
+                                      type="text"
+                                      value={bankImportExpenseDescription(row)}
+                                      onChange={(event) => {
+                                        setBankImportExpenseDescriptions((current) => ({
+                                          ...current,
+                                          [row.id]: event.target.value
+                                        }));
+                                      }}
+                                    />
+                                  </label>
+                                  <span>{language === "sv" ? "Netto/moms" : "Net/VAT"}: {suggestedExpenseAmounts.netAmount} / {suggestedExpenseAmounts.vatAmount} SEK</span>
+                                  {existingExpenseMatch && (
+                                    <span className="warning-text">
+                                      {language === "sv"
+                                        ? `Verkar redan bokford: ${existingExpenseMatch.description}`
+                                        : `Looks already booked: ${existingExpenseMatch.description}`}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="primary-small-button"
+                                    disabled={Boolean(existingExpenseMatch)}
+                                    onClick={() => createExpenseFromBankImport(row)}
+                                  >
+                                    {existingExpenseMatch
+                                      ? (language === "sv" ? "Redan bokford" : "Already booked")
+                                      : (language === "sv" ? "Skapa kostnad" : "Create expense")}
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => skipBankImportRow(row)}
+                              >
+                                {language === "sv" ? "Hoppa over rad" : "Skip row"}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="payment-overview-list">
+            {paymentOverviewInvoices.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga fakturor i detta urval." : "No invoices in this selection."}</p>
+            ) : paymentOverviewInvoices.map((item) => {
+              const dueStatus = invoiceDueStatus(item, language);
+              return (
+                <article className={invoiceIsOverdue(item) ? "payment-overview-row overdue" : "payment-overview-row"} key={item.id}>
+                  <div>
+                    <strong>{invoiceNumber(item)}</strong>
+                    <span>{item.customerName}</span>
+                    <span>{t.personalNumber}: {item.customer?.personalNumber || "-"}</span>
+                    <span>{statusLabel(item.status, language)}</span>
+                    <span>{t.dueDate}: {item.dueDate || "-"}</span>
+                    <strong className={`due-status ${dueStatus.className}`}>{dueStatus.label}</strong>
+                    {invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && !invoiceIsOverdue(item) && (
+                      <strong className="due-soon-label">{invoiceReminderRuleText(item, language)}</strong>
+                    )}
+                    {invoiceIsOverdue(item) && (
+                      <strong className="overdue-label">{language === "sv" ? "Forfallen" : "Overdue"}</strong>
+                    )}
+                  </div>
+                  <div>
+                    <span>{language === "sv" ? "Totalt" : "Total"}: {invoiceTotalAmount(item)} SEK</span>
+                    <span>{language === "sv" ? "Betalt" : "Paid"}: {invoicePaidAmount(item)} SEK</span>
+                    <strong>{language === "sv" ? "Kvar" : "Remaining"}: {invoiceRemainingAmount(item)} SEK</strong>
+                    <span>{language === "sv" ? "OCR" : "OCR"}: {item.ocrNumber || "-"}</span>
+                    <span>{language === "sv" ? "Referens" : "Reference"}: {item.paymentReference || "-"}</span>
+                    <button type="button" className="secondary-button" onClick={() => copyPaymentInfo(item)}>
+                      {copiedPaymentInfoId === item.id
+                        ? (language === "sv" ? "Kopierad" : "Copied")
+                        : (language === "sv" ? "Kopiera betalinfo" : "Copy payment info")}
+                    </button>
+                    {item.reminderSentDate && (
+                      <span className="reminder-copy-status">
+                        {language === "sv" ? "Paminnelse sparad" : "Reminder saved"}: {item.reminderSentDate}
+                      </span>
+                    )}
+                    {invoiceShouldSendReminder(item, settings?.invoiceReminderDaysBeforeDue || 5) && (
+                      <div className="payment-reminder-actions">
+                        <button type="button" className="primary-small-button" onClick={() => sendInvoiceReminderEmail(item)}>
+                          {language === "sv" ? "Skicka e-post" : "Send email"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => openInvoiceReminderEmail(item)}>
+                          {language === "sv" ? "Oppna e-post" : "Open email"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => copyInvoiceReminder(item)}>
+                          {language === "sv" ? "Kopiera paminnelse" : "Copy reminder"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="section-heading">
+            <h2>{t.expenses}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={() => loadExpenses()}>
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadExpensesCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="expense-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Kostnader totalt" : "Total expenses"}</span>
+              <strong>{filteredExpenseTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Netto" : "Net"}</span>
+              <strong>{filteredExpenseNet} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Moms" : "VAT"}</span>
+              <strong>{filteredExpenseVat} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Saknar kvitto" : "Missing receipts"}</span>
+              <strong>{filteredExpensesMissingReceipt.length}</strong>
+            </article>
+          </div>
+
+          <div className="expense-filter-panel">
+            <div className="filter-bar">
+              <button
+                type="button"
+                className={expenseFilter === "all" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("all")}
+              >
+                {t.all}
+              </button>
+              <button
+                type="button"
+                className={expenseFilter === "withReceipt" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("withReceipt")}
+              >
+                {language === "sv" ? "Med kvitto" : "With receipt"}
+              </button>
+              <button
+                type="button"
+                className={expenseFilter === "missingReceipt" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("missingReceipt")}
+              >
+                {language === "sv" ? "Saknar kvitto" : "Missing receipt"}
+              </button>
+            </div>
+
+            <label>
+              {t.category}
+              <select value={expenseCategoryFilter} onChange={(event) => setExpenseCategoryFilter(event.target.value)}>
+                <option value="all">{t.all}</option>
+                {expenseCategories.map((category) => (
+                  <option value={category} key={category}>{expenseCategoryLabel(category)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              {language === "sv" ? "Fran datum" : "From date"}
+              <input
+                type="date"
+                value={expenseDateFrom}
+                onChange={(event) => setExpenseDateFrom(event.target.value)}
+              />
+            </label>
+
+            <label>
+              {language === "sv" ? "Till datum" : "To date"}
+              <input
+                type="date"
+                value={expenseDateTo}
+                onChange={(event) => setExpenseDateTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentMonthRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Denna manad" : "This month"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentQuarterRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Detta kvartal" : "This quarter"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentYearRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "I ar" : "This year"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setExpenseFilter("all");
+                setExpenseCategoryFilter("all");
+                setExpenseDateFrom("");
+                setExpenseDateTo("");
+                setExpenseSearch("");
+              }}
+            >
+              {language === "sv" ? "Rensa filter" : "Clear filters"}
+            </button>
+          </div>
+
+          <div className="search-box">
+            <label>
+              {language === "sv" ? "Sok kostnader" : "Search expenses"}
+              <div className="search-actions">
+                <input
+                  value={expenseSearch}
+                  onChange={(event) => setExpenseSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Beskrivning, kategori, kvitto..." : "Description, category, receipt..."}
+                />
+                {expenseSearch && (
+                  <button type="button" className="secondary-button" onClick={() => setExpenseSearch("")}>
+                    {language === "sv" ? "Rensa" : "Clear"}
+                  </button>
+                )}
+              </div>
+            </label>
+          </div>
+
+          {expenseCategorySummary.length > 0 && (
+            <div className="expense-category-list">
+              {expenseCategorySummary.map((group) => (
+                <article className="expense-category-row" key={group.category}>
+                  <div>
+                    <strong>{group.label}</strong>
+                    <span>{group.count} {language === "sv" ? "kostnad/kostnader" : "expense(s)"}</span>
+                  </div>
+                  <div>
+                    <span>{t.net}: {group.net} SEK</span>
+                    <span>{t.vat}: {group.vat} SEK</span>
+                    <strong>{t.total}: {group.total} SEK</strong>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateExpense} className="form expense-form">
+            <label>
+              {t.date}
+              <input
+                type="date"
+                value={expenseDate}
+                onChange={(event) => setExpenseDate(event.target.value)}
+              />
+            </label>
+            {expenseDateIsLocked && (
+              <p className="message warning">{lockedAccountingMessage(expenseDate)}</p>
+            )}
+
+            <label>
+              {t.description}
+              <input
+                value={expenseDescription}
+                onChange={(event) => setExpenseDescription(event.target.value)}
+                placeholder="Software subscription"
+              />
+            </label>
+
+            <div className="form-row">
+              <label>
+                {t.net}
+                <input
+                  type="number"
+                  value={expenseNetAmount}
+                  onChange={(event) => setExpenseNetAmount(event.target.value)}
+                  placeholder="1000"
+                />
+              </label>
+
+              <label>
+                {t.vat}
+                <input
+                  type="number"
+                  value={expenseVatAmount}
+                  onChange={(event) => setExpenseVatAmount(event.target.value)}
+                  placeholder="250"
+                />
+              </label>
+            </div>
+
+            <label>
+              {t.category}
+              <select value={expenseCategory} onChange={(event) => setExpenseCategory(event.target.value)}>
+                <option value="5420">5420 Programvaror</option>
+                <option value="5410">5410 Forbrukningsinventarier</option>
+                <option value="5800">5800 Resekostnader</option>
+                <option value="6570">6570 Bankkostnader</option>
+                <option value="4010">4010 Inkop</option>
+              </select>
+            </label>
+
+            <label>
+              {t.receipt}
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={(event) => setExpenseReceiptFile(event.target.files?.[0] || null)}
+              />
+            </label>
+
+            <button type="submit" disabled={!token || expenseDateIsLocked}>{t.saveExpense}</button>
+          </form>
+
+          {filteredExpenses.length === 0 ? (
+            <p className="empty-state">{t.noExpenses}</p>
+          ) : (
+            <div className="orders">
+              {filteredExpenses.map((expense) => (
+                <article className="order-card" key={expense.id}>
+                  <div>
+                    <h3>{expense.description}</h3>
+                    <p>{expense.expenseDate}</p>
+                    <p>{t.category}: {expenseCategoryLabel(expense.category)}</p>
+                    <span className={`due-status ${expenseHasReceipt(expense) ? "due-status-ok" : "due-status-soon"}`}>
+                      {expenseHasReceipt(expense)
+                        ? (language === "sv" ? "Kvitto sparat" : "Receipt saved")
+                        : (language === "sv" ? "Saknar kvitto" : "Missing receipt")}
+                    </span>
+                    {expense.receiptFileName && (
+                      <p>{language === "sv" ? "Fil" : "File"}: {expense.receiptFileName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <span>{t.net}: {expense.netAmount} SEK</span>
+                    <span>{t.vat}: {expense.vatAmount} SEK</span>
+                    <strong>{t.total}: {expense.totalAmount} SEK</strong>
+                    {expenseHasReceipt(expense) && (
+                      <button type="button" className="secondary-button" onClick={() => openExpenseReceipt(expense.id)}>
+                        {t.openReceipt}
+                      </button>
+                    )}
+                    {!expenseHasReceipt(expense) && (
+                      <label className="file-button">
+                        {t.attachReceipt}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          onChange={(event) => attachReceiptToExpense(expense.id, event.target.files?.[0] || null)}
+                        />
+                      </label>
+                    )}
+                    <button type="button" className="secondary-button" onClick={() => copyExpenseInfo(expense)}>
+                      {copiedExpenseInfoId === expense.id
+                        ? (language === "sv" ? "Kopierad" : "Copied")
+                        : (language === "sv" ? "Kopiera info" : "Copy info")}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>}
+
+        {activeView === "uploaded" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.uploaded}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={() => loadExpenses()}>
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadExpensesCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="stats compact-stats">
+            <article>
+              <span>{t.receiptsSaved}</span>
+              <strong>{filteredExpensesWithReceipt.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Sparat belopp" : "Saved amount"}</span>
+              <strong>{filteredReceiptTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{t.receiptsMissing}</span>
+              <strong>{filteredExpensesMissingReceipt.length}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Saknar kvitto belopp" : "Missing receipt amount"}</span>
+              <strong>{filteredMissingReceiptTotal} SEK</strong>
+            </article>
+          </div>
+
+          <div className="expense-filter-panel">
+            <div className="filter-bar">
+              <button
+                type="button"
+                className={expenseFilter === "all" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("all")}
+              >
+                {t.all}
+              </button>
+              <button
+                type="button"
+                className={expenseFilter === "withReceipt" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("withReceipt")}
+              >
+                {language === "sv" ? "Med kvitto" : "With receipt"}
+              </button>
+              <button
+                type="button"
+                className={expenseFilter === "missingReceipt" ? "filter-button active" : "filter-button"}
+                onClick={() => setExpenseFilter("missingReceipt")}
+              >
+                {language === "sv" ? "Saknar kvitto" : "Missing receipt"}
+              </button>
+            </div>
+
+            <label>
+              {t.category}
+              <select value={expenseCategoryFilter} onChange={(event) => setExpenseCategoryFilter(event.target.value)}>
+                <option value="all">{t.all}</option>
+                {expenseCategories.map((category) => (
+                  <option value={category} key={category}>{expenseCategoryLabel(category)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              {language === "sv" ? "Fran datum" : "From date"}
+              <input
+                type="date"
+                value={expenseDateFrom}
+                onChange={(event) => setExpenseDateFrom(event.target.value)}
+              />
+            </label>
+
+            <label>
+              {language === "sv" ? "Till datum" : "To date"}
+              <input
+                type="date"
+                value={expenseDateTo}
+                onChange={(event) => setExpenseDateTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentMonthRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Denna manad" : "This month"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentQuarterRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Detta kvartal" : "This quarter"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const range = currentYearRange();
+                setExpenseDateFrom(range.from);
+                setExpenseDateTo(range.to);
+              }}
+            >
+              {language === "sv" ? "I ar" : "This year"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setExpenseFilter("all");
+                setExpenseCategoryFilter("all");
+                setExpenseDateFrom("");
+                setExpenseDateTo("");
+                setExpenseSearch("");
+              }}
+            >
+              {language === "sv" ? "Rensa filter" : "Clear filters"}
+            </button>
+          </div>
+
+          <div className="search-box">
+            <label>
+              {language === "sv" ? "Sok underlag" : "Search receipts"}
+              <div className="search-actions">
+                <input
+                  value={expenseSearch}
+                  onChange={(event) => setExpenseSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Beskrivning, kategori, kvitto..." : "Description, category, receipt..."}
+                />
+                {expenseSearch && (
+                  <button type="button" className="secondary-button" onClick={() => setExpenseSearch("")}>
+                    {language === "sv" ? "Rensa" : "Clear"}
+                  </button>
+                )}
+              </div>
+            </label>
+          </div>
+
+          <div className="receipt-sections">
+            <article className="receipt-panel">
+              <h3>{t.receiptsSaved}</h3>
+              {filteredExpensesWithReceipt.length === 0 ? (
+                <p className="empty-state">{t.noReceipts}</p>
+              ) : (
+                <div className="receipt-list">
+                  {filteredExpensesWithReceipt.map((expense) => (
+                    <div className="receipt-row" key={expense.id}>
+                      <div>
+                        <strong>{expense.description}</strong>
+                        <span>{expense.expenseDate} - {expense.totalAmount} SEK</span>
+                        <span>{t.net}: {expense.netAmount || 0} SEK - {t.vat}: {expense.vatAmount || 0} SEK</span>
+                        <span>{t.category}: {expenseCategoryLabel(expense.category)}</span>
+                        <span>{expense.receiptFileName || t.receipt}</span>
+                      </div>
+                      <div className="receipt-row-actions">
+                        <button type="button" className="secondary-button" onClick={() => openExpenseReceipt(expense.id)}>
+                          {t.openReceipt}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => copyExpenseInfo(expense)}>
+                          {copiedExpenseInfoId === expense.id
+                            ? (language === "sv" ? "Kopierad" : "Copied")
+                            : (language === "sv" ? "Kopiera info" : "Copy info")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            <article className="receipt-panel">
+              <h3>{t.receiptsMissing}</h3>
+              {filteredExpensesMissingReceipt.length === 0 ? (
+                <p className="empty-state">{t.noMissingReceipts}</p>
+              ) : (
+                <div className="receipt-list">
+                  {filteredExpensesMissingReceipt.map((expense) => (
+                    <div className="receipt-row missing" key={expense.id}>
+                      <div>
+                        <strong>{expense.description}</strong>
+                        <span>{expense.expenseDate} - {expense.totalAmount} SEK</span>
+                        <span>{t.net}: {expense.netAmount || 0} SEK - {t.vat}: {expense.vatAmount || 0} SEK</span>
+                        <span>{t.category}: {expenseCategoryLabel(expense.category)}</span>
+                      </div>
+                      <div className="receipt-row-actions">
+                        <label className="file-button">
+                          {t.attachReceipt}
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            onChange={(event) => attachReceiptToExpense(expense.id, event.target.files?.[0] || null)}
+                          />
+                        </label>
+                        <button type="button" className="secondary-button" onClick={() => copyExpenseInfo(expense)}>
+                          {copiedExpenseInfoId === expense.id
+                            ? (language === "sv" ? "Kopierad" : "Copied")
+                            : (language === "sv" ? "Kopiera info" : "Copy info")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          </div>
+        </section>}
+
+        {activeView === "vat" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.vatReport}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={loadVatReport}>
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadVatReportCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="vat-report">
+            <article>
+              <span>{t.outputVat} 2611</span>
+              <strong>{vatReport?.outputVat || 0} SEK</strong>
+            </article>
+            <article>
+              <span>{t.inputVat} 2641</span>
+              <strong>{vatReport?.inputVat || 0} SEK</strong>
+            </article>
+            <article>
+              <span>{t.vatToPay}</span>
+              <strong>{vatReport?.vatToPay || 0} SEK</strong>
+            </article>
+          </div>
+        </section>}
+
+        {activeView === "bookkeeping" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.bookkeeping}</h2>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={loadJournalEntries}>
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadJournalCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateManualJournalEntry} className="form manual-voucher-form">
+            <h3>{t.manualVoucher}</h3>
+            <p className="settings-hint">
+              {language === "sv"
+                ? "Bokforda verifikationer ska bevaras som historik. Om nagot blir fel, skapa en ny korrigeringsverifikation i stallet for att andra eller radera gamla rader."
+                : "Posted journal entries should be preserved as history. If something is wrong, create a new correction voucher instead of changing or deleting old rows."}
+            </p>
+            <label>
+              {t.date}
+              <input
+                type="date"
+                value={manualVoucherDate}
+                onChange={(event) => setManualVoucherDate(event.target.value)}
+              />
+            </label>
+            {manualVoucherDateIsLocked && (
+              <p className="message warning">
+                {language === "sv"
+                  ? `Denna period ar last till och med ${formatDateOnly(accountingLockedThroughDate)}. Valj ett senare datum eller skapa en korrigering i en olast period.`
+                  : `This period is locked through ${formatDateOnly(accountingLockedThroughDate)}. Choose a later date or create a correction in an unlocked period.`}
+              </p>
+            )}
+
+            <label>
+              {t.description}
+              <input
+                value={manualDescription}
+                onChange={(event) => setManualDescription(event.target.value)}
+                placeholder={language === "sv" ? "Exempel: korrigering" : "Example: adjustment"}
+              />
+            </label>
+
+            <div className="form-row">
+              <label>
+                {t.debitAccount}
+                <select value={manualDebitAccount} onChange={(event) => setManualDebitAccount(event.target.value)}>
+                  <option value="">{language === "sv" ? "Valj konto" : "Choose account"}</option>
+                  {accounts.map((account) => (
+                    <option key={account.number} value={account.number}>
+                      {account.number} {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                {t.creditAccount}
+                <select value={manualCreditAccount} onChange={(event) => setManualCreditAccount(event.target.value)}>
+                  <option value="">{language === "sv" ? "Valj konto" : "Choose account"}</option>
+                  {accounts.map((account) => (
+                    <option key={account.number} value={account.number}>
+                      {account.number} {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label>
+              {t.amount}
+              <input
+                type="number"
+                value={manualAmount}
+                onChange={(event) => setManualAmount(event.target.value)}
+                placeholder="1000"
+              />
+            </label>
+
+            <button type="submit" disabled={!token || manualVoucherDateIsLocked || !manualDescription || !manualDebitAccount || !manualCreditAccount || !manualAmount}>
+              {t.saveVoucher}
+            </button>
+          </form>
+
+          {journalEntries.length === 0 ? (
+            <p className="empty-state">{t.noJournalEntries}</p>
+          ) : (
+            <>
+            <div className="filter-bar bookkeeping-filter-bar">
+              <button
+                type="button"
+                className={bookkeepingFilter === "all" ? "filter-button active" : "filter-button"}
+                onClick={() => setBookkeepingFilter("all")}
+              >
+                {t.all}
+              </button>
+              <button
+                type="button"
+                className={bookkeepingFilter === "original" ? "filter-button active" : "filter-button"}
+                onClick={() => setBookkeepingFilter("original")}
+              >
+                {language === "sv" ? "Original" : "Original"}
+              </button>
+              <button
+                type="button"
+                className={bookkeepingFilter === "corrections" ? "filter-button active" : "filter-button"}
+                onClick={() => setBookkeepingFilter("corrections")}
+              >
+                {language === "sv" ? "Rattelser" : "Corrections"}
+              </button>
+              <button
+                type="button"
+                className={bookkeepingFilter === "corrected" ? "filter-button active" : "filter-button"}
+                onClick={() => setBookkeepingFilter("corrected")}
+              >
+                {language === "sv" ? "Har rattelse" : "Has correction"}
+              </button>
+            </div>
+
+            <div className="search-box bookkeeping-search-box">
+              <label>
+                {language === "sv" ? "Sok i bokforing" : "Search bookkeeping"}
+                <div className="search-actions">
+                  <input
+                    value={bookkeepingSearch}
+                    onChange={(event) => setBookkeepingSearch(event.target.value)}
+                    placeholder={language === "sv" ? "Verifikat, konto, beskrivning, belopp..." : "Voucher, account, description, amount..."}
+                  />
+                  {bookkeepingSearch && (
+                    <button type="button" className="secondary-button" onClick={() => setBookkeepingSearch("")}>
+                      {language === "sv" ? "Rensa" : "Clear"}
+                    </button>
+                  )}
+                </div>
+              </label>
+            </div>
+            {bookkeepingAccountSearch && (
+              <div className="account-drilldown-banner">
+                <span>
+                  {language === "sv" ? "Visar huvudbok for konto" : "Showing ledger for account"}{" "}
+                  <strong>{bookkeepingAccountSearch}</strong>
+                  {activeBookkeepingAccount?.accountName || activeBookkeepingAccount?.name
+                    ? ` - ${activeBookkeepingAccount.accountName || activeBookkeepingAccount.name}`
+                    : ""}
+                </span>
+                <div className="account-drilldown-actions">
+                  <button type="button" className="secondary-button" onClick={downloadActiveAccountLedgerCsv}>
+                    {language === "sv" ? "Exportera huvudbok" : "Export ledger"}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => setBookkeepingSearch("")}>
+                    {language === "sv" ? "Visa alla konton" : "Show all accounts"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {bookkeepingVoucherSearch && (
+              <div className="account-drilldown-banner voucher-drilldown-banner">
+                <span>
+                  {language === "sv" ? "Visar verifikat" : "Showing voucher"}{" "}
+                  <strong>{bookkeepingVoucherSearch}</strong>
+                  {activeBookkeepingVoucher?.description ? ` - ${activeBookkeepingVoucher.description}` : ""}
+                </span>
+                <div className="account-drilldown-actions">
+                  <button type="button" className="secondary-button" onClick={() => setBookkeepingSearch("")}>
+                    {language === "sv" ? "Visa alla verifikat" : "Show all vouchers"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {activeBookkeepingVoucher && (
+              <div className="voucher-detail-panel">
+                <div className="expense-summary-grid voucher-detail-summary-grid">
+                  <article>
+                    <span>{language === "sv" ? "Verifikationsdatum" : "Voucher date"}</span>
+                    <strong>{activeBookkeepingVoucher.voucherDate || formatDateTime(activeBookkeepingVoucher.createdAt)}</strong>
+                  </article>
+                  <article>
+                    <span>{t.debit}</span>
+                    <strong>{activeBookkeepingVoucher.debit} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{t.credit}</span>
+                    <strong>{activeBookkeepingVoucher.credit} SEK</strong>
+                  </article>
+                  <article className={activeBookkeepingVoucherDifference === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                    <span>{language === "sv" ? "Status" : "Status"}</span>
+                    <strong>
+                      {activeBookkeepingVoucherDifference === 0
+                        ? (language === "sv" ? "Balanserar" : "Balanced")
+                        : `${language === "sv" ? "Differens" : "Difference"} ${activeBookkeepingVoucherDifference} SEK`}
+                    </strong>
+                  </article>
+                </div>
+                <div className="journal-table voucher-detail-table">
+                  <div className="journal-header">
+                    <span>{t.account}</span>
+                    <span>{t.description}</span>
+                    <span>{t.debit}</span>
+                    <span>{t.credit}</span>
+                  </div>
+                  {activeBookkeepingVoucher.rows.map((entry) => (
+                    <div className="journal-row" key={`voucher-detail-${entry.id}`}>
+                      <span>{entry.accountNumber} {entry.accountName}</span>
+                      <span>{entry.description}</span>
+                      <span>{entry.debit} SEK</span>
+                      <span>{entry.credit} SEK</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {bookkeepingAccountSearch && activeAccountLedgerRows.length > 0 && (
+              <>
+                <div className="expense-summary-grid active-account-summary-grid">
+                  <article>
+                    <span>{language === "sv" ? "Ingaende saldo" : "Opening balance"}</span>
+                    <strong>{activeAccountOpeningBalance} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Period debet" : "Period debit"}</span>
+                    <strong>{activeAccountPeriodDebit} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Period kredit" : "Period credit"}</span>
+                    <strong>{activeAccountPeriodCredit} SEK</strong>
+                  </article>
+                  <article className={activeAccountPeriodChange === 0 ? "balanced-summary" : ""}>
+                    <span>{language === "sv" ? "Utgaende saldo" : "Closing balance"}</span>
+                    <strong>{activeAccountClosingBalance} SEK</strong>
+                  </article>
+                </div>
+                <div className="account-table active-account-ledger">
+                  <div className="account-row active-account-ledger-header">
+                    <span>{t.date}</span>
+                    <span>{language === "sv" ? "Verifikat" : "Voucher"}</span>
+                    <span>{t.description}</span>
+                    <span>{t.debit}</span>
+                    <span>{t.credit}</span>
+                    <span>{language === "sv" ? "Lopande saldo" : "Running balance"}</span>
+                  </div>
+                  {bookkeepingDateFrom && (
+                    <div className="account-row active-account-ledger-row opening-balance-row">
+                      <span>{bookkeepingDateFrom}</span>
+                      <strong>{language === "sv" ? "Ingaende" : "Opening"}</strong>
+                      <span>{language === "sv" ? "Ingaende saldo fore perioden" : "Opening balance before period"}</span>
+                      <span>0 SEK</span>
+                      <span>0 SEK</span>
+                      <strong>{activeAccountOpeningBalance} SEK</strong>
+                    </div>
+                  )}
+                  {activeAccountLedgerRows.map((row, index) => (
+                    <div className="account-row active-account-ledger-row" key={`${row.voucherNumber}-${index}`}>
+                      <span>{row.voucherDate || "-"}</span>
+                      <button
+                        type="button"
+                        className="account-drilldown-button"
+                        onClick={() => setBookkeepingSearch(row.voucherNumber)}
+                        title={language === "sv" ? "Visa hela verifikatet" : "Show full voucher"}
+                      >
+                        {row.voucherNumber}
+                      </button>
+                      <span>{row.description}</span>
+                      <span>{row.debit} SEK</span>
+                      <span>{row.credit} SEK</span>
+                      <strong>{row.balance} SEK</strong>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="invoice-filter-panel bookkeeping-date-panel">
+              <label>
+                {language === "sv" ? "Verifikationsdatum fran" : "Voucher date from"}
+                <input
+                  type="date"
+                  value={bookkeepingDateFrom}
+                  onChange={(event) => setBookkeepingDateFrom(event.target.value)}
+                />
+              </label>
+
+              <label>
+                {language === "sv" ? "Verifikationsdatum till" : "Voucher date to"}
+                <input
+                  type="date"
+                  value={bookkeepingDateTo}
+                  onChange={(event) => setBookkeepingDateTo(event.target.value)}
+                />
+              </label>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  const range = currentMonthRange();
+                  setBookkeepingDateFrom(range.from);
+                  setBookkeepingDateTo(range.to);
+                }}
+              >
+                {language === "sv" ? "Denna manad" : "This month"}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  const range = currentQuarterRange();
+                  setBookkeepingDateFrom(range.from);
+                  setBookkeepingDateTo(range.to);
+                }}
+              >
+                {language === "sv" ? "Detta kvartal" : "This quarter"}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  const range = currentYearRange();
+                  setBookkeepingDateFrom(range.from);
+                  setBookkeepingDateTo(range.to);
+                }}
+              >
+                {language === "sv" ? "I ar" : "This year"}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setBookkeepingFilter("all");
+                  setBookkeepingDateFrom("");
+                  setBookkeepingDateTo("");
+                  setBookkeepingSearch("");
+                }}
+              >
+                {language === "sv" ? "Rensa filter" : "Clear filters"}
+              </button>
+            </div>
+
+            <div className="expense-summary-grid bookkeeping-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Verifikationer i urval" : "Vouchers in selection"}</span>
+                <strong>{filteredJournalGroups.length}</strong>
+              </article>
+              <article>
+                <span>{t.debit}</span>
+                <strong>{filteredJournalDebit} SEK</strong>
+              </article>
+              <article>
+                <span>{t.credit}</span>
+                <strong>{filteredJournalCredit} SEK</strong>
+              </article>
+              <article className={filteredJournalDifference === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Differens" : "Difference"}</span>
+                <strong>{filteredJournalDifference} SEK</strong>
+              </article>
+            </div>
+
+            {filteredJournalMonthlySummary.length > 0 && (
+              <div className="account-table bookkeeping-monthly-summary">
+                <div className="account-row bookkeeping-monthly-header">
+                  <span>{language === "sv" ? "Manad" : "Month"}</span>
+                  <span>{language === "sv" ? "Verifikationer" : "Vouchers"}</span>
+                  <span>{t.debit}</span>
+                  <span>{t.credit}</span>
+                  <span>{language === "sv" ? "Differens" : "Difference"}</span>
+                </div>
+                {filteredJournalMonthlySummary.map((month) => {
+                  const difference = month.debit - month.credit;
+
+                  return (
+                    <div className="account-row bookkeeping-monthly-row" key={month.monthKey}>
+                      <button
+                        type="button"
+                        className="account-drilldown-button"
+                        onClick={() => {
+                          const range = monthRangeFromKey(month.monthKey);
+                          setBookkeepingDateFrom(range.from);
+                          setBookkeepingDateTo(range.to);
+                          setBookkeepingSearch("");
+                        }}
+                        title={language === "sv" ? "Filtrera bokforing till denna manad" : "Filter bookkeeping to this month"}
+                      >
+                        {formatMonthLabel(month.monthKey, language)}
+                      </button>
+                      <span>{month.voucherCount}</span>
+                      <span>{month.debit} SEK</span>
+                      <span>{month.credit} SEK</span>
+                      <strong className={difference === 0 ? "balanced-text" : "unbalanced-text"}>{difference} SEK</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {filteredJournalAccountSummary.length > 0 && (
+              <div className="account-table bookkeeping-account-summary">
+                <div className="account-row bookkeeping-account-header">
+                  <span>{t.account}</span>
+                  <span>{t.accountName}</span>
+                  <span>{t.debit}</span>
+                  <span>{t.credit}</span>
+                  <span>{language === "sv" ? "Saldo" : "Balance"}</span>
+                </div>
+                {filteredJournalAccountSummary.map((account) => (
+                  <div className="account-row bookkeeping-account-row" key={account.accountNumber}>
+                    <button
+                      type="button"
+                      className="account-drilldown-button"
+                      onClick={() => setBookkeepingSearch(account.accountNumber)}
+                      title={language === "sv" ? "Visa verifikationer for kontot" : "Show vouchers for this account"}
+                    >
+                      {account.accountNumber}
+                    </button>
+                    <span>{account.accountName}</span>
+                    <span>{account.debit} SEK</span>
+                    <span>{account.credit} SEK</span>
+                    <strong>{account.debit - account.credit} SEK</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {filteredJournalGroups.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv" ? "Inga verifikationer matchar filtret." : "No vouchers match the filter."}
+              </p>
+            ) : (
+            <div className="journal-groups">
+              {filteredJournalGroups.map((group) => (
+                <article className="journal-group" key={group.voucherNumber}>
+                  <header className="journal-group-header">
+                    <div>
+                      <div className="journal-title-row">
+                        <h3>{group.voucherNumber}</h3>
+                        <span className="locked-badge">{language === "sv" ? "Last historik" : "Locked history"}</span>
+                        {group.correctionOfVoucherNumber ? (
+                          <span className="correction-badge">
+                            {language === "sv"
+                              ? `Rattelse av ${group.correctionOfVoucherNumber}`
+                              : `Correction of ${group.correctionOfVoucherNumber}`}
+                          </span>
+                        ) : group.hasCorrection ? (
+                          <span className="corrected-badge">
+                            {language === "sv" ? "Har rattelse" : "Has correction"}
+                          </span>
+                        ) : (
+                          <span className="original-badge">
+                            {language === "sv" ? "Original" : "Original"}
+                          </span>
+                        )}
+                      </div>
+                      <p>{group.description}</p>
+                      <span>{group.voucherDate || formatDateTime(group.createdAt)}</span>
+                    </div>
+                    <div className="journal-header-actions">
+                      <div className="journal-totals">
+                        <span>{t.debit}: {group.debit} SEK</span>
+                        <span>{t.credit}: {group.credit} SEK</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!token || group.voucherNumber === "Utan verifikat" || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                        onClick={() => createCorrectionVoucher(group.voucherNumber)}
+                      >
+                        {language === "sv" ? "Skapa rattelse" : "Create correction"}
+                      </button>
+                    </div>
+                  </header>
+
+                  <div className="journal-table">
+                    <div className="journal-header">
+                      <span>{t.account}</span>
+                      <span>{t.description}</span>
+                      <span>{t.debit}</span>
+                      <span>{t.credit}</span>
+                    </div>
+                    {group.rows.map((entry) => (
+                      <div className="journal-row" key={entry.id}>
+                        <span>{entry.accountNumber} {entry.accountName}</span>
+                        <span>{entry.description}</span>
+                        <span>{entry.debit} SEK</span>
+                        <span>{entry.credit} SEK</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            )}
+            </>
+          )}
+        </section>}
+
+        {activeView === "accounts" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.chartOfAccounts}</h2>
+            <button type="button" className="secondary-button" onClick={() => loadAccounts()}>
+              {t.refresh}
+            </button>
+          </div>
+
+          <p className="settings-hint">
+            {settings?.companyType === "LIMITED_COMPANY"
+              ? (language === "sv"
+                ? "Visar gemensamma konton och konton som passar aktiebolag."
+                : "Showing shared accounts and accounts suitable for limited companies.")
+              : (language === "sv"
+                ? "Visar gemensamma konton och konton som passar enskild firma."
+                : "Showing shared accounts and accounts suitable for sole traders.")}
+          </p>
+
+          {accounts.length === 0 ? (
+            <p className="empty-state">{language === "sv" ? "Inga konton laddade." : "No accounts loaded."}</p>
+          ) : (
+            <div className="account-table">
+              <div className="account-row account-header">
+                <span>{t.accountNumber}</span>
+                <span>{t.accountName}</span>
+                <span>{t.appliesTo}</span>
+              </div>
+              {accounts.map((account) => (
+                <div className="account-row" key={account.number}>
+                  <strong>{account.number}</strong>
+                  <span>{account.name}</span>
+                  <span>{accountCompanyTypeLabel(account.companyType, language)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>}
+
+        {activeView === "reports" && <section className="orders-section">
+          <div className="section-heading">
+            <h2>{t.profitAndLoss}</h2>
+            <div className="button-row">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  loadProfitAndLoss();
+                  loadBalanceReport();
+                }}
+              >
+                {t.refresh}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadProfitAndLossCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          {profitAndLoss ? (
+            <div className="report-grid">
+              <article className="report-card">
+                <h3>{t.revenueLines}</h3>
+                {profitAndLoss.revenue.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga intakter annu." : "No revenue yet."}</p>
+                ) : (
+                  profitAndLoss.revenue.map((line) => (
+                    <p key={line.accountNumber}>
+                      <span>{line.accountNumber} {line.accountName}</span>
+                      <strong>{line.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+                <footer>{t.total}: {profitAndLoss.totalRevenue} SEK</footer>
+              </article>
+
+              <article className="report-card">
+                <h3>{t.expenseLines}</h3>
+                {profitAndLoss.expenses.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga kostnader annu." : "No expenses yet."}</p>
+                ) : (
+                  profitAndLoss.expenses.map((line) => (
+                    <p key={line.accountNumber}>
+                      <span>{line.accountNumber} {line.accountName}</span>
+                      <strong>{line.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+                <footer>{t.total}: {profitAndLoss.totalExpenses} SEK</footer>
+              </article>
+
+              <article className="report-card result-card">
+                <h3>{t.result}</h3>
+                <strong>{profitAndLoss.result} SEK</strong>
+              </article>
+            </div>
+          ) : (
+            <p className="empty-state">{language === "sv" ? "Ingen rapport laddad." : "No report loaded."}</p>
+          )}
+
+          <div className="section-heading report-subheading">
+            <h2>{t.balanceReport}</h2>
+            <button type="button" className="secondary-button" onClick={downloadBalanceReportCsv}>
+              {t.exportCsv}
+            </button>
+          </div>
+
+          {balanceReport ? (
+            <div className="report-grid">
+              <article className="report-card">
+                <h3>{t.assetLines}</h3>
+                {balanceReport.assets.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga tillgangar annu." : "No assets yet."}</p>
+                ) : (
+                  balanceReport.assets.map((line) => (
+                    <p key={line.accountNumber}>
+                      <span>{line.accountNumber} {line.accountName}</span>
+                      <strong>{line.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+                <footer>{t.total}: {balanceReport.totalAssets} SEK</footer>
+              </article>
+
+              <article className="report-card">
+                <h3>{t.liabilitiesAndEquity}</h3>
+                {balanceReport.liabilitiesAndEquity.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga skulder eller eget kapital annu." : "No liabilities or equity yet."}</p>
+                ) : (
+                  balanceReport.liabilitiesAndEquity.map((line) => (
+                    <p key={line.accountNumber}>
+                      <span>{line.accountNumber} {line.accountName}</span>
+                      <strong>{line.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+                <footer>{t.total}: {balanceReport.totalLiabilitiesAndEquity} SEK</footer>
+              </article>
+
+              <article className="report-card result-card">
+                <h3>{t.difference}</h3>
+                <strong>{balanceReport.difference} SEK</strong>
+              </article>
+            </div>
+          ) : (
+            <p className="empty-state">{language === "sv" ? "Ingen balansrapport laddad." : "No balance report loaded."}</p>
+          )}
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Forfallorapport" : "Aging report"}</h2>
+            <div className="button-row">
+              <span className="status">{agingInvoices.length} {language === "sv" ? "oppna fakturor" : "open invoices"}</span>
+              <button type="button" className="secondary-button" onClick={downloadAgingReportCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="aging-report-grid">
+            {agingBuckets.map((bucket) => {
+              const bucketTotal = bucket.items.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+
+              return (
+                <article className="report-card aging-card" key={bucket.key}>
+                  <header>
+                    <h3>{bucket.title}</h3>
+                    <strong>{bucketTotal} SEK</strong>
+                  </header>
+
+                  {bucket.items.length === 0 ? (
+                    <p className="muted-line">{language === "sv" ? "Inga fakturor i denna grupp." : "No invoices in this group."}</p>
+                  ) : (
+                    <div className="aging-list">
+                      {bucket.items.map((item) => {
+                        const dueStatus = invoiceDueStatus(item, language);
+
+                        return (
+                          <button
+                            type="button"
+                            className="aging-row"
+                            key={item.id}
+                            onClick={() => {
+                              setActiveView("invoices");
+                              setInvoiceSearch(invoiceNumber(item));
+                            }}
+                          >
+                            <span>
+                              <strong>{invoiceNumber(item)}</strong>
+                              <small>{item.customerName || item.customer?.name || "-"}</small>
+                            </span>
+                            <span>
+                              <strong>{invoiceRemainingAmount(item)} SEK</strong>
+                              <small>{language === "sv" ? "Forfallodatum" : "Due"}: {formatDateOnly(item.dueDate)}</small>
+                            </span>
+                            <span className={`due-status ${dueStatus.className}`}>{dueStatus.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>}
+
+        {activeView === "settings" && (
+          <section className="orders-section">
+            <h2>{t.settings}</h2>
+            {settings ? (
+              <form className="form settings-form" onSubmit={handleSaveSettings}>
+                <div className="settings-panel system-status-panel">
+                  <div className="section-heading">
+                    <strong>{language === "sv" ? "Systemstatus" : "System status"}</strong>
+                    <button type="button" className="secondary-button" onClick={loadSystemStatus}>
+                      {language === "sv" ? "Uppdatera" : "Refresh"}
+                    </button>
+                  </div>
+                  {systemStatus?.error && <p className="message warning">{systemStatus.error}</p>}
+                  <div className="system-status-grid">
+                    {renderSystemStatusItem(
+                      language === "sv" ? "Backend" : "Backend",
+                      Boolean(systemStatus?.backend?.ok),
+                      language === "sv" ? "API-servern svarar." : "API server is responding."
+                    )}
+                    {renderSystemStatusItem(
+                      language === "sv" ? "Databas" : "Database",
+                      Boolean(systemStatus?.database?.ok),
+                      language === "sv" ? "PostgreSQL/RDS-anslutning." : "PostgreSQL/RDS connection."
+                    )}
+                    {renderSystemStatusItem(
+                      language === "sv" ? "JWT-sakerhet" : "JWT security",
+                      Boolean(systemStatus?.security?.jwtStrong),
+                      systemStatus?.security?.jwtConfigured
+                        ? (language === "sv" ? "JWT_SECRET finns men bor vara minst 32 tecken." : "JWT_SECRET exists but should be at least 32 characters.")
+                        : (language === "sv" ? "Byt fran standard JWT_SECRET fore publik demo." : "Change the default JWT_SECRET before public demo.")
+                    )}
+                    {renderSystemStatusItem(
+                      "Stripe",
+                      Boolean(systemStatus?.stripe?.configured),
+                      systemStatus?.stripe?.webhookConfigured
+                        ? (language === "sv" ? "Nyckel och webhook finns." : "Key and webhook are set.")
+                        : (language === "sv" ? "Lagg STRIPE_SECRET_KEY och webhook-secret senare." : "Add STRIPE_SECRET_KEY and webhook secret later.")
+                    )}
+                    {renderSystemStatusItem(
+                      language === "sv" ? "E-post/SMTP" : "Email/SMTP",
+                      Boolean(systemStatus?.email?.configured),
+                      systemStatus?.email?.configured
+                        ? (language === "sv" ? "SMTP host och anvandare finns." : "SMTP host and username are set.")
+                        : (language === "sv" ? "Lagg SMTP i IntelliJ Run Configuration for riktiga mail." : "Add SMTP in IntelliJ Run Configuration for real email.")
+                    )}
+                    {renderSystemStatusItem(
+                      language === "sv" ? "Automatiska paminnelser" : "Automatic reminders",
+                      Boolean(systemStatus?.automation?.invoiceRemindersConfigured),
+                      systemStatus?.automation?.invoiceRemindersConfigured
+                        ? (language === "sv"
+                          ? `Schema: ${systemStatus?.automation?.invoiceRemindersCron || "-"} (${systemStatus?.automation?.timeZone || "Europe/Stockholm"})`
+                          : `Schedule: ${systemStatus?.automation?.invoiceRemindersCron || "-"} (${systemStatus?.automation?.timeZone || "Europe/Stockholm"})`)
+                        : (language === "sv" ? "Inget schema hittades." : "No schedule found.")
+                    )}
+                  </div>
+                  {systemStatus && (!systemStatus?.security?.jwtStrong || !systemStatus?.stripe?.configured || !systemStatus?.stripe?.webhookConfigured || !systemStatus?.email?.configured) && (
+                    <div className="config-guide">
+                      <div className="config-guide-header">
+                        <strong>{language === "sv" ? "Konfigurationsguide" : "Configuration guide"}</strong>
+                        <button type="button" className="secondary-button" onClick={copyMissingConfigValues}>
+                          {language === "sv" ? "Kopiera alla" : "Copy all"}
+                        </button>
+                      </div>
+                      <p>
+                        {language === "sv"
+                          ? "Lagg dessa som Environment variables i IntelliJ Run Configuration. Skriv aldrig riktiga nycklar direkt i koden."
+                          : "Add these as Environment variables in IntelliJ Run Configuration. Never write real secrets directly in code."}
+                      </p>
+                      <p className="settings-hint">
+                        {language === "sv"
+                          ? "Efter att du har andrat miljo variabler: starta om CloudShopApplication."
+                          : "After changing environment variables: restart CloudShopApplication."}
+                      </p>
+                      {!systemStatus?.security?.jwtStrong && (
+                        <div className="config-guide-row">
+                          <code>{jwtSecretConfigLine()}</code>
+                          <button type="button" className="secondary-button" onClick={generateJwtSecret}>
+                            {language === "sv" ? "Generera" : "Generate"}
+                          </button>
+                          <button type="button" className="secondary-button" onClick={() => copyConfigValue(jwtSecretConfigLine())}>
+                            {language === "sv" ? "Kopiera" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                      {!systemStatus?.stripe?.configured && (
+                        <div className="config-guide-row">
+                          <code>STRIPE_SECRET_KEY=sk_test_...</code>
+                          <button type="button" className="secondary-button" onClick={() => copyConfigValue("STRIPE_SECRET_KEY=sk_test_...")}>
+                            {language === "sv" ? "Kopiera" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                      {!systemStatus?.stripe?.webhookConfigured && (
+                        <div className="config-guide-row">
+                          <code>STRIPE_WEBHOOK_SECRET=whsec_...</code>
+                          <button type="button" className="secondary-button" onClick={() => copyConfigValue("STRIPE_WEBHOOK_SECRET=whsec_...")}>
+                            {language === "sv" ? "Kopiera" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                      {!systemStatus?.email?.configured && (
+                        <>
+                          <div className="config-guide-row">
+                            <code>SPRING_MAIL_HOST=smtp.gmail.com</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("SPRING_MAIL_HOST=smtp.gmail.com")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="config-guide-row">
+                            <code>SPRING_MAIL_PORT=587</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("SPRING_MAIL_PORT=587")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="config-guide-row">
+                            <code>SPRING_MAIL_USERNAME=din-email@gmail.com</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("SPRING_MAIL_USERNAME=din-email@gmail.com")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="config-guide-row">
+                            <code>SPRING_MAIL_PASSWORD=app-losenord-fran-google</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("SPRING_MAIL_PASSWORD=app-losenord-fran-google")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <label>
+                  {t.company}
+                  <input
+                    value={settings.companyName || ""}
+                    onChange={(event) => setSettings({ ...settings, companyName: event.target.value })}
+                  />
+                </label>
+
+                <label>
+                  {t.companyType}
+                  <select
+                    value={settings.companyType || "SOLE_TRADER"}
+                    onChange={(event) => setSettings({ ...settings, companyType: event.target.value })}
+                  >
+                    <option value="SOLE_TRADER">{t.soleTrader}</option>
+                    <option value="LIMITED_COMPANY">{t.limitedCompany}</option>
+                  </select>
+                </label>
+                <p className="settings-hint">
+                  {settings.companyType === "LIMITED_COMPANY"
+                    ? (language === "sv"
+                      ? "Aktiebolag valt. Nasta steg blir AB-konton som 2081, 2091, 2099 och 2510."
+                      : "Limited company selected. Next step is AB accounts such as 2081, 2091, 2099 and 2510.")
+                    : (language === "sv"
+                      ? "Enskild firma valt. Detta passar din nuvarande bokforing."
+                      : "Sole trader selected. This matches your current bookkeeping.")}
+                </p>
+
+                <label>
+                  {t.contactEmail}
+                  <input
+                    type="email"
+                    value={settings.contactEmail || ""}
+                    onChange={(event) => setSettings({ ...settings, contactEmail: event.target.value })}
+                  />
+                </label>
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "E-posttest" : "Email test"}</strong>
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Skickar ett testmail till kontaktadressen ovan med samma SMTP-installningar som fakturapaminnelser."
+                      : "Sends a test email to the contact address above using the same SMTP settings as invoice reminders."}
+                  </p>
+                  <button type="button" className="secondary-button" onClick={sendSettingsTestEmail}>
+                    {language === "sv" ? "Skicka testmail" : "Send test email"}
+                  </button>
+                </div>
+
+                <div className="form-row">
+                  <label>
+                    PlusGiro
+                    <input
+                      value={settings.plusGiro || ""}
+                      onChange={(event) => setSettings({ ...settings, plusGiro: event.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    OCR
+                    <input
+                      value={settings.defaultOcr || ""}
+                      onChange={(event) => setSettings({ ...settings, defaultOcr: event.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  {t.paymentRecipient}
+                  <input
+                    value={settings.paymentRecipient || ""}
+                    onChange={(event) => setSettings({ ...settings, paymentRecipient: event.target.value })}
+                  />
+                </label>
+
+                <label>
+                  {t.vatPercent}
+                  <input
+                    type="number"
+                    value={settings.vatPercent || 25}
+                    onChange={(event) => setSettings({ ...settings, vatPercent: Number(event.target.value) })}
+                  />
+                </label>
+
+                <label>
+                  {t.paymentTermsDays}
+                  <select
+                    value={settings.paymentTermsDays || 30}
+                    onChange={(event) => setSettings({ ...settings, paymentTermsDays: Number(event.target.value) })}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={30}>30</option>
+                    <option value={60}>60</option>
+                  </select>
+                </label>
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.ftaxApproved)}
+                    onChange={(event) => setSettings({ ...settings, ftaxApproved: event.target.checked })}
+                  />
+                  {t.approvedForFtax}
+                </label>
+
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "Periodlasning" : "Period locking"}</strong>
+                  <label>
+                    {language === "sv" ? "Las bokforing till och med" : "Lock bookkeeping through"}
+                    <input
+                      type="date"
+                      value={settings.accountingLockedThroughDate || ""}
+                      onChange={(event) => setSettings({
+                        ...settings,
+                        accountingLockedThroughDate: event.target.value || null
+                      })}
+                    />
+                  </label>
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Nar ett datum ar valt kan inga manuella verifikationer skapas pa eller fore detta datum. Lamna tomt om du inte vill lasa nagon period."
+                      : "When a date is selected, manual vouchers cannot be created on or before that date. Leave empty if you do not want to lock a period."}
+                  </p>
+                </div>
+
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "Automatiska fakturapaminnelser" : "Automatic invoice reminders"}</strong>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.automaticInvoiceRemindersEnabled !== false}
+                      onChange={(event) => setSettings({ ...settings, automaticInvoiceRemindersEnabled: event.target.checked })}
+                    />
+                    {language === "sv" ? "Skicka automatiskt via e-post" : "Send automatically by email"}
+                  </label>
+
+                  <label>
+                    {language === "sv" ? "Skicka antal dagar fore forfallodatum" : "Send days before due date"}
+                    <select
+                      value={settings.invoiceReminderDaysBeforeDue || 5}
+                      onChange={(event) => setSettings({ ...settings, invoiceReminderDaysBeforeDue: Number(event.target.value) })}
+                    >
+                      <option value={3}>3</option>
+                      <option value={5}>5</option>
+                      <option value={7}>7</option>
+                      <option value={10}>10</option>
+                    </select>
+                  </label>
+
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Backend kontrollerar fakturor varje dag kl. 09:00 nar appen kors."
+                      : "Backend checks invoices every day at 09:00 while the app is running."}
+                  </p>
+
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.overdueInvoiceRemindersEnabled !== false}
+                      onChange={(event) => setSettings({ ...settings, overdueInvoiceRemindersEnabled: event.target.checked })}
+                    />
+                    {language === "sv" ? "Skicka forfallen paminnelse automatiskt" : "Send overdue reminder automatically"}
+                  </label>
+
+                  <label>
+                    {language === "sv" ? "Skicka antal dagar efter forfallodatum" : "Send days after due date"}
+                    <select
+                      value={settings.overdueInvoiceReminderDaysAfterDue || 3}
+                      onChange={(event) => setSettings({ ...settings, overdueInvoiceReminderDaysAfterDue: Number(event.target.value) })}
+                    >
+                      <option value={1}>1</option>
+                      <option value={3}>3</option>
+                      <option value={5}>5</option>
+                      <option value={7}>7</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "Mall for fakturamejl" : "Invoice email template"}</strong>
+                  <label>
+                    {language === "sv" ? "E-posttext" : "Email text"}
+                    <textarea
+                      rows={10}
+                      value={settings.invoiceEmailTemplate || defaultInvoiceEmailTemplate()}
+                      onChange={(event) => setSettings({ ...settings, invoiceEmailTemplate: event.target.value })}
+                    />
+                  </label>
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Denna text anvands nar du klickar Skicka faktura. PDF-fakturan bifogas automatiskt. Du kan anvanda: {kundnamn}, {fakturanummer}, {forfallodatum}, {belopp}, {plusgiro}, {ocr}, {betalningsmottagare}, {foretag}, {kontaktEpost}."
+                      : "This text is used when you click Send invoice. The PDF invoice is attached automatically. You can use: {kundnamn}, {fakturanummer}, {forfallodatum}, {belopp}, {plusgiro}, {ocr}, {betalningsmottagare}, {foretag}, {kontaktEpost}."}
+                  </p>
+                  <div className="template-preview">
+                    <strong>{language === "sv" ? "Forhandsgranskning" : "Preview"}</strong>
+                    <span>
+                      {language === "sv"
+                        ? `Exempel baserat pa ${invoiceNumber(reminderPreviewInvoice)}`
+                        : `Example based on ${invoiceNumber(reminderPreviewInvoice)}`}
+                    </span>
+                    <pre>{renderInvoiceEmailText(reminderPreviewInvoice, settings)}</pre>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setSettings({ ...settings, invoiceEmailTemplate: defaultInvoiceEmailTemplate() })}
+                  >
+                    {language === "sv" ? "Aterstall standardmall" : "Reset default template"}
+                  </button>
+                </div>
+
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "Mall for fakturapaminnelse" : "Invoice reminder template"}</strong>
+                  <label>
+                    {language === "sv" ? "E-posttext" : "Email text"}
+                    <textarea
+                      rows={10}
+                      value={settings.invoiceReminderTemplate || defaultInvoiceReminderTemplate()}
+                      onChange={(event) => setSettings({ ...settings, invoiceReminderTemplate: event.target.value })}
+                    />
+                  </label>
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Du kan anvanda: {kundnamn}, {fakturanummer}, {forfallodatum}, {belopp}, {plusgiro}, {ocr}, {betalningsmottagare}, {foretag}, {kontaktEpost}."
+                      : "You can use: {kundnamn}, {fakturanummer}, {forfallodatum}, {belopp}, {plusgiro}, {ocr}, {betalningsmottagare}, {foretag}, {kontaktEpost}."}
+                  </p>
+                  <div className="template-preview">
+                    <strong>{language === "sv" ? "Forhandsgranskning" : "Preview"}</strong>
+                    <span>
+                      {language === "sv"
+                        ? `Exempel baserat pa ${invoiceNumber(reminderPreviewInvoice)}`
+                        : `Example based on ${invoiceNumber(reminderPreviewInvoice)}`}
+                    </span>
+                    <pre>{renderInvoiceReminderText(reminderPreviewInvoice, settings)}</pre>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setSettings({ ...settings, invoiceReminderTemplate: defaultInvoiceReminderTemplate() })}
+                  >
+                    {language === "sv" ? "Aterstall standardmall" : "Reset default template"}
+                  </button>
+                </div>
+
+                <div className="settings-panel">
+                  <strong>{language === "sv" ? "Mall for forfallen faktura" : "Overdue invoice template"}</strong>
+                  <label>
+                    {language === "sv" ? "E-posttext" : "Email text"}
+                    <textarea
+                      rows={10}
+                      value={settings.overdueInvoiceReminderTemplate || defaultOverdueInvoiceReminderTemplate()}
+                      onChange={(event) => setSettings({ ...settings, overdueInvoiceReminderTemplate: event.target.value })}
+                    />
+                  </label>
+                  <p className="settings-hint">
+                    {language === "sv"
+                      ? "Denna mall anvands efter forfallodatum om fakturan fortfarande ar obetald."
+                      : "This template is used after the due date if the invoice is still unpaid."}
+                  </p>
+                  <div className="template-preview">
+                    <strong>{language === "sv" ? "Forhandsgranskning" : "Preview"}</strong>
+                    <span>
+                      {language === "sv"
+                        ? `Exempel baserat pa ${invoiceNumber(reminderPreviewInvoice)}`
+                        : `Example based on ${invoiceNumber(reminderPreviewInvoice)}`}
+                    </span>
+                    <pre>{renderInvoiceReminderText(
+                      reminderPreviewInvoice,
+                      settings,
+                      settings.overdueInvoiceReminderTemplate || defaultOverdueInvoiceReminderTemplate()
+                    )}</pre>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setSettings({ ...settings, overdueInvoiceReminderTemplate: defaultOverdueInvoiceReminderTemplate() })}
+                  >
+                    {language === "sv" ? "Aterstall standardmall" : "Reset default template"}
+                  </button>
+                </div>
+
+                <button type="submit">{t.saveSettings}</button>
+                {settingsMessage && <p className="message success">{settingsMessage}</p>}
+
+                <div className="danger-zone">
+                  <strong>{language === "sv" ? "Utveckling / test" : "Development / test"}</strong>
+                  <p>
+                    {language === "sv"
+                      ? "Rensa demo- och testdata nar du vill borja om."
+                      : "Clear demo and test data when you want to start over."}
+                  </p>
+                  <button type="button" className="danger-button" onClick={clearTestData}>
+                    {t.clearTestData}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={clearLocalPreferences}>
+                    {language === "sv" ? "Aterstall lokala val" : "Reset local preferences"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="empty-state">{language === "sv" ? "Logga in for att se installningar." : "Log in to see settings."}</p>
+            )}
+          </section>
+        )}
+      </section>
+      <div className={aiAssistantOpen ? "floating-ai floating-ai-open" : "floating-ai"}>
+        {aiAssistantOpen && (
+          <section className="floating-ai-panel" aria-label={language === "sv" ? "AI-assistent" : "AI assistant"}>
+            <header>
+              <div>
+                <strong>{language === "sv" ? "AI-assistent" : "AI assistant"}</strong>
+                <span>{language === "sv" ? "Fraga om AliBooks" : "Ask about AliBooks"}</span>
+              </div>
+              <button type="button" className="floating-ai-close" onClick={() => setAiAssistantOpen(false)}>
+                x
+              </button>
+            </header>
+
+            <div className="floating-ai-quick">
+              {aiContextQuestions().map((question) => (
+                <button type="button" key={question} onClick={() => askAiAssistant(question)}>
+                  {question}
+                </button>
+              ))}
+            </div>
+
+            <div className="floating-ai-messages">
+              {aiAssistantMessages.length === 0 && !aiAssistantLoading ? (
+                <p className="floating-ai-empty">
+                  {language === "sv"
+                    ? `Hej Ali, jag kan hjalpa dig med sidan ${viewTitle()} eller andra delar av AliBooks.`
+                    : `Hi Ali, I can help with the ${viewTitle()} page or other parts of AliBooks.`}
+                </p>
+              ) : (
+                aiAssistantMessages.map((message, index) => (
+                  <article className={`ai-message ai-message-${message.role}`} key={`floating-${message.role}-${index}`}>
+                    <strong>{message.role === "user" ? (language === "sv" ? "Du" : "You") : "AliBooks"}</strong>
+                    <p>{message.text}</p>
+                    {message.role === "assistant" && (
+                      <div className="ai-message-actions">
+                        <button
+                          type="button"
+                          className="ai-message-action"
+                          onClick={() => copyAiAssistantMessage(message, `floating-${index}`)}
+                        >
+                          {copiedAiMessageId === `floating-${index}`
+                            ? (language === "sv" ? "Kopierad" : "Copied")
+                            : (language === "sv" ? "Kopiera" : "Copy")}
+                        </button>
+                        {message.targetView && (
+                          <button
+                            type="button"
+                            className="ai-message-action"
+                            onClick={() => {
+                              setActiveView(message.targetView);
+                              setAiAssistantOpen(false);
+                            }}
+                          >
+                            {language === "sv" ? `Ga till ${aiTargetLabel(message.targetView)}` : `Go to ${aiTargetLabel(message.targetView)}`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                ))
+              )}
+              {aiAssistantLoading && (
+                <div className="floating-ai-loading">
+                  <AiLoader size={62} text="AI" />
+                  <span>{language === "sv" ? "Tanker..." : "Thinking..."}</span>
+                </div>
+              )}
+            </div>
+
+            <form
+              className="floating-ai-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                askAiAssistant();
+              }}
+            >
+              <textarea
+                value={aiAssistantQuestion}
+                onChange={(event) => setAiAssistantQuestion(event.target.value)}
+                placeholder={language === "sv" ? "Fraga assistenten..." : "Ask the assistant..."}
+                rows="3"
+              />
+              <div className="button-row floating-ai-form-actions">
+                <button type="submit" className="primary-small-button">
+                  {language === "sv" ? "Skicka" : "Send"}
+                </button>
+                {aiAssistantMessages.length > 0 && (
+                  <button type="button" className="secondary-button" onClick={() => setAiAssistantMessages([])}>
+                    {language === "sv" ? "Rensa" : "Clear"}
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+        )}
+
+        <button
+          type="button"
+          className="floating-ai-button"
+          onClick={() => setAiAssistantOpen((current) => !current)}
+          aria-label={language === "sv" ? "Oppna AI-assistent" : "Open AI assistant"}
+        >
+          <AiLoader size={68} text="AI" />
+        </button>
+      </div>
+    </main>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<App />);

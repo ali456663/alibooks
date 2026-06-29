@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LumaWell Health and Wellness App</title>
+    <meta
+      name="description"
+      content="LumaWell is a calming wellness app concept for meditation, gentle fitness tracking, sleep routines, breathing exercises, and daily mood check-ins."
+    />
+    <meta name="theme-color" content="#315d54" />
+    <meta property="og:title" content="LumaWell Health and Wellness App" />
+    <meta
+      property="og:description"
+      content="Build calmer routines with meditation, breathing, gentle movement, sleep rituals, and private-by-default wellness tracking."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:image"
+      content="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LumaWell Health and Wellness App" />
+    <meta
+      name="twitter:description"
+      content="A soothing wellness app landing page for meditation, fitness tracking, breathing, sleep, and daily check-ins."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LumaWell",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "iOS, Android",
+        "description": "A calming wellness app concept for meditation, breathing exercises, gentle fitness tracking, sleep routines, and daily mood check-ins.",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Free",
+            "price": "0",
+            "priceCurrency": "SEK"
+          },
+          {
+            "@type": "Offer",
+            "name": "Plus",
+            "price": "79",
+            "priceCurrency": "SEK"
+          },
+          {
+            "@type": "Offer",
+            "name": "Coach",
+            "price": "199",
+            "priceCurrency": "SEK"
+          }
+        ],
+        "featureList": [
+          "Guided meditation",
+          "Breathing timer",
+          "Gentle fitness tracking",
+          "Sleep routines",
+          "Mood check-ins",
+          "Personalized wellness goals"
+        ]
+      }
+    </script>
+    <link rel="stylesheet" href="./wellness-landing.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="#">
+        <span class="brand-mark">LW</span>
+        <span>LumaWell</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#tracking">Tracking</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#stories">Stories</a>
+      </nav>
+      <a class="header-action" href="#download">Get the app</a>
+    </header>
+
+    <main id="main-content">
+      <section class="hero">
+        <img
+          class="hero-image"
+          src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1800&q=80"
+          alt="A calm meditation space with soft daylight"
+        />
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Mindful health, softly guided</p>
+          <h1>Feel steadier in your body, breath, and daily rhythm.</h1>
+          <p class="hero-copy">
+            LumaWell brings meditation, gentle fitness tracking, sleep rituals, and mood reflections into one quiet app designed for real life.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#download">Download app</a>
+            <a class="secondary-button" href="#features">Explore features</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="calm-strip" aria-label="Wellness highlights">
+        <article>
+          <span>7 min</span>
+          <strong>Daily calm session</strong>
+        </article>
+        <article>
+          <span>92%</span>
+          <strong>Users feel more consistent</strong>
+        </article>
+        <article>
+          <span>24/7</span>
+          <strong>Soft reminders and check-ins</strong>
+        </article>
+      </section>
+
+      <section class="section-grid app-preview-section" id="features">
+        <div class="section-copy">
+          <p class="eyebrow">Personal wellness dashboard</p>
+          <h2>A softer way to build healthy habits.</h2>
+          <p>
+            Track the essentials without pressure. LumaWell turns your meditation, movement, sleep, and mood into gentle signals that help you choose the next kind step.
+          </p>
+          <ul class="soft-list">
+            <li>Guided breathing and meditation sessions</li>
+            <li>Low-pressure fitness and mobility tracking</li>
+            <li>Sleep wind-down rituals and mood journaling</li>
+          </ul>
+        </div>
+
+        <aside class="phone-preview" aria-label="Mobile app preview">
+          <div class="phone-top">
+            <span>Today</span>
+            <strong>Balanced</strong>
+          </div>
+          <div class="breath-card">
+            <div class="breath-ring" id="breath-ring">
+              <span id="breath-phase">Breathe</span>
+            </div>
+            <p id="breath-instruction">4 seconds in, 6 seconds out</p>
+            <button class="breath-button" id="breath-toggle" type="button">Start breathing</button>
+          </div>
+          <div class="metric-grid">
+            <article>
+              <span>Meditation</span>
+              <strong>18 min</strong>
+            </article>
+            <article>
+              <span>Movement</span>
+              <strong>6,840</strong>
+            </article>
+            <article>
+              <span>Sleep</span>
+              <strong>7h 42m</strong>
+            </article>
+            <article>
+              <span>Mood</span>
+              <strong>Calm</strong>
+            </article>
+          </div>
+        </aside>
+      </section>
+
+      <section class="feature-showcase" id="tracking">
+        <div class="section-heading">
+          <p class="eyebrow">Meditation and fitness tracking</p>
+          <h2>Care for your nervous system and your strength.</h2>
+        </div>
+
+        <div class="feature-grid">
+          <article class="soft-card">
+            <span class="card-kicker">Meditation</span>
+            <h3>Guided sessions for busy minds</h3>
+            <p>Choose calm, focus, sleep, or anxiety support. Sessions adapt from two minutes to a full reset.</p>
+          </article>
+          <article class="soft-card">
+            <span class="card-kicker">Fitness</span>
+            <h3>Gentle movement with real progress</h3>
+            <p>Track walks, mobility, strength, and recovery without turning wellness into another scoreboard.</p>
+          </article>
+          <article class="soft-card">
+            <span class="card-kicker">Recovery</span>
+            <h3>Sleep and stress insights</h3>
+            <p>See patterns between sleep, mood, movement, and meditation so your routines feel easier to adjust.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="checkin-section" aria-label="Interactive wellness check-in preview">
+        <div class="section-copy">
+          <p class="eyebrow">Daily check-in preview</p>
+          <h2>See how LumaWell suggests a gentle next step.</h2>
+          <p>
+            Move the sliders to preview how the app can respond to your energy, stress, and sleep with a calm recommendation.
+          </p>
+        </div>
+
+        <div class="checkin-card">
+          <div class="checkin-result">
+            <span>Wellness rhythm</span>
+            <strong id="wellness-score">72</strong>
+            <p id="wellness-advice">A short walk and a five minute breathing session would keep your day balanced.</p>
+          </div>
+
+          <label>
+            Energy
+            <input type="range" min="0" max="100" value="72" data-checkin="energy" />
+          </label>
+          <label>
+            Stress
+            <input type="range" min="0" max="100" value="38" data-checkin="stress" />
+          </label>
+          <label>
+            Sleep quality
+            <input type="range" min="0" max="100" value="76" data-checkin="sleep" />
+          </label>
+        </div>
+      </section>
+
+      <section class="goal-section" aria-label="Personalized wellness goal selector">
+        <div class="goal-panel">
+          <div>
+            <p class="eyebrow">Choose your focus</p>
+            <h2>A plan that meets the moment.</h2>
+            <p id="goal-copy">
+              Start with calm foundations: short breathing resets, reflective prompts, and gentle reminders.
+            </p>
+          </div>
+          <div class="goal-controls" role="group" aria-label="Choose wellness goal">
+            <button class="goal-button active" type="button" data-goal="calm">Calm</button>
+            <button class="goal-button" type="button" data-goal="strength">Strength</button>
+            <button class="goal-button" type="button" data-goal="sleep">Sleep</button>
+          </div>
+          <div class="goal-plan" id="goal-plan">
+            <span>2 minute breathing reset</span>
+            <span>Evening reflection</span>
+            <span>Gentle notification rhythm</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="routine-section">
+        <div class="routine-panel">
+          <div>
+            <p class="eyebrow">Your evening routine</p>
+            <h2>Close the day with less noise.</h2>
+            <p>
+              LumaWell suggests a light stretch, a short reflection, and a breathing session when your day has been full.
+            </p>
+          </div>
+          <div class="routine-steps" aria-label="Evening routine steps">
+            <span>Mobility reset</span>
+            <span>Mood reflection</span>
+            <span>Sleep meditation</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="testimonials" id="stories">
+        <div class="section-heading">
+          <p class="eyebrow">Member stories</p>
+          <h2>Quiet progress people can feel.</h2>
+        </div>
+
+        <div class="testimonial-grid">
+          <article>
+            <p>"I finally stopped treating wellness like a checklist. The app helps me notice what I need."</p>
+            <strong>Maya R.</strong>
+            <span>Product designer</span>
+          </article>
+          <article>
+            <p>"The movement tracking is kind. I can build fitness consistency without feeling behind."</p>
+            <strong>Jonas K.</strong>
+            <span>Small business owner</span>
+          </article>
+          <article>
+            <p>"The evening routine changed my sleep more than any complicated system I tried before."</p>
+            <strong>Amira S.</strong>
+            <span>Student</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="pricing-section" aria-label="Membership plans">
+        <div class="section-heading">
+          <p class="eyebrow">Membership plans</p>
+          <h2>Start free, grow when you are ready.</h2>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="pricing-card">
+            <span>Free</span>
+            <strong>0 kr</strong>
+            <p>Simple daily check-ins and starter meditation sessions.</p>
+            <ul>
+              <li>3 guided sessions</li>
+              <li>Basic mood tracking</li>
+              <li>Daily calm reminder</li>
+            </ul>
+            <a href="#download">Start free</a>
+          </article>
+          <article class="pricing-card featured">
+            <span>Plus</span>
+            <strong>79 kr/mo</strong>
+            <p>Personalized wellness plans, deeper tracking, and full meditation library.</p>
+            <ul>
+              <li>Unlimited sessions</li>
+              <li>Fitness and sleep insights</li>
+              <li>Goal-based routines</li>
+            </ul>
+            <a href="#download">Try Plus</a>
+          </article>
+          <article class="pricing-card">
+            <span>Coach</span>
+            <strong>199 kr/mo</strong>
+            <p>Extra support with weekly reflections and coach-designed habit plans.</p>
+            <ul>
+              <li>Weekly plan review</li>
+              <li>Stress recovery paths</li>
+              <li>Priority app support</li>
+            </ul>
+            <a href="#download">Choose Coach</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="privacy-section" id="privacy" aria-label="Privacy and safety">
+        <div class="privacy-panel">
+          <div class="privacy-copy">
+            <p class="eyebrow">Privacy and safety</p>
+            <h2>Your health data should feel held, not harvested.</h2>
+            <p>
+              LumaWell is designed around clear consent, local-first wellness notes, and simple controls for what gets synced to integrations.
+            </p>
+          </div>
+
+          <div class="trust-grid">
+            <article>
+              <span>01</span>
+              <strong>Private by default</strong>
+              <p>Mood notes and check-ins stay personal unless you choose to export or sync them.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <strong>Clear integrations</strong>
+              <p>Connect Apple Health or Google Fit only for the signals you approve, like sleep or steps.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <strong>Gentle notifications</strong>
+              <p>Reminders can be quiet, scheduled, or paused so the app supports your rhythm.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="care-note-section" aria-label="Wellness safety note">
+        <div class="care-note">
+          <span>Care note</span>
+          <p>
+            LumaWell supports everyday wellbeing and habit building. It is not a medical device and does not replace advice from a doctor, therapist, or licensed healthcare professional.
+          </p>
+        </div>
+      </section>
+
+      <section class="faq-section" aria-label="Frequently asked questions">
+        <div class="section-heading">
+          <p class="eyebrow">Questions</p>
+          <h2>Small answers before you begin.</h2>
+        </div>
+
+        <div class="faq-list">
+          <details open>
+            <summary>Do I need experience with meditation?</summary>
+            <p>No. LumaWell starts with short, guided sessions and simple breathing prompts for beginners.</p>
+          </details>
+          <details>
+            <summary>Can I use it for fitness tracking too?</summary>
+            <p>Yes. The app supports gentle movement, walks, mobility, strength routines, and recovery-aware progress.</p>
+          </details>
+          <details>
+            <summary>Does LumaWell connect to health apps?</summary>
+            <p>The product concept supports Apple Health and Google Fit integrations for movement, sleep, and recovery signals.</p>
+          </details>
+          <details>
+            <summary>Is my wellness data private?</summary>
+            <p>Wellness data should be treated as sensitive. LumaWell is designed around private-by-default tracking and clear user control.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="download-section" id="download">
+        <div>
+          <p class="eyebrow">Start softly</p>
+          <h2>Download LumaWell and build a routine that fits your life.</h2>
+          <p>Available for iOS and Android. Seven days free, then choose a plan that works for you.</p>
+        </div>
+        <div class="download-actions">
+          <a class="store-button" href="#">App Store</a>
+          <a class="store-button" href="#">Google Play</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <a class="brand" href="#">
+          <span class="brand-mark">LW</span>
+          <span>LumaWell</span>
+        </a>
+        <p>Private-by-default wellness tracking for meditation, movement, sleep, and gentle daily reflection.</p>
+      </div>
+      <nav aria-label="Footer navigation">
+        <a href="#features">Features</a>
+        <a href="#tracking">Tracking</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#stories">Stories</a>
+        <a href="#download">Download</a>
+      </nav>
+      <div class="footer-meta">
+        <span>Privacy-first concept</span>
+        <span>iOS and Android</span>
+        <span>© 2026 LumaWell</span>
+      </div>
+    </footer>
+
+    <script>
+      const sliders = document.querySelectorAll("[data-checkin]");
+      const scoreEl = document.getElementById("wellness-score");
+      const adviceEl = document.getElementById("wellness-advice");
+      const breathRing = document.getElementById("breath-ring");
+      const breathPhase = document.getElementById("breath-phase");
+      const breathInstruction = document.getElementById("breath-instruction");
+      const breathToggle = document.getElementById("breath-toggle");
+      const goalButtons = document.querySelectorAll("[data-goal]");
+      const goalCopy = document.getElementById("goal-copy");
+      const goalPlan = document.getElementById("goal-plan");
+      const breathSteps = [
+        { phase: "Inhale", instruction: "Breathe in softly for 4 seconds", className: "breath-inhale", duration: 4000 },
+        { phase: "Hold", instruction: "Pause gently for 2 seconds", className: "breath-hold", duration: 2000 },
+        { phase: "Exhale", instruction: "Release slowly for 6 seconds", className: "breath-exhale", duration: 6000 }
+      ];
+      let breathTimer = null;
+      let breathIndex = 0;
+      let breathing = false;
+      const goalPlans = {
+        calm: {
+          copy: "Start with calm foundations: short breathing resets, reflective prompts, and gentle reminders.",
+          steps: ["2 minute breathing reset", "Evening reflection", "Gentle notification rhythm"]
+        },
+        strength: {
+          copy: "Build strength without pressure through steady walks, mobility work, and recovery-aware sessions.",
+          steps: ["20 minute walk", "Mobility sequence", "Recovery check-in"]
+        },
+        sleep: {
+          copy: "Protect your evening with a calmer wind-down, screen break reminders, and sleep meditation.",
+          steps: ["Digital sunset", "Stretch and release", "Sleep meditation"]
+        }
+      };
+
+      function updateCheckin() {
+        const values = Object.fromEntries(
+          Array.from(sliders).map((slider) => [slider.dataset.checkin, Number(slider.value)])
+        );
+        const score = Math.round((values.energy + values.sleep + (100 - values.stress)) / 3);
+
+        scoreEl.textContent = score;
+
+        if (values.stress > 68) {
+          adviceEl.textContent = "Start with a two minute breathing reset before movement or planning.";
+        } else if (values.sleep < 45) {
+          adviceEl.textContent = "Choose a recovery day: light stretching, hydration, and an early wind-down.";
+        } else if (values.energy > 75) {
+          adviceEl.textContent = "Your body is ready for a steady walk or a gentle strength session.";
+        } else {
+          adviceEl.textContent = "A short walk and a five minute breathing session would keep your day balanced.";
+        }
+      }
+
+      sliders.forEach((slider) => slider.addEventListener("input", updateCheckin));
+      updateCheckin();
+
+      function setBreathStep(index) {
+        const step = breathSteps[index];
+        breathRing.className = `breath-ring ${step.className}`;
+        breathPhase.textContent = step.phase;
+        breathInstruction.textContent = step.instruction;
+      }
+
+      function runBreathTimer() {
+        setBreathStep(breathIndex);
+        breathTimer = window.setTimeout(() => {
+          breathIndex = (breathIndex + 1) % breathSteps.length;
+          runBreathTimer();
+        }, breathSteps[breathIndex].duration);
+      }
+
+      breathToggle.addEventListener("click", () => {
+        breathing = !breathing;
+        breathToggle.textContent = breathing ? "Pause breathing" : "Start breathing";
+
+        if (breathing) {
+          runBreathTimer();
+          return;
+        }
+
+        window.clearTimeout(breathTimer);
+        breathRing.className = "breath-ring";
+        breathPhase.textContent = "Breathe";
+        breathInstruction.textContent = "4 seconds in, 6 seconds out";
+        breathIndex = 0;
+      });
+
+      goalButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const goal = goalPlans[button.dataset.goal];
+          goalButtons.forEach((item) => item.classList.toggle("active", item === button));
+          goalCopy.textContent = goal.copy;
+          goalPlan.innerHTML = goal.steps.map((step) => `<span>${step}</span>`).join("");
+        });
+      });
+    </script>
+  </body>
+</html>

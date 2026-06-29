@@ -1,0 +1,147 @@
+package se.cloudshop.config;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+@Component
+public class DatabaseSchemaPatch implements CommandLineRunner {
+
+  private final JdbcTemplate jdbcTemplate;
+
+  public DatabaseSchemaPatch(JdbcTemplate jdbcTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+  }
+
+  @Override
+  public void run(String... args) {
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS active boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_label varchar(255)");
+    jdbcTemplate.execute("UPDATE products SET active = true WHERE active IS NULL");
+    jdbcTemplate.execute("UPDATE products SET discount_price = 0 WHERE discount_price IS NULL");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS ordinary_price integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS discount_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS discount_label varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS status varchar(255) DEFAULT 'DRAFT'");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS stripe_checkout_session_id varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS invoice_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS invoice_date date DEFAULT CURRENT_DATE");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS due_date date");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS payment_terms_days integer DEFAULT 30");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS f_tax_approved boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS ocr_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS plus_giro varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS payment_recipient varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS paid_date date");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS paid_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS payment_reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS reminder_sent_date date");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS credit_invoice boolean DEFAULT false");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS credited_invoice_id bigint");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS invoice_payments (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS invoice_id bigint");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS payment_date date");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS invoice_reminders (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS invoice_id bigint");
+    jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS method varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS status varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS recipient_email varchar(255)");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS stripe_webhook_events (event_id varchar(255) PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS event_type varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS processed_at timestamp");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS stripe_payouts (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS payout_date date");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS gross_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS fee_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS voucher_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS stripe_payouts_reference_unique ON stripe_payouts(reference) WHERE reference IS NOT NULL AND reference <> ''");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS personal_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS address varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS city varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS expenses (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_date date");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS description varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_from varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_file_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_content_type varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_storage_path varchar(1000)");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS recurring_contracts (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_id bigint");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_id bigint");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS contract_interval varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS next_invoice_date date");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS active boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS last_invoice_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_date date DEFAULT CURRENT_DATE");
+    jdbcTemplate.execute("ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS correction_of_voucher_number varchar(255)");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS app_settings (id bigint PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS contact_email varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS plus_giro varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_ocr varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_recipient varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'SOLE_TRADER'");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_percent integer DEFAULT 25");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_terms_days integer DEFAULT 30");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS f_tax_approved boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_email_template text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ALTER COLUMN invoice_email_template TYPE text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS automatic_invoice_reminders_enabled boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_days_before_due integer DEFAULT 5");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_template text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ALTER COLUMN invoice_reminder_template TYPE text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminders_enabled boolean DEFAULT true");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_days_after_due integer DEFAULT 3");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_template text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ALTER COLUMN overdue_invoice_reminder_template TYPE text");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS accounting_locked_through_date date");
+    jdbcTemplate.execute("UPDATE customer_orders SET status = 'DRAFT' WHERE status IS NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET quantity = 1 WHERE quantity IS NULL OR quantity = 0");
+    jdbcTemplate.execute("UPDATE customer_orders SET ordinary_price = net_amount WHERE ordinary_price IS NULL OR ordinary_price = 0");
+    jdbcTemplate.execute("UPDATE customer_orders SET discount_amount = 0 WHERE discount_amount IS NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET invoice_date = CURRENT_DATE WHERE invoice_date IS NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET payment_terms_days = 30 WHERE payment_terms_days IS NULL OR payment_terms_days = 0");
+    jdbcTemplate.execute("UPDATE customer_orders SET due_date = invoice_date + payment_terms_days WHERE due_date IS NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET f_tax_approved = true WHERE f_tax_approved IS NULL");
+    jdbcTemplate.execute("UPDATE customers SET archived = false WHERE archived IS NULL");
+    jdbcTemplate.execute("UPDATE recurring_contracts SET quantity = 1 WHERE quantity IS NULL OR quantity = 0");
+    jdbcTemplate.execute("UPDATE recurring_contracts SET contract_interval = 'monthly' WHERE contract_interval IS NULL OR contract_interval = ''");
+    jdbcTemplate.execute("UPDATE recurring_contracts SET next_invoice_date = CURRENT_DATE WHERE next_invoice_date IS NULL");
+    jdbcTemplate.execute("UPDATE recurring_contracts SET active = true WHERE active IS NULL");
+    jdbcTemplate.execute("UPDATE app_settings SET company_type = 'SOLE_TRADER' WHERE company_type IS NULL");
+    jdbcTemplate.execute("UPDATE app_settings SET automatic_invoice_reminders_enabled = true WHERE automatic_invoice_reminders_enabled IS NULL");
+    jdbcTemplate.execute("UPDATE app_settings SET invoice_email_template = 'Hej {kundnamn},\n\nBifogat finns faktura {fakturanummer}.\nForfallodatum: {forfallodatum}.\nAtt betala: {belopp} SEK.\n\nBetalning kan goras till PlusGiro {plusgiro} med OCR {ocr}.\nBetalningsmottagare: {betalningsmottagare}.\n\nVanliga halsningar,\n{foretag}\n{kontaktEpost}' WHERE invoice_email_template IS NULL OR invoice_email_template = ''");
+    jdbcTemplate.execute("UPDATE app_settings SET invoice_reminder_days_before_due = 5 WHERE invoice_reminder_days_before_due IS NULL OR invoice_reminder_days_before_due = 0");
+    jdbcTemplate.execute("UPDATE app_settings SET invoice_reminder_template = 'Hej {kundnamn},\n\nVi vill paminna om faktura {fakturanummer}.\nForfallodatum: {forfallodatum}.\nKvar att betala: {belopp} SEK.\n\nBetalning kan goras till PlusGiro {plusgiro} med OCR {ocr}.\nBetalningsmottagare: {betalningsmottagare}.\n\nVanliga halsningar,\n{foretag}\n{kontaktEpost}' WHERE invoice_reminder_template IS NULL OR invoice_reminder_template = ''");
+    jdbcTemplate.execute("UPDATE app_settings SET overdue_invoice_reminders_enabled = true WHERE overdue_invoice_reminders_enabled IS NULL");
+    jdbcTemplate.execute("UPDATE app_settings SET overdue_invoice_reminder_days_after_due = 3 WHERE overdue_invoice_reminder_days_after_due IS NULL OR overdue_invoice_reminder_days_after_due = 0");
+    jdbcTemplate.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'BOTH'");
+    jdbcTemplate.execute("UPDATE accounts SET company_type = 'BOTH' WHERE company_type IS NULL");
+    jdbcTemplate.execute("UPDATE journal_entries SET voucher_date = CURRENT_DATE WHERE voucher_date IS NULL");
+  }
+}

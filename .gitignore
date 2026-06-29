@@ -1,0 +1,16 @@
+.idea/
+.agents/
+.codex/
+*.iml
+
+backend/target/
+backend/uploads/
+uploads/
+frontend/node_modules/
+frontend/dist/
+outputs/
+work/
+
+*.log
+.env
+.env.local

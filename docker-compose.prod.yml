@@ -1,0 +1,33 @@
+services:
+  frontend:
+    image: ${DOCKERHUB_USERNAME}/cloudshop-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL}
+    depends_on:
+      - backend
+
+  backend:
+    image: ${DOCKERHUB_USERNAME}/cloudshop-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - SERVER_PORT=3000
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - APP_FRONTEND_URL=${APP_FRONTEND_URL}
+      - APP_TIME_ZONE=${APP_TIME_ZONE:-Europe/Stockholm}
+      - APP_INVOICE_REMINDERS_CRON=${APP_INVOICE_REMINDERS_CRON:-0 0 9 * * *}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST:-}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT:-587}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME:-}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD:-}
+      - SPRING_MAIL_SMTP_AUTH=${SPRING_MAIL_SMTP_AUTH:-true}
+      - SPRING_MAIL_SMTP_STARTTLS_ENABLE=${SPRING_MAIL_SMTP_STARTTLS_ENABLE:-true}

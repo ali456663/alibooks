@@ -1,0 +1,50 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - SERVER_PORT=${SERVER_PORT:-3000}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshop
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-cloudshop}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-cloudshop}
+      - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
+      - APP_FRONTEND_URL=${APP_FRONTEND_URL:-http://localhost:5173}
+      - APP_TIME_ZONE=${APP_TIME_ZONE:-Europe/Stockholm}
+      - APP_INVOICE_REMINDERS_CRON=${APP_INVOICE_REMINDERS_CRON:-0 0 9 * * *}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST:-}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT:-587}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME:-}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD:-}
+      - SPRING_MAIL_SMTP_AUTH=${SPRING_MAIL_SMTP_AUTH:-true}
+      - SPRING_MAIL_SMTP_STARTTLS_ENABLE=${SPRING_MAIL_SMTP_STARTTLS_ENABLE:-true}
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=cloudshop
+      - POSTGRES_PASSWORD=cloudshop
+      - POSTGRES_DB=cloudshop
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
