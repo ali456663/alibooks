@@ -9,6 +9,8 @@ import se.cloudshop.accounting.AccountingService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
 import se.cloudshop.customer.CustomerRepository;
+import se.cloudshop.email.InvoiceEmailService;
+import se.cloudshop.email.InvoiceReminderEmailService;
 import se.cloudshop.product.ProductService;
 import se.cloudshop.settings.SettingsService;
 
@@ -20,18 +22,22 @@ class OrderControllerTest {
   private final CustomerRepository customerRepository = mock(CustomerRepository.class);
   private final AccountingService accountingService = mock(AccountingService.class);
   private final SettingsService settingsService = mock(SettingsService.class);
+  private final InvoiceReminderEmailService invoiceReminderEmailService = mock(InvoiceReminderEmailService.class);
+  private final InvoiceEmailService invoiceEmailService = mock(InvoiceEmailService.class);
   private final OrderController orderController = new OrderController(
       productService,
       authHeader,
       orderRepository,
       customerRepository,
       accountingService,
-      settingsService
+      settingsService,
+      invoiceReminderEmailService,
+      invoiceEmailService
   );
 
   @Test
   void createOrderRequiresJwtToken() {
-    CreateOrderRequest request = new CreateOrderRequest("Ali", null, 1);
+    CreateOrderRequest request = new CreateOrderRequest("Ali", null, 1L, 1);
 
     assertThatThrownBy(() -> orderController.createOrder(null, request))
         .isInstanceOf(ResponseStatusException.class);
