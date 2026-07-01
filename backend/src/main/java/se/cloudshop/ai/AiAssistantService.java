@@ -18,23 +18,32 @@ public class AiAssistantService {
 
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
+  private final String geminiApiKey;
+  private final String geminiModel;
+  private final String geminiBaseUrl;
   private final String hfToken;
-  private final String model;
-  private final String baseUrl;
+  private final String hfModel;
+  private final String hfBaseUrl;
 
   public AiAssistantService(
       ObjectMapper objectMapper,
+      @Value("${ai.gemini.api-key:}") String geminiApiKey,
+      @Value("${ai.gemini.model:gemini-3.5-flash}") String geminiModel,
+      @Value("${ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl,
       @Value("${ai.huggingface.token:}") String hfToken,
-      @Value("${ai.huggingface.model:moonshotai/Kimi-K2-Instruct-0905}") String model,
-      @Value("${ai.huggingface.base-url:https://router.huggingface.co/v1}") String baseUrl
+      @Value("${ai.huggingface.model:moonshotai/Kimi-K2-Instruct-0905}") String hfModel,
+      @Value("${ai.huggingface.base-url:https://router.huggingface.co/v1}") String hfBaseUrl
   ) {
     this.objectMapper = objectMapper;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(8))
         .build();
+    this.geminiApiKey = geminiApiKey;
+    this.geminiModel = geminiModel;
+    this.geminiBaseUrl = geminiBaseUrl;
     this.hfToken = hfToken;
-    this.model = model;
-    this.baseUrl = baseUrl;
+    this.hfModel = hfModel;
+    this.hfBaseUrl = hfBaseUrl;
   }
 
   public AiAssistantResponse answer(AiAssistantRequest request) {
@@ -46,24 +55,59 @@ public class AiAssistantService {
       return new AiAssistantResponse(emptyQuestionAnswer(language), "", "local");
     }
 
-    if (hfToken == null || hfToken.isBlank()) {
-      return new AiAssistantResponse(localAnswer(question, language), targetView, "local");
+    String context = clean(request == null ? "" : request.context());
+
+    if (geminiApiKey != null && !geminiApiKey.isBlank()) {
+      try {
+        String aiAnswer = requestGemini(question, language, context);
+        if (aiAnswer != null && !aiAnswer.isBlank()) {
+          return new AiAssistantResponse(aiAnswer, targetView, "gemini");
+        }
+      } catch (Exception exception) {
+        // Try the next configured provider before falling back to local rules.
+      }
     }
 
-    try {
-      String aiAnswer = requestHuggingFace(question, language, clean(request == null ? "" : request.context()));
-      if (aiAnswer == null || aiAnswer.isBlank()) {
-        return new AiAssistantResponse(localAnswer(question, language), targetView, "local");
+    if (hfToken != null && !hfToken.isBlank()) {
+      try {
+        String aiAnswer = requestHuggingFace(question, language, context);
+        if (aiAnswer != null && !aiAnswer.isBlank()) {
+          return new AiAssistantResponse(aiAnswer, targetView, "huggingface");
+        }
+      } catch (Exception exception) {
+        // Local rules keep the assistant useful when external AI is unavailable.
       }
-      return new AiAssistantResponse(aiAnswer, targetView, "huggingface");
-    } catch (Exception exception) {
-      return new AiAssistantResponse(localAnswer(question, language), targetView, "local");
     }
+
+    return new AiAssistantResponse(localAnswer(question, language), targetView, "local");
+  }
+
+  private String requestGemini(String question, String language, String context) throws Exception {
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("model", geminiModel);
+    body.put("system_instruction", systemPrompt(language));
+    body.put("input", "Question: " + question + "\n\nAliBooks context: " + context);
+
+    HttpRequest httpRequest = HttpRequest.newBuilder()
+        .uri(URI.create(geminiBaseUrl + "/interactions"))
+        .timeout(Duration.ofSeconds(25))
+        .header("x-goog-api-key", geminiApiKey)
+        .header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+        .build();
+
+    HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      return "";
+    }
+
+    JsonNode root = objectMapper.readTree(response.body());
+    return root.path("output_text").asText("");
   }
 
   private String requestHuggingFace(String question, String language, String context) throws Exception {
     ObjectNode body = objectMapper.createObjectNode();
-    body.put("model", model);
+    body.put("model", hfModel);
 
     ArrayNode messages = body.putArray("messages");
     messages.addObject()
@@ -74,7 +118,7 @@ public class AiAssistantService {
         .put("content", "Question: " + question + "\n\nAliBooks context: " + context);
 
     HttpRequest httpRequest = HttpRequest.newBuilder()
-        .uri(URI.create(baseUrl + "/chat/completions"))
+        .uri(URI.create(hfBaseUrl + "/chat/completions"))
         .timeout(Duration.ofSeconds(25))
         .header("Authorization", "Bearer " + hfToken)
         .header("Content-Type", "application/json")

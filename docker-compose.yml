@@ -25,9 +25,12 @@ services:
       - APP_INVOICE_REMINDERS_CRON=${APP_INVOICE_REMINDERS_CRON:-0 0 9 * * *}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - GEMINI_BASE_URL=${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       - HF_TOKEN=${HF_TOKEN:-}
-      - AI_MODEL=${AI_MODEL:-moonshotai/Kimi-K2-Instruct-0905}
-      - AI_BASE_URL=${AI_BASE_URL:-https://router.huggingface.co/v1}
+      - HF_MODEL=${HF_MODEL:-moonshotai/Kimi-K2-Instruct-0905}
+      - HF_BASE_URL=${HF_BASE_URL:-https://router.huggingface.co/v1}
       - SPRING_MAIL_HOST=${SPRING_MAIL_HOST:-}
       - SPRING_MAIL_PORT=${SPRING_MAIL_PORT:-587}
       - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME:-}

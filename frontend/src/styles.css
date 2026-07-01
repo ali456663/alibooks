@@ -1965,6 +1965,11 @@ button:focus-visible,
   color: #14743a;
 }
 
+.ai-provider-gemini {
+  background: #ede9ff;
+  color: #5b21b6;
+}
+
 .ai-message-user {
   justify-self: end;
   border-color: #cfe0ff;

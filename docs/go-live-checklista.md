@@ -216,12 +216,15 @@ SPRING_MAIL_USERNAME=<gmail>
 SPRING_MAIL_PASSWORD=<google-app-password>
 ```
 
-Om du vill testa riktig AI-assistent via Hugging Face:
+Om du vill testa riktig AI-assistent via Gemini eller Hugging Face:
 
 ```text
+GEMINI_API_KEY=AIza...
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 HF_TOKEN=hf_...
-AI_MODEL=moonshotai/Kimi-K2-Instruct-0905
-AI_BASE_URL=https://router.huggingface.co/v1
+HF_MODEL=moonshotai/Kimi-K2-Instruct-0905
+HF_BASE_URL=https://router.huggingface.co/v1
 ```
 
 Visa aldrig `.env` med hemligheter i presentationen.

@@ -187,17 +187,21 @@ If a Stripe payout reference is reused, AliBooks blocks it to reduce the risk of
 
 ## AI Assistant
 
-The AI assistant is called through the Spring Boot backend, so the Hugging Face token is never exposed in React.
+The AI assistant is called through the Spring Boot backend, so AI API keys are never exposed in React.
+AliBooks tries Gemini first when `GEMINI_API_KEY` is set. If Gemini is not configured, it can use Hugging Face. If no external AI key works, it falls back to a local rule-based assistant.
 
 Optional environment variables:
 
 ```text
+GEMINI_API_KEY=AIza...
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 HF_TOKEN=hf_...
-AI_MODEL=moonshotai/Kimi-K2-Instruct-0905
-AI_BASE_URL=https://router.huggingface.co/v1
+HF_MODEL=moonshotai/Kimi-K2-Instruct-0905
+HF_BASE_URL=https://router.huggingface.co/v1
 ```
 
-If `HF_TOKEN` is missing or the external AI API is unavailable, AliBooks falls back to a local rule-based assistant for invoices, bookkeeping, VAT, receipts, payments, reports and settings.
+If external AI is unavailable, AliBooks falls back to a local rule-based assistant for invoices, bookkeeping, VAT, receipts, payments, reports and settings.
 
 ## Docker
 

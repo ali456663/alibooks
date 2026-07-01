@@ -3680,6 +3680,10 @@ function App() {
   }
 
   function aiProviderLabel(provider) {
+    if (provider === "gemini") {
+      return language === "sv" ? "Gemini AI" : "Gemini AI";
+    }
+
     if (provider === "huggingface") {
       return language === "sv" ? "Hugging Face AI" : "Hugging Face AI";
     }
