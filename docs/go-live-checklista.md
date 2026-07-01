@@ -216,6 +216,14 @@ SPRING_MAIL_USERNAME=<gmail>
 SPRING_MAIL_PASSWORD=<google-app-password>
 ```
 
+Om du vill testa riktig AI-assistent via Hugging Face:
+
+```text
+HF_TOKEN=hf_...
+AI_MODEL=moonshotai/Kimi-K2-Instruct-0905
+AI_BASE_URL=https://router.huggingface.co/v1
+```
+
 Visa aldrig `.env` med hemligheter i presentationen.
 
 ## 9. Deploy Pa EC2

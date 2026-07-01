@@ -3601,9 +3601,23 @@ function App() {
       : `${answerIntro} I can help with invoices, bookkeeping, VAT, reports, receipts, bank import, payments and settings. Try asking more specifically, for example "how do I bookkeep an expense?" or "how do I export reports?".`);
   }
 
-  function askAiAssistant(questionOverride) {
+  function createAiAssistantContext() {
+    return JSON.stringify({
+      activeView,
+      openInvoices: invoices.filter((item) => invoiceRemainingAmount(item) > 0).length,
+      totalOutstanding,
+      vatToPay: vatReport?.vatToPay || 0,
+      profitNet,
+      expenses: expenses.length,
+      customers: customers.length,
+      contracts: contracts.length,
+      bankImportRows: bankImportRows.length
+    });
+  }
+
+  async function askAiAssistant(questionOverride) {
     const questionText = questionOverride || aiAssistantQuestion;
-    const answer = createAiAssistantAnswer(questionText);
+    const fallbackAnswer = createAiAssistantAnswer(questionText);
 
     setAiAssistantMessages((current) => [
       ...current,
@@ -3613,13 +3627,41 @@ function App() {
     setAiAssistantOpen(true);
     setAiAssistantLoading(true);
 
-    window.setTimeout(() => {
+    try {
+      const response = await fetch(`${apiUrl}/ai/assistant`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          question: questionText,
+          language,
+          context: createAiAssistantContext()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("AI assistant request failed.");
+      }
+
+      const data = await response.json();
       setAiAssistantMessages((current) => [
         ...current,
-        { role: "assistant", text: answer.text, targetView: answer.targetView }
+        {
+          role: "assistant",
+          text: data.answer || fallbackAnswer.text,
+          targetView: data.targetView || fallbackAnswer.targetView
+        }
       ].slice(-8));
+    } catch (error) {
+      setAiAssistantMessages((current) => [
+        ...current,
+        { role: "assistant", text: fallbackAnswer.text, targetView: fallbackAnswer.targetView }
+      ].slice(-8));
+    } finally {
       setAiAssistantLoading(false);
-    }, 350);
+    }
   }
 
   function aiTargetLabel(targetView) {

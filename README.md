@@ -185,6 +185,20 @@ When Stripe later pays out money to the bank account, use the payment view to bo
 Booked Stripe payouts are stored in `stripe_payouts` with payout date, gross amount, fee, net amount, reference and voucher number.
 If a Stripe payout reference is reused, AliBooks blocks it to reduce the risk of double bookkeeping.
 
+## AI Assistant
+
+The AI assistant is called through the Spring Boot backend, so the Hugging Face token is never exposed in React.
+
+Optional environment variables:
+
+```text
+HF_TOKEN=hf_...
+AI_MODEL=moonshotai/Kimi-K2-Instruct-0905
+AI_BASE_URL=https://router.huggingface.co/v1
+```
+
+If `HF_TOKEN` is missing or the external AI API is unavailable, AliBooks falls back to a local rule-based assistant for invoices, bookkeeping, VAT, receipts, payments, reports and settings.
+
 ## Docker
 
 Start the full local environment:
