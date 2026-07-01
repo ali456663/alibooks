@@ -1521,6 +1521,59 @@ button:focus-visible,
   gap: 8px;
 }
 
+.bank-reconciliation-panel {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #cbe7d7;
+  border-radius: 8px;
+  background: #f7fff9;
+}
+
+.bank-reconciliation-panel h3 {
+  margin: 0;
+}
+
+.bank-reconciliation-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 0;
+}
+
+.bank-reconciliation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.bank-reconciliation-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-left: 5px solid #2f855a;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bank-reconciliation-skipped {
+  border-left-color: #f2a900;
+}
+
+.bank-reconciliation-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.bank-reconciliation-row div:last-child {
+  justify-items: end;
+  text-align: right;
+}
+
+.bank-reconciliation-row span {
+  color: #5d6259;
+}
+
 .stripe-payout-history {
   display: grid;
   gap: 10px;

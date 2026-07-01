@@ -1098,6 +1098,14 @@ function App() {
   const [bankImportExpenseDescriptions, setBankImportExpenseDescriptions] = useState({});
   const [lastCreatedBankImportExpense, setLastCreatedBankImportExpense] = useState(null);
   const [skippedBankImportRows, setSkippedBankImportRows] = useState([]);
+  const [bankReconciliationHistory, setBankReconciliationHistory] = useState(() => {
+    try {
+      const savedRows = JSON.parse(localStorage.getItem("alibooks-bank-reconciliation-history") || "[]");
+      return Array.isArray(savedRows) ? savedRows.slice(0, 100) : [];
+    } catch {
+      return [];
+    }
+  });
   const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
   const [stripePayoutFeeAmount, setStripePayoutFeeAmount] = useState("");
@@ -1156,6 +1164,10 @@ function App() {
     localStorage.setItem("alibooks-payment-overview-filter", paymentOverviewFilter);
     localStorage.setItem("alibooks-payment-overview-search", paymentOverviewSearch);
   }, [paymentOverviewFilter, paymentOverviewSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-bank-reconciliation-history", JSON.stringify(bankReconciliationHistory.slice(0, 100)));
+  }, [bankReconciliationHistory]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -2616,6 +2628,52 @@ function App() {
     }) || null;
   }
 
+  function addBankReconciliationHistory(entry) {
+    const savedEntry = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      bookedAt: new Date().toISOString(),
+      ...entry
+    };
+
+    setBankReconciliationHistory((current) => [savedEntry, ...current].slice(0, 100));
+  }
+
+  function bankReconciliationRowBase(row) {
+    return {
+      bankRowId: row.id,
+      date: bankImportPaymentDate(row),
+      description: row.description || "",
+      reference: row.reference || "",
+      amount: row.amount || 0
+    };
+  }
+
+  function clearBankReconciliationHistory() {
+    setBankReconciliationHistory([]);
+    setBankImportMessage(language === "sv" ? "Bankavstamningshistorik rensad." : "Bank reconciliation history cleared.");
+  }
+
+  function downloadBankReconciliationCsv() {
+    const rows = [
+      ["Datum", "Typ", "Status", "Beskrivning", "Referens", "Belopp", "Matchning", "Bokad tid"]
+    ];
+
+    bankReconciliationHistory.forEach((entry) => {
+      rows.push([
+        entry.date || "",
+        entry.type || "",
+        entry.status || "",
+        entry.description || "",
+        entry.reference || "",
+        entry.amount || 0,
+        entry.matchLabel || "",
+        entry.bookedAt || ""
+      ]);
+    });
+
+    downloadLocalCsv("bankavstamning.csv", rows);
+  }
+
   function removeBankImportRow(rowId) {
     setBankImportRows((current) => current.filter((item) => item.id !== rowId));
     setBankImportExpenseCategories((current) => {
@@ -2638,6 +2696,12 @@ function App() {
   function skipBankImportRow(row) {
     removeBankImportRow(row.id);
     setSkippedBankImportRows((current) => [row, ...current].slice(0, 8));
+    addBankReconciliationHistory({
+      ...bankReconciliationRowBase(row),
+      type: (row.amount || 0) < 0 ? "outgoing" : "incoming",
+      status: "skipped",
+      matchLabel: language === "sv" ? "Hoppades over" : "Skipped"
+    });
     setLastCreatedBankImportExpense(null);
     setBankImportMessage(language === "sv" ? "Bankrad hoppades over." : "Bank row skipped.");
   }
@@ -2645,6 +2709,7 @@ function App() {
   function restoreSkippedBankImportRow(row) {
     setBankImportRows((current) => [row, ...current]);
     setSkippedBankImportRows((current) => current.filter((item) => item.id !== row.id));
+    setBankReconciliationHistory((current) => current.filter((item) => !(item.bankRowId === row.id && item.status === "skipped")));
     setBankImportMessage(language === "sv" ? "Bankrad aterstalldes." : "Bank row restored.");
   }
 
@@ -2658,6 +2723,13 @@ function App() {
     });
 
     removeBankImportRow(row.id);
+    addBankReconciliationHistory({
+      ...bankReconciliationRowBase(row),
+      type: "invoice_payment",
+      status: "booked",
+      amount: paidAmount,
+      matchLabel: `${invoiceNumber(invoiceItem)} - ${invoiceItem.customerName || ""}`.trim()
+    });
     setBankImportMessage(language === "sv" ? "Bankbetalning registrerad." : "Bank payment registered.");
     setLastCreatedBankImportExpense(null);
   }
@@ -2706,6 +2778,12 @@ function App() {
 
     setExpenses((current) => [...current, data]);
     removeBankImportRow(row.id);
+    addBankReconciliationHistory({
+      ...bankReconciliationRowBase(row),
+      type: "expense",
+      status: "booked",
+      matchLabel: `${data.category || category} - ${data.description || bankImportExpenseDescription(row)}`
+    });
     setBankImportMessage(language === "sv" ? "Kostnad skapad fran bankrad." : "Expense created from bank row.");
     setLastCreatedBankImportExpense(data);
     loadJournalEntries();
@@ -3477,6 +3555,15 @@ function App() {
   const stripePayoutGrossTotal = stripePayouts.reduce((sum, payout) => sum + (payout.grossAmount || 0), 0);
   const stripePayoutFeeTotal = stripePayouts.reduce((sum, payout) => sum + (payout.feeAmount || 0), 0);
   const stripePayoutNetTotal = stripePayouts.reduce((sum, payout) => sum + (payout.netAmount || 0), 0);
+  const bankReconciliationBookedRows = bankReconciliationHistory.filter((entry) => entry.status === "booked");
+  const bankReconciliationSkippedRows = bankReconciliationHistory.filter((entry) => entry.status === "skipped");
+  const bankReconciliationIncomingAmount = bankReconciliationBookedRows
+    .filter((entry) => (entry.amount || 0) > 0)
+    .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+  const bankReconciliationOutgoingAmount = bankReconciliationBookedRows
+    .filter((entry) => (entry.amount || 0) < 0)
+    .reduce((sum, entry) => sum + Math.abs(entry.amount || 0), 0);
+  const bankReconciliationOpenAmount = bankImportRows.reduce((sum, row) => sum + (row.amount || 0), 0);
   const filteredBankImportRows = bankImportRows.filter((row) => {
     const match = findBankImportMatch(row);
     const hasMatch = Boolean(match);
@@ -6127,6 +6214,75 @@ function App() {
                   })}
                 </div>
               </>
+            )}
+          </div>
+
+          <div className="bank-reconciliation-panel">
+            <div className="section-heading">
+              <div>
+                <h3>{language === "sv" ? "Bankavstamning" : "Bank reconciliation"}</h3>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Historik over bankrader som har bokats som fakturabetalning, kostnad eller hoppats over."
+                    : "History of bank rows booked as invoice payments, expenses or skipped."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadBankReconciliationCsv} disabled={bankReconciliationHistory.length === 0}>
+                  {language === "sv" ? "Exportera avstamning" : "Export reconciliation"}
+                </button>
+                <button type="button" className="secondary-button" onClick={clearBankReconciliationHistory} disabled={bankReconciliationHistory.length === 0}>
+                  {language === "sv" ? "Rensa historik" : "Clear history"}
+                </button>
+              </div>
+            </div>
+
+            <div className="expense-summary-grid bank-reconciliation-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Bokade bankrader" : "Booked rows"}</span>
+                <strong>{bankReconciliationBookedRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Overhoppade" : "Skipped"}</span>
+                <strong>{bankReconciliationSkippedRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bokade inbetalningar" : "Booked incoming"}</span>
+                <strong>{bankReconciliationIncomingAmount} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bokade utbetalningar" : "Booked outgoing"}</span>
+                <strong>{bankReconciliationOutgoingAmount} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kvar i import" : "Still in import"}</span>
+                <strong>{bankReconciliationOpenAmount} SEK</strong>
+              </article>
+            </div>
+
+            {bankReconciliationHistory.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Ingen bankavstamningshistorik annu. Importera en bankfil och behandla rader for att fylla listan."
+                  : "No bank reconciliation history yet. Import a bank file and process rows to fill the list."}
+              </p>
+            ) : (
+              <div className="bank-reconciliation-list">
+                {bankReconciliationHistory.slice(0, 12).map((entry) => (
+                  <article className={`bank-reconciliation-row bank-reconciliation-${entry.status}`} key={entry.id}>
+                    <div>
+                      <strong>{entry.date || "-"}</strong>
+                      <span>{entry.description || "-"}</span>
+                      <span>{language === "sv" ? "Referens" : "Reference"}: {entry.reference || "-"}</span>
+                    </div>
+                    <div>
+                      <strong>{entry.amount || 0} SEK</strong>
+                      <span>{entry.matchLabel || "-"}</span>
+                      <span className="status">{entry.status === "booked" ? (language === "sv" ? "Bokad" : "Booked") : (language === "sv" ? "Overhoppad" : "Skipped")}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
             )}
           </div>
 
