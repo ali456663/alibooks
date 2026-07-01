@@ -1942,6 +1942,29 @@ button:focus-visible,
   color: #34302a;
 }
 
+.ai-provider-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #155ee8;
+  font-size: 0.74rem;
+  font-weight: 900;
+  vertical-align: middle;
+}
+
+.ai-provider-local {
+  background: #fff7df;
+  color: #856000;
+}
+
+.ai-provider-huggingface {
+  background: #e9f8ef;
+  color: #14743a;
+}
+
 .ai-message-user {
   justify-self: end;
   border-color: #cfe0ff;

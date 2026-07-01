@@ -3651,13 +3651,14 @@ function App() {
         {
           role: "assistant",
           text: data.answer || fallbackAnswer.text,
-          targetView: data.targetView || fallbackAnswer.targetView
+          targetView: data.targetView || fallbackAnswer.targetView,
+          provider: data.provider || "local"
         }
       ].slice(-8));
     } catch (error) {
       setAiAssistantMessages((current) => [
         ...current,
-        { role: "assistant", text: fallbackAnswer.text, targetView: fallbackAnswer.targetView }
+        { role: "assistant", text: fallbackAnswer.text, targetView: fallbackAnswer.targetView, provider: "local" }
       ].slice(-8));
     } finally {
       setAiAssistantLoading(false);
@@ -3676,6 +3677,14 @@ function App() {
     };
 
     return labels[targetView] || "";
+  }
+
+  function aiProviderLabel(provider) {
+    if (provider === "huggingface") {
+      return language === "sv" ? "Hugging Face AI" : "Hugging Face AI";
+    }
+
+    return language === "sv" ? "Lokal fallback" : "Local fallback";
   }
 
   function aiContextQuestions() {
@@ -4371,6 +4380,11 @@ function App() {
             ) : aiAssistantMessages.map((message, index) => (
               <article className={`ai-message ai-message-${message.role}`} key={`${message.role}-${index}`}>
                 <strong>{message.role === "user" ? (language === "sv" ? "Du" : "You") : "AliBooks"}</strong>
+                {message.role === "assistant" && (
+                  <span className={`ai-provider-badge ai-provider-${message.provider || "local"}`}>
+                    {aiProviderLabel(message.provider)}
+                  </span>
+                )}
                 <p>{message.text}</p>
                 {message.role === "assistant" && (
                   <div className="ai-message-actions">
@@ -7871,6 +7885,11 @@ function App() {
                 aiAssistantMessages.map((message, index) => (
                   <article className={`ai-message ai-message-${message.role}`} key={`floating-${message.role}-${index}`}>
                     <strong>{message.role === "user" ? (language === "sv" ? "Du" : "You") : "AliBooks"}</strong>
+                    {message.role === "assistant" && (
+                      <span className={`ai-provider-badge ai-provider-${message.provider || "local"}`}>
+                        {aiProviderLabel(message.provider)}
+                      </span>
+                    )}
                     <p>{message.text}</p>
                     {message.role === "assistant" && (
                       <div className="ai-message-actions">
