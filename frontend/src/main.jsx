@@ -994,6 +994,7 @@ function App() {
   const [generatedJwtSecret, setGeneratedJwtSecret] = useState("");
   const [profitAndLoss, setProfitAndLoss] = useState(null);
   const [balanceReport, setBalanceReport] = useState(null);
+  const [customerLedgerSearch, setCustomerLedgerSearch] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -3354,6 +3355,34 @@ function App() {
     downloadLocalCsv("aging-report.csv", rows);
   }
 
+  function downloadReceivablesReportCsv() {
+    setError("");
+    const rows = [
+      ["Kund", "E-post", "Personnummer", "Fakturor", "Betalda", "Oppna", "Forfallna", "Fakturerat", "Betalt", "Kvar att betala", "Forfallet belopp", "Senaste faktura", "Senaste fakturadatum", "Senaste forfallodatum"]
+    ];
+
+    filteredCustomerLedgerRows.forEach((row) => {
+      rows.push([
+        row.name || "",
+        row.email || "",
+        row.personalNumber || "",
+        row.invoiceCount,
+        row.paidCount,
+        row.openCount,
+        row.overdueCount,
+        row.invoicedTotal,
+        row.paidTotal,
+        row.outstandingTotal,
+        row.overdueTotal,
+        row.latestInvoiceNumber || "",
+        row.latestInvoiceDate || "",
+        row.latestDueDate || ""
+      ]);
+    });
+
+    downloadLocalCsv("customer-receivables.csv", rows);
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -3679,6 +3708,94 @@ function App() {
       }).sort(compareInvoices)
     }
   ];
+  const customerLedgerMap = new Map();
+
+  customers.forEach((customer) => {
+    customerLedgerMap.set(`customer-${customer.id}`, {
+      customerId: customer.id,
+      name: customer.name || "",
+      email: customer.email || "",
+      personalNumber: customer.personalNumber || "",
+      invoiceCount: 0,
+      openCount: 0,
+      overdueCount: 0,
+      paidCount: 0,
+      invoicedTotal: 0,
+      paidTotal: 0,
+      outstandingTotal: 0,
+      overdueTotal: 0,
+      latestInvoiceDate: "",
+      latestDueDate: "",
+      latestInvoiceNumber: "",
+      invoices: []
+    });
+  });
+
+  invoices.forEach((item) => {
+    const customerId = item.customer?.id || item.customerId || "";
+    const customerKey = customerId ? `customer-${customerId}` : `invoice-customer-${normalizeNameValue(item.customerName || item.customer?.name || "unknown")}`;
+    const existing = customerLedgerMap.get(customerKey) || {
+      customerId,
+      name: item.customerName || item.customer?.name || "",
+      email: item.customer?.email || "",
+      personalNumber: item.customer?.personalNumber || "",
+      invoiceCount: 0,
+      openCount: 0,
+      overdueCount: 0,
+      paidCount: 0,
+      invoicedTotal: 0,
+      paidTotal: 0,
+      outstandingTotal: 0,
+      overdueTotal: 0,
+      latestInvoiceDate: "",
+      latestDueDate: "",
+      latestInvoiceNumber: "",
+      invoices: []
+    };
+    const invoiceDateValue = item.invoiceDate || String(item.createdAt || "").slice(0, 10);
+    const remainingAmount = invoiceRemainingAmount(item);
+
+    existing.name = existing.name || item.customerName || item.customer?.name || "";
+    existing.email = existing.email || item.customer?.email || "";
+    existing.personalNumber = existing.personalNumber || item.customer?.personalNumber || "";
+    existing.invoiceCount += 1;
+    existing.openCount += remainingAmount > 0 ? 1 : 0;
+    existing.overdueCount += invoiceIsOverdue(item) ? 1 : 0;
+    existing.paidCount += item.status === "PAID" ? 1 : 0;
+    existing.invoicedTotal += invoiceTotalAmount(item);
+    existing.paidTotal += invoicePaidAmount(item);
+    existing.outstandingTotal += remainingAmount;
+    existing.overdueTotal += invoiceIsOverdue(item) ? remainingAmount : 0;
+    existing.invoices.push(item);
+
+    if (!existing.latestInvoiceDate || invoiceDateValue > existing.latestInvoiceDate) {
+      existing.latestInvoiceDate = invoiceDateValue;
+      existing.latestDueDate = item.dueDate || "";
+      existing.latestInvoiceNumber = invoiceNumber(item);
+    }
+
+    customerLedgerMap.set(customerKey, existing);
+  });
+
+  const customerLedgerRows = Array.from(customerLedgerMap.values())
+    .filter((row) => row.invoiceCount > 0 || row.outstandingTotal > 0)
+    .sort((a, b) => b.outstandingTotal - a.outstandingTotal || a.name.localeCompare(b.name));
+  const filteredCustomerLedgerRows = customerLedgerRows.filter((row) => {
+    const query = customerLedgerSearch.toLowerCase().trim();
+    if (!query) return true;
+
+    return [
+      row.name,
+      row.email,
+      row.personalNumber,
+      row.latestInvoiceNumber,
+      row.invoices.map((item) => invoiceNumber(item)).join(" ")
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const customerLedgerOpenCustomers = customerLedgerRows.filter((row) => row.outstandingTotal > 0).length;
+  const customerLedgerOverdueCustomers = customerLedgerRows.filter((row) => row.overdueTotal > 0).length;
+  const customerLedgerOutstandingTotal = customerLedgerRows.reduce((sum, row) => sum + row.outstandingTotal, 0);
+  const customerLedgerOverdueTotal = customerLedgerRows.reduce((sum, row) => sum + row.overdueTotal, 0);
   const revenueNet = invoices.reduce((sum, item) => sum + invoiceNetAmount(item), 0);
   const revenueTotal = invoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
   const expenseNet = expenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
@@ -7635,6 +7752,91 @@ function App() {
               );
             })}
           </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Kundreskontra" : "Customer receivables"}</h2>
+            <div className="button-row">
+              <span className="status">{customerLedgerOpenCustomers} {language === "sv" ? "kunder med utestaende saldo" : "customers with outstanding balance"}</span>
+              <button type="button" className="secondary-button" onClick={downloadReceivablesReportCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="expense-summary-grid customer-ledger-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Kvar att betala" : "Outstanding"}</span>
+              <strong>{customerLedgerOutstandingTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Forfallet belopp" : "Overdue amount"}</span>
+              <strong>{customerLedgerOverdueTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kunder med skuld" : "Customers owing"}</span>
+              <strong>{customerLedgerOpenCustomers}</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Forfallna kunder" : "Overdue customers"}</span>
+              <strong>{customerLedgerOverdueCustomers}</strong>
+            </article>
+          </div>
+
+          <div className="invoice-filter-panel customer-ledger-filter-panel">
+            <label>
+              {language === "sv" ? "Sok kundreskontra" : "Search receivables"}
+              <input
+                value={customerLedgerSearch}
+                onChange={(event) => setCustomerLedgerSearch(event.target.value)}
+                placeholder={language === "sv" ? "Namn, e-post, personnummer eller faktura" : "Name, email, personal number or invoice"}
+              />
+            </label>
+            <button type="button" className="secondary-button" onClick={() => setCustomerLedgerSearch("")}>
+              {language === "sv" ? "Rensa sokning" : "Clear search"}
+            </button>
+          </div>
+
+          {filteredCustomerLedgerRows.length === 0 ? (
+            <p className="empty-state">{language === "sv" ? "Ingen kundreskontra att visa annu." : "No customer receivables to show yet."}</p>
+          ) : (
+            <div className="account-table customer-ledger-table">
+              <div className="account-row customer-ledger-header">
+                <span>{language === "sv" ? "Kund" : "Customer"}</span>
+                <span>{language === "sv" ? "Fakturor" : "Invoices"}</span>
+                <span>{language === "sv" ? "Fakturerat" : "Invoiced"}</span>
+                <span>{language === "sv" ? "Betalt" : "Paid"}</span>
+                <span>{language === "sv" ? "Kvar" : "Outstanding"}</span>
+                <span>{language === "sv" ? "Forfallet" : "Overdue"}</span>
+                <span>{language === "sv" ? "Senaste" : "Latest"}</span>
+              </div>
+              {filteredCustomerLedgerRows.map((row) => (
+                <button
+                  type="button"
+                  className={row.overdueTotal > 0 ? "account-row customer-ledger-row overdue" : "account-row customer-ledger-row"}
+                  key={row.customerId || row.name}
+                  onClick={() => {
+                    setActiveView("invoices");
+                    setInvoiceSearch(row.name || row.latestInvoiceNumber || "");
+                  }}
+                >
+                  <span>
+                    <strong>{row.name || "-"}</strong>
+                    <small>{row.email || "-"}</small>
+                    <small>{row.personalNumber || "-"}</small>
+                  </span>
+                  <span>{row.invoiceCount} / {row.openCount} {language === "sv" ? "oppna" : "open"}</span>
+                  <span>{row.invoicedTotal} SEK</span>
+                  <span>{row.paidTotal} SEK</span>
+                  <strong>{row.outstandingTotal} SEK</strong>
+                  <strong className={row.overdueTotal > 0 ? "overdue-text" : ""}>{row.overdueTotal} SEK</strong>
+                  <span>
+                    <strong>{row.latestInvoiceNumber || "-"}</strong>
+                    <small>{formatDateOnly(row.latestInvoiceDate) || "-"}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </section>}
 
         {activeView === "settings" && (

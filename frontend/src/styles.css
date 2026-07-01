@@ -2392,6 +2392,50 @@ button:focus-visible,
   color: #5d6259;
 }
 
+.customer-ledger-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.customer-ledger-filter-panel {
+  align-items: end;
+}
+
+.customer-ledger-table {
+  margin-top: 14px;
+}
+
+.customer-ledger-header,
+.customer-ledger-row {
+  grid-template-columns: minmax(170px, 1.5fr) 0.7fr 0.9fr 0.9fr 0.9fr 0.9fr 0.9fr;
+}
+
+.customer-ledger-row {
+  width: 100%;
+  border-left: 4px solid transparent;
+  color: #191815;
+  text-align: left;
+}
+
+.customer-ledger-row.overdue {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.customer-ledger-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.customer-ledger-row small {
+  color: #5d6259;
+  font-weight: 650;
+}
+
+.overdue-text {
+  color: #8f1e1e;
+}
+
 .muted-line {
   color: #5d6259;
 }
@@ -2902,7 +2946,9 @@ button:focus-visible,
   }
 
   .aging-report-grid,
-  .aging-row {
+  .aging-row,
+  .customer-ledger-header,
+  .customer-ledger-row {
     grid-template-columns: 1fr;
   }
 
