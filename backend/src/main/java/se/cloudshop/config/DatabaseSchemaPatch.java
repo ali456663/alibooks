@@ -67,6 +67,16 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS voucher_number varchar(255)");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS created_at timestamp");
     jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS stripe_payouts_reference_unique ON stripe_payouts(reference) WHERE reference IS NOT NULL AND reference <> ''");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS bank_reconciliation_entries (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS bank_row_id varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS bank_date date");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS description varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS entry_type varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS status varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS match_label varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS booked_at timestamp");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS personal_number varchar(255)");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS address varchar(255)");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone varchar(255)");

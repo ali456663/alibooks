@@ -1098,14 +1098,7 @@ function App() {
   const [bankImportExpenseDescriptions, setBankImportExpenseDescriptions] = useState({});
   const [lastCreatedBankImportExpense, setLastCreatedBankImportExpense] = useState(null);
   const [skippedBankImportRows, setSkippedBankImportRows] = useState([]);
-  const [bankReconciliationHistory, setBankReconciliationHistory] = useState(() => {
-    try {
-      const savedRows = JSON.parse(localStorage.getItem("alibooks-bank-reconciliation-history") || "[]");
-      return Array.isArray(savedRows) ? savedRows.slice(0, 100) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [bankReconciliationHistory, setBankReconciliationHistory] = useState([]);
   const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
   const [stripePayoutFeeAmount, setStripePayoutFeeAmount] = useState("");
@@ -1166,10 +1159,6 @@ function App() {
   }, [paymentOverviewFilter, paymentOverviewSearch]);
 
   useEffect(() => {
-    localStorage.setItem("alibooks-bank-reconciliation-history", JSON.stringify(bankReconciliationHistory.slice(0, 100)));
-  }, [bankReconciliationHistory]);
-
-  useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
     localStorage.setItem("alibooks-bookkeeping-search", bookkeepingSearch);
     localStorage.setItem("alibooks-bookkeeping-date-from", bookkeepingDateFrom);
@@ -1215,6 +1204,7 @@ function App() {
       loadBalanceReport();
       loadContracts();
       loadStripePayouts();
+      loadBankReconciliations();
     }
   }, [token]);
 
@@ -1341,6 +1331,21 @@ function App() {
       setAdvisorSummary(data);
     } catch {
       setError("Could not load advisor summary.");
+    }
+  }
+
+  async function loadBankReconciliations(authToken = token) {
+    try {
+      const response = await fetch(`${apiUrl}/bank-reconciliations`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json().catch(() => []);
+
+      if (response.ok && Array.isArray(data)) {
+        setBankReconciliationHistory(data);
+      }
+    } catch {
+      setBankReconciliationHistory([]);
     }
   }
 
@@ -2628,14 +2633,34 @@ function App() {
     }) || null;
   }
 
-  function addBankReconciliationHistory(entry) {
+  async function addBankReconciliationHistory(entry) {
     const savedEntry = {
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       bookedAt: new Date().toISOString(),
       ...entry
     };
 
+    try {
+      const response = await fetch(`${apiUrl}/bank-reconciliations`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(entry)
+      });
+      const data = await response.json().catch(() => null);
+
+      if (response.ok && data) {
+        setBankReconciliationHistory((current) => [data, ...current.filter((item) => item.id !== data.id)].slice(0, 100));
+        return data;
+      }
+    } catch {
+      // Keep the UI usable even if the backend has not been restarted with the new endpoint yet.
+    }
+
     setBankReconciliationHistory((current) => [savedEntry, ...current].slice(0, 100));
+    return savedEntry;
   }
 
   function bankReconciliationRowBase(row) {
@@ -2648,9 +2673,28 @@ function App() {
     };
   }
 
-  function clearBankReconciliationHistory() {
+  async function clearBankReconciliationHistory() {
+    let clearedInDatabase = true;
+
+    try {
+      const response = await fetch(`${apiUrl}/bank-reconciliations`, {
+        method: "DELETE",
+        headers: authHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error("Could not clear bank reconciliation history.");
+      }
+    } catch {
+      clearedInDatabase = false;
+    }
+
     setBankReconciliationHistory([]);
-    setBankImportMessage(language === "sv" ? "Bankavstamningshistorik rensad." : "Bank reconciliation history cleared.");
+    setBankImportMessage(clearedInDatabase
+      ? (language === "sv" ? "Bankavstamningshistorik rensad." : "Bank reconciliation history cleared.")
+      : (language === "sv"
+        ? "Historiken rensades lokalt. Starta om backend om den inte rensas i databasen."
+        : "History was cleared locally. Restart the backend if it is not cleared in the database."));
   }
 
   function downloadBankReconciliationCsv() {
@@ -2706,10 +2750,18 @@ function App() {
     setBankImportMessage(language === "sv" ? "Bankrad hoppades over." : "Bank row skipped.");
   }
 
-  function restoreSkippedBankImportRow(row) {
+  async function restoreSkippedBankImportRow(row) {
     setBankImportRows((current) => [row, ...current]);
     setSkippedBankImportRows((current) => current.filter((item) => item.id !== row.id));
     setBankReconciliationHistory((current) => current.filter((item) => !(item.bankRowId === row.id && item.status === "skipped")));
+    try {
+      await fetch(`${apiUrl}/bank-reconciliations/skipped/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+        headers: authHeaders()
+      });
+    } catch {
+      // The row is restored in the UI; the persisted history will catch up after backend restart.
+    }
     setBankImportMessage(language === "sv" ? "Bankrad aterstalldes." : "Bank row restored.");
   }
 
