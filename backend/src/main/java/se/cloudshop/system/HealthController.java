@@ -15,6 +15,8 @@ public class HealthController {
   private final String mailUsername;
   private final String stripeSecretKey;
   private final String stripeWebhookSecret;
+  private final String geminiApiKey;
+  private final String hfToken;
   private final String frontendUrl;
   private final String jwtSecret;
   private final String reminderCron;
@@ -26,6 +28,8 @@ public class HealthController {
       @Value("${spring.mail.username:}") String mailUsername,
       @Value("${stripe.secret-key:}") String stripeSecretKey,
       @Value("${stripe.webhook-secret:}") String stripeWebhookSecret,
+      @Value("${ai.gemini.api-key:}") String geminiApiKey,
+      @Value("${ai.huggingface.token:}") String hfToken,
       @Value("${app.frontend-url:}") String frontendUrl,
       @Value("${jwt.secret:}") String jwtSecret,
       @Value("${app.invoice-reminders.cron:}") String reminderCron,
@@ -36,6 +40,8 @@ public class HealthController {
     this.mailUsername = mailUsername;
     this.stripeSecretKey = stripeSecretKey;
     this.stripeWebhookSecret = stripeWebhookSecret;
+    this.geminiApiKey = geminiApiKey;
+    this.hfToken = hfToken;
     this.frontendUrl = frontendUrl;
     this.jwtSecret = jwtSecret;
     this.reminderCron = reminderCron;
@@ -64,6 +70,12 @@ public class HealthController {
     status.put("stripe", Map.of(
         "configured", hasText(stripeSecretKey),
         "webhookConfigured", hasText(stripeWebhookSecret)
+    ));
+    status.put("ai", Map.of(
+        "configured", hasText(geminiApiKey) || hasText(hfToken),
+        "provider", aiProvider(),
+        "geminiConfigured", hasText(geminiApiKey),
+        "huggingFaceConfigured", hasText(hfToken)
     ));
     status.put("frontend", Map.of(
         "configured", hasText(frontendUrl),
@@ -96,5 +108,17 @@ public class HealthController {
 
   private boolean jwtIsConfigured() {
     return hasText(jwtSecret) && !"change_me_in_production".equals(jwtSecret);
+  }
+
+  private String aiProvider() {
+    if (hasText(geminiApiKey)) {
+      return "gemini";
+    }
+
+    if (hasText(hfToken)) {
+      return "huggingface";
+    }
+
+    return "local";
   }
 }

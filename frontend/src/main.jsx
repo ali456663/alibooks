@@ -1390,6 +1390,7 @@ function App() {
           database: { ok: false },
           email: { configured: false },
           stripe: { configured: false },
+          ai: { configured: false, provider: "local" },
           error: response.status === 404
             ? (language === "sv"
               ? "Status-endpointen hittades inte. Starta om CloudShopApplication i IntelliJ."
@@ -1407,6 +1408,7 @@ function App() {
         database: { ok: false },
         email: { configured: false },
         stripe: { configured: false },
+        ai: { configured: false, provider: "local" },
         error: language === "sv"
           ? "Backend svarar inte just nu."
           : "Backend is not responding right now."
@@ -1826,6 +1828,14 @@ function App() {
 
     if (!systemStatus?.stripe?.webhookConfigured) {
       lines.push("STRIPE_WEBHOOK_SECRET=whsec_...");
+    }
+
+    if (!systemStatus?.ai?.configured) {
+      lines.push(
+        "GEMINI_API_KEY=AIza...",
+        "GEMINI_MODEL=gemini-3.5-flash",
+        "GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta"
+      );
     }
 
     if (!systemStatus?.email?.configured) {
@@ -7458,6 +7468,13 @@ function App() {
                         : (language === "sv" ? "Lagg STRIPE_SECRET_KEY och webhook-secret senare." : "Add STRIPE_SECRET_KEY and webhook secret later.")
                     )}
                     {renderSystemStatusItem(
+                      language === "sv" ? "AI-assistent" : "AI assistant",
+                      Boolean(systemStatus?.ai?.configured),
+                      systemStatus?.ai?.configured
+                        ? `Provider: ${aiProviderLabel(systemStatus?.ai?.provider)}`
+                        : (language === "sv" ? "Lagg GEMINI_API_KEY for riktig AI." : "Add GEMINI_API_KEY for real AI.")
+                    )}
+                    {renderSystemStatusItem(
                       language === "sv" ? "E-post/SMTP" : "Email/SMTP",
                       Boolean(systemStatus?.email?.configured),
                       systemStatus?.email?.configured
@@ -7474,7 +7491,7 @@ function App() {
                         : (language === "sv" ? "Inget schema hittades." : "No schedule found.")
                     )}
                   </div>
-                  {systemStatus && (!systemStatus?.security?.jwtStrong || !systemStatus?.stripe?.configured || !systemStatus?.stripe?.webhookConfigured || !systemStatus?.email?.configured) && (
+                  {systemStatus && (!systemStatus?.security?.jwtStrong || !systemStatus?.stripe?.configured || !systemStatus?.stripe?.webhookConfigured || !systemStatus?.ai?.configured || !systemStatus?.email?.configured) && (
                     <div className="config-guide">
                       <div className="config-guide-header">
                         <strong>{language === "sv" ? "Konfigurationsguide" : "Configuration guide"}</strong>
@@ -7518,6 +7535,28 @@ function App() {
                             {language === "sv" ? "Kopiera" : "Copy"}
                           </button>
                         </div>
+                      )}
+                      {!systemStatus?.ai?.configured && (
+                        <>
+                          <div className="config-guide-row">
+                            <code>GEMINI_API_KEY=AIza...</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("GEMINI_API_KEY=AIza...")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="config-guide-row">
+                            <code>GEMINI_MODEL=gemini-3.5-flash</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("GEMINI_MODEL=gemini-3.5-flash")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="config-guide-row">
+                            <code>GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta</code>
+                            <button type="button" className="secondary-button" onClick={() => copyConfigValue("GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta")}>
+                              {language === "sv" ? "Kopiera" : "Copy"}
+                            </button>
+                          </div>
+                        </>
                       )}
                       {!systemStatus?.email?.configured && (
                         <>
