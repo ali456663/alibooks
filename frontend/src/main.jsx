@@ -3444,6 +3444,37 @@ function App() {
     downloadLocalCsv("close-checklist.csv", rows);
   }
 
+  function downloadArchiveManifestCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks arkivpaket"],
+      ["Period", archivePeriodLabel],
+      ["Skapad", new Date().toISOString().slice(0, 10)],
+      ["Bokslutsstatus", `${closeReadinessScore}%`],
+      ["Varningar", closeChecklistWarnings],
+      [],
+      ["Del", "Status", "Antal/Belopp", "Beskrivning"]
+    ];
+
+    archivePackageItems.forEach((item) => {
+      rows.push([
+        item.title,
+        item.status,
+        item.count,
+        item.description
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Kontrollrad", "Spara fakturor, kvitton, verifikationer, grundbok/huvudbok och rapporter tillsammans."],
+      ["Kontrollrad", "Bokforing och underlag ska normalt sparas i 7 ar efter rakenskapsarets slut."],
+      ["Kontrollrad", "Kontrollera alltid slutliga moms- och deklarationsdatum hos Skatteverket."]
+    );
+
+    downloadLocalCsv("archive-manifest.csv", rows);
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -4028,8 +4059,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Du har ocksa resultatrapport, balansrapport, manadsrapport, forfallorapport och kundreskontra. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. You also have profit and loss, balance report, monthly report, aging report and customer receivables. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -4507,6 +4538,99 @@ function App() {
   const closeReadinessScore = closeChecklistItems.length === 0
     ? 0
     : Math.round(((closeChecklistItems.length - closeChecklistWarnings) / closeChecklistItems.length) * 100);
+  const archivePeriodLabel = `${vatPeriodFrom || "-"} - ${vatPeriodTo || "-"}`;
+  const archivePackageItems = [
+    {
+      key: "manifest",
+      status: "info",
+      title: language === "sv" ? "Arkivmanifest" : "Archive manifest",
+      count: archivePeriodLabel,
+      description: language === "sv"
+        ? "Sammanfattning av vilka delar som ska sparas for perioden."
+        : "Summary of which parts should be stored for the period.",
+      actionLabel: language === "sv" ? "Exportera manifest" : "Export manifest",
+      action: downloadArchiveManifestCsv
+    },
+    {
+      key: "close-checklist",
+      status: closeChecklistWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Kontrollista" : "Checklist",
+      count: `${closeReadinessScore}%`,
+      description: language === "sv"
+        ? "Visar om bokforing, underlag, kundfordringar, moms och periodlasning ser redo ut."
+        : "Shows whether bookkeeping, receipts, receivables, VAT and period lock look ready.",
+      actionLabel: t.exportCsv,
+      action: downloadCloseChecklistCsv
+    },
+    {
+      key: "journal",
+      status: unbalancedJournalGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Verifikationer och huvudbok" : "Vouchers and ledger",
+      count: `${journalGroups.length} ${language === "sv" ? "verifikat" : "vouchers"}`,
+      description: language === "sv"
+        ? "Exportera bokforingsrader och anvand huvudbok per konto i Bokforing."
+        : "Export bookkeeping rows and use account ledger in Bookkeeping.",
+      actionLabel: t.exportCsv,
+      action: downloadJournalCsv
+    },
+    {
+      key: "invoices",
+      status: filteredInvoices.length > 0 ? "ok" : "info",
+      title: language === "sv" ? "Fakturor" : "Invoices",
+      count: `${invoices.length} ${language === "sv" ? "fakturor" : "invoices"}`,
+      description: language === "sv"
+        ? "Spara fakturalista och ladda ner PDF pa viktiga fakturor."
+        : "Save invoice list and download PDF for important invoices.",
+      actionLabel: t.exportCsv,
+      action: downloadInvoicesCsv
+    },
+    {
+      key: "receipts",
+      status: expensesMissingReceipt.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag och kostnader" : "Receipts and expenses",
+      count: `${filteredExpensesWithReceipt.length}/${expenses.length}`,
+      description: language === "sv"
+        ? "Kontrollera att kvitton och fakturaunderlag finns sparade for kostnader."
+        : "Check that receipts and invoice documents are saved for expenses.",
+      actionLabel: language === "sv" ? "Oppna underlag" : "Open receipts",
+      action: () => setActiveView("uploaded")
+    },
+    {
+      key: "vat",
+      status: vatPeriodHasData ? "ok" : "warning",
+      title: language === "sv" ? "Momsrapport" : "VAT report",
+      count: `${vatPeriodToPay} SEK`,
+      description: language === "sv"
+        ? "Spara momsavstamning for vald period och jamfor med Skatteverket innan deklaration."
+        : "Save VAT reconciliation for the selected period and compare with the tax authority before filing.",
+      actionLabel: t.exportCsv,
+      action: downloadVatReconciliationCsv
+    },
+    {
+      key: "reports",
+      status: profitAndLoss && balanceReport ? "ok" : "info",
+      title: language === "sv" ? "Resultat och balans" : "Profit and balance",
+      count: `${profitNet} SEK`,
+      description: language === "sv"
+        ? "Exportera resultatrapport, balansrapport och manadsrapport."
+        : "Export profit and loss, balance report and monthly report.",
+      actionLabel: language === "sv" ? "Exportera resultat" : "Export profit",
+      action: downloadProfitAndLossCsv
+    },
+    {
+      key: "payments",
+      status: totalOutstanding === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Betalningar och bank" : "Payments and bank",
+      count: `${totalOutstanding} SEK ${language === "sv" ? "kvar" : "outstanding"}`,
+      description: language === "sv"
+        ? "Spara betalningsoversikt, bankimport och bankavstamningshistorik."
+        : "Save payment overview, bank import and reconciliation history.",
+      actionLabel: t.exportCsv,
+      action: downloadPaymentOverviewCsv
+    }
+  ];
+  const archivePackageWarnings = archivePackageItems.filter((item) => item.status === "warning").length;
+  const archivePackageReadyCount = archivePackageItems.filter((item) => item.status === "ok").length;
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -8058,6 +8182,50 @@ function App() {
                 <small>{item.value}</small>
               </button>
             ))}
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Arkivpaket for perioden" : "Archive package for the period"}</h2>
+            <div className="button-row">
+              <span className={archivePackageWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {archivePackageReadyCount}/{archivePackageItems.length} {language === "sv" ? "redo" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadArchiveManifestCsv}>
+                {language === "sv" ? "Exportera manifest" : "Export manifest"}
+              </button>
+            </div>
+          </div>
+
+          <div className="archive-package-panel">
+            <div className="archive-package-intro">
+              <strong>{language === "sv" ? "Spara detta tillsammans" : "Store this together"}</strong>
+              <p>
+                {language === "sv"
+                  ? "Anvand arkivpaketet nar du vill samla bokforingsunderlag for en period: fakturor, kvitton, verifikationer, betalningar, moms och rapporter. Manifestet blir din innehallsforteckning."
+                  : "Use the archive package when you want to gather bookkeeping records for a period: invoices, receipts, vouchers, payments, VAT and reports. The manifest becomes your table of contents."}
+              </p>
+              <small>
+                {language === "sv"
+                  ? "Tips: exportera manifestet sist, efter att du har kontrollerat varningar."
+                  : "Tip: export the manifest last, after checking warnings."}
+              </small>
+            </div>
+
+            <div className="archive-package-grid">
+              {archivePackageItems.map((item) => (
+                <article className={`archive-package-card ${item.status}`} key={item.key}>
+                  <header>
+                    <span>{item.status === "ok" ? "OK" : item.status === "warning" ? (language === "sv" ? "Kontrollera" : "Check") : "Info"}</span>
+                    <strong>{item.count}</strong>
+                  </header>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                  <button type="button" className="secondary-button" onClick={item.action}>
+                    {item.actionLabel}
+                  </button>
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className="section-heading report-subheading">
