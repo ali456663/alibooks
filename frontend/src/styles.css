@@ -2555,6 +2555,65 @@ button:focus-visible,
   margin-top: 4px;
 }
 
+.period-close-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #f3d293;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.period-close-panel.locked {
+  border-color: #b8dec6;
+  background: #f0fbf4;
+}
+
+.period-close-panel span,
+.period-close-panel small {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.period-close-panel strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+}
+
+.period-close-panel p {
+  margin: 10px 0;
+  color: #34302a;
+  line-height: 1.5;
+}
+
+.period-close-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+
+.primary-action-button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font-weight: 900;
+  padding: 13px 16px;
+}
+
+.primary-action-button:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.primary-action-button:disabled {
+  cursor: not-allowed;
+  background: #aab4c2;
+}
+
 .report-card {
   padding: 18px;
   border: 1px solid #d9ddd4;
@@ -3163,7 +3222,8 @@ button:focus-visible,
   .close-center-hero,
   .close-checklist-grid,
   .archive-package-panel,
-  .archive-package-grid {
+  .archive-package-grid,
+  .period-close-panel {
     grid-template-columns: 1fr;
   }
 

@@ -998,6 +998,7 @@ function App() {
   const [vatPeriodFrom, setVatPeriodFrom] = useState(() => currentQuarterRange().from);
   const [vatPeriodTo, setVatPeriodTo] = useState(() => currentQuarterRange().to);
   const [settingsMessage, setSettingsMessage] = useState("");
+  const [periodCloseMessage, setPeriodCloseMessage] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [expenseNetAmount, setExpenseNetAmount] = useState("");
@@ -1760,8 +1761,7 @@ function App() {
     setContracts((current) => current.filter((item) => item.id !== contractId));
   }
 
-  async function handleSaveSettings(event) {
-    event.preventDefault();
+  async function saveSettingsChanges(updatedSettings, successMessage = t.settingsSaved) {
     setError("");
     setSettingsMessage("");
 
@@ -1771,20 +1771,65 @@ function App() {
         "Content-Type": "application/json",
         ...authHeaders()
       },
-      body: JSON.stringify(settings)
+      body: JSON.stringify(updatedSettings)
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       setError(apiErrorMessage(data, "Could not save settings."));
-      return;
+      return null;
     }
 
     setSettings(data);
-    setSettingsMessage(t.settingsSaved);
+    setSettingsMessage(successMessage);
     loadAccounts();
     loadBalanceReport();
+    return data;
+  }
+
+  async function handleSaveSettings(event) {
+    event.preventDefault();
+    await saveSettingsChanges(settings);
+  }
+
+  async function closeSelectedAccountingPeriod() {
+    setPeriodCloseMessage("");
+
+    if (!settings) {
+      setError(language === "sv" ? "Installningar ar inte laddade annu." : "Settings are not loaded yet.");
+      return;
+    }
+
+    if (!vatPeriodTo) {
+      setError(language === "sv" ? "Valj ett slutdatum for perioden forst." : "Choose an end date for the period first.");
+      return;
+    }
+
+    if (accountingLockedThroughDate && accountingLockedThroughDate >= vatPeriodTo) {
+      setPeriodCloseMessage(language === "sv"
+        ? `Perioden ar redan last till ${formatDateOnly(accountingLockedThroughDate)}.`
+        : `The period is already locked through ${formatDateOnly(accountingLockedThroughDate)}.`);
+      return;
+    }
+
+    const confirmed = window.confirm(language === "sv"
+      ? `Vill du lasa bokforingen till och med ${formatDateOnly(vatPeriodTo)}? Efter detta ska andringar i perioden goras som korrigeringar i en nyare period.`
+      : `Lock bookkeeping through ${formatDateOnly(vatPeriodTo)}? After this, changes in the period should be made as corrections in a later period.`);
+
+    if (!confirmed) return;
+
+    const successMessage = language === "sv"
+      ? `Perioden ar last till ${formatDateOnly(vatPeriodTo)}.`
+      : `Period locked through ${formatDateOnly(vatPeriodTo)}.`;
+    const data = await saveSettingsChanges({
+      ...settings,
+      accountingLockedThroughDate: vatPeriodTo
+    }, successMessage);
+
+    if (data) {
+      setPeriodCloseMessage(successMessage);
+    }
   }
 
   async function sendSettingsTestEmail() {
@@ -4059,8 +4104,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -4631,6 +4676,12 @@ function App() {
   ];
   const archivePackageWarnings = archivePackageItems.filter((item) => item.status === "warning").length;
   const archivePackageReadyCount = archivePackageItems.filter((item) => item.status === "ok").length;
+  const selectedPeriodIsLocked = Boolean(
+    accountingLockedThroughDate
+      && vatPeriodTo
+      && accountingLockedThroughDate >= vatPeriodTo
+  );
+  const selectedPeriodCanBeLocked = Boolean(settings && vatPeriodTo && !selectedPeriodIsLocked);
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -8225,6 +8276,48 @@ function App() {
                   </button>
                 </article>
               ))}
+            </div>
+          </div>
+
+          <div className={selectedPeriodIsLocked ? "period-close-panel locked" : "period-close-panel"}>
+            <div>
+              <span>{language === "sv" ? "Periodavslut" : "Period close"}</span>
+              <strong>
+                {selectedPeriodIsLocked
+                  ? (language === "sv" ? "Vald period ar last" : "Selected period is locked")
+                  : (language === "sv" ? "Redo att lasa nar du har kontrollerat" : "Ready to lock after review")}
+              </strong>
+              <p>
+                {language === "sv"
+                  ? `Period: ${archivePeriodLabel}. Nar du laser perioden stoppar AliBooks nya andringar pa eller fore ${formatDateOnly(vatPeriodTo)}. Gor senare rattelser i en ny period.`
+                  : `Period: ${archivePeriodLabel}. When you lock the period, AliBooks blocks new changes on or before ${formatDateOnly(vatPeriodTo)}. Make later corrections in a new period.`}
+              </p>
+              <small>
+                {closeChecklistWarnings === 0 && archivePackageWarnings === 0
+                  ? (language === "sv" ? "Inga varningar i kontrollcentret." : "No warnings in the control center.")
+                  : `${closeChecklistWarnings + archivePackageWarnings} ${language === "sv" ? "varningar att kontrollera innan lasning" : "warnings to check before locking"}`}
+              </small>
+            </div>
+            <div className="period-close-actions">
+              <span className={selectedPeriodIsLocked ? "status success-status" : "status warning-status"}>
+                {selectedPeriodIsLocked
+                  ? `${language === "sv" ? "Last till" : "Locked through"} ${formatDateOnly(accountingLockedThroughDate)}`
+                  : (language === "sv" ? "Inte last" : "Not locked")}
+              </span>
+              <button
+                type="button"
+                className="primary-action-button"
+                onClick={closeSelectedAccountingPeriod}
+                disabled={!selectedPeriodCanBeLocked}
+              >
+                {selectedPeriodIsLocked
+                  ? (language === "sv" ? "Period redan last" : "Period already locked")
+                  : (language === "sv" ? "Las vald period" : "Lock selected period")}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setActiveView("settings")}>
+                {language === "sv" ? "Oppna installningar" : "Open settings"}
+              </button>
+              {periodCloseMessage && <p className="message success">{periodCloseMessage}</p>}
             </div>
           </div>
 
