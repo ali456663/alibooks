@@ -3415,6 +3415,35 @@ function App() {
     downloadLocalCsv("monthly-report.csv", rows);
   }
 
+  function downloadCloseChecklistCsv() {
+    setError("");
+    const rows = [
+      ["Bokslutsstatus", `${closeReadinessScore}%`],
+      ["Varningar", closeChecklistWarnings],
+      ["Kontroll", "Status", "Varde"]
+    ];
+
+    closeChecklistItems.forEach((item) => {
+      rows.push([
+        item.title,
+        item.status,
+        item.value
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Resultat", profitNet],
+      ["Moms vald period", vatPeriodToPay],
+      ["Utestaende kundfordringar", totalOutstanding],
+      ["Saknade underlag", expensesMissingReceipt.length],
+      ["Obalanserade verifikat", unbalancedJournalGroups.length],
+      ["Last period till", accountingLockedThroughDate || "-"]
+    );
+
+    downloadLocalCsv("close-checklist.csv", rows);
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -3999,8 +4028,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter for resultatrapport, balansrapport, manadsrapport, forfallorapport och kundreskontra. I Bokforing kan du exportera verifikat och huvudbok som CSV. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports for profit and loss, balance report, monthly report, aging report and customer receivables. In Bookkeeping you can export vouchers and account ledger as CSV. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Du har ocksa resultatrapport, balansrapport, manadsrapport, forfallorapport och kundreskontra. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. You also have profit and loss, balance report, monthly report, aging report and customer receivables. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -4405,6 +4434,79 @@ function App() {
   const activeBookkeepingVoucherDifference = activeBookkeepingVoucher
     ? activeBookkeepingVoucher.debit - activeBookkeepingVoucher.credit
     : 0;
+  const unbalancedJournalGroups = journalGroups.filter((group) => (group.debit || 0) !== (group.credit || 0));
+  const closeChecklistItems = [
+    {
+      key: "balanced-vouchers",
+      status: unbalancedJournalGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Verifikat balanserar" : "Vouchers are balanced",
+      value: unbalancedJournalGroups.length === 0
+        ? (language === "sv" ? "Alla verifikat balanserar" : "All vouchers balance")
+        : `${unbalancedJournalGroups.length} ${language === "sv" ? "obalanserade verifikat" : "unbalanced vouchers"}`,
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingSearch(unbalancedJournalGroups[0]?.voucherNumber || "");
+      }
+    },
+    {
+      key: "missing-receipts",
+      status: expensesMissingReceipt.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag sparade" : "Receipts saved",
+      value: expensesMissingReceipt.length === 0
+        ? (language === "sv" ? "Alla kostnader har underlag" : "All expenses have receipts")
+        : `${expensesMissingReceipt.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+      }
+    },
+    {
+      key: "open-invoices",
+      status: totalOutstanding === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Kundfordringar" : "Customer receivables",
+      value: totalOutstanding === 0
+        ? (language === "sv" ? "Inga obetalda fakturor" : "No unpaid invoices")
+        : `${totalOutstanding} SEK ${language === "sv" ? "kvar att fa betalt" : "outstanding"}`,
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("open");
+      }
+    },
+    {
+      key: "overdue-invoices",
+      status: overdueInvoices.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Forfallna fakturor" : "Overdue invoices",
+      value: overdueInvoices.length === 0
+        ? (language === "sv" ? "Inga forfallna fakturor" : "No overdue invoices")
+        : `${overdueInvoices.length} ${language === "sv" ? "forfallna fakturor" : "overdue invoices"}`,
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("overdue");
+      }
+    },
+    {
+      key: "vat",
+      status: vatPeriodHasData ? "info" : "warning",
+      title: language === "sv" ? "Momsavstamning" : "VAT reconciliation",
+      value: vatPeriodHasData
+        ? `${vatPeriodToPay} SEK`
+        : (language === "sv" ? "Ingen momsdata i vald period" : "No VAT data in selected period"),
+      action: () => setActiveView("vat")
+    },
+    {
+      key: "period-lock",
+      status: accountingLockedThroughDate ? "ok" : "info",
+      title: language === "sv" ? "Periodlasning" : "Period lock",
+      value: accountingLockedThroughDate
+        ? `${language === "sv" ? "Last till" : "Locked through"} ${formatDateOnly(accountingLockedThroughDate)}`
+        : (language === "sv" ? "Ingen period ar last" : "No period is locked"),
+      action: () => setActiveView("settings")
+    }
+  ];
+  const closeChecklistWarnings = closeChecklistItems.filter((item) => item.status === "warning").length;
+  const closeReadinessScore = closeChecklistItems.length === 0
+    ? 0
+    : Math.round(((closeChecklistItems.length - closeChecklistWarnings) / closeChecklistItems.length) * 100);
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -7884,6 +7986,81 @@ function App() {
 
         {activeView === "reports" && <section className="orders-section">
           <div className="section-heading">
+            <h2>{language === "sv" ? "Boksluts- och kontrollcenter" : "Closing and control center"}</h2>
+            <div className="button-row">
+              <span className={closeChecklistWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {closeReadinessScore}% {language === "sv" ? "klart" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadCloseChecklistCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="close-center-hero">
+            <article>
+              <span>{language === "sv" ? "Status" : "Status"}</span>
+              <strong>
+                {closeChecklistWarnings === 0
+                  ? (language === "sv" ? "Ser redo ut" : "Looks ready")
+                  : `${closeChecklistWarnings} ${language === "sv" ? "saker att kontrollera" : "items to check"}`}
+              </strong>
+              <p>
+                {language === "sv"
+                  ? "Kontrollcentret samlar bokforing, underlag, kundfordringar och moms pa ett stalle innan du exporterar eller later perioden vila."
+                  : "The control center gathers bookkeeping, receipts, receivables and VAT in one place before you export or close a period."}
+              </p>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Period" : "Period"}</span>
+              <strong>{vatPeriodFrom || "-"} - {vatPeriodTo || "-"}</strong>
+              <p>
+                {accountingLockedThroughDate
+                  ? (language === "sv"
+                    ? `Bokforingen ar last till ${formatDateOnly(accountingLockedThroughDate)}.`
+                    : `Bookkeeping is locked through ${formatDateOnly(accountingLockedThroughDate)}.`)
+                  : (language === "sv"
+                    ? "Ingen bokforingsperiod ar last annu."
+                    : "No bookkeeping period is locked yet.")}
+              </p>
+            </article>
+          </div>
+
+          <div className="expense-summary-grid close-center-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Resultat" : "Result"}</span>
+              <strong>{profitNet} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Moms vald period" : "VAT selected period"}</span>
+              <strong>{vatPeriodToPay} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kundfordringar" : "Receivables"}</span>
+              <strong>{totalOutstanding} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
+              <strong>{expensesMissingReceipt.length}</strong>
+            </article>
+          </div>
+
+          <div className="close-checklist-grid">
+            {closeChecklistItems.map((item) => (
+              <button
+                type="button"
+                className={`close-check-card ${item.status}`}
+                key={item.key}
+                onClick={item.action}
+              >
+                <span>{item.status === "ok" ? "OK" : item.status === "warning" ? (language === "sv" ? "Kontrollera" : "Check") : "Info"}</span>
+                <strong>{item.title}</strong>
+                <small>{item.value}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="section-heading report-subheading">
             <h2>{t.profitAndLoss}</h2>
             <div className="button-row">
               <button

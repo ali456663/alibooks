@@ -2372,6 +2372,98 @@ button:focus-visible,
   margin-top: 34px;
 }
 
+.success-status {
+  border-color: #b8dec6;
+  background: #eaf8ef;
+  color: #155c49;
+}
+
+.warning-status {
+  border-color: #f3d293;
+  background: #fff7e6;
+  color: #8a5a00;
+}
+
+.close-center-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.close-center-hero article,
+.close-check-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.close-center-hero article {
+  padding: 18px;
+}
+
+.close-center-hero span,
+.close-check-card span {
+  display: block;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.close-center-hero strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+}
+
+.close-center-hero p {
+  margin-bottom: 0;
+  color: #34302a;
+  line-height: 1.5;
+}
+
+.close-center-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.close-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+
+.close-check-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-left: 5px solid var(--color-primary);
+  color: #191815;
+  text-align: left;
+}
+
+.close-check-card.ok {
+  border-left-color: #155c49;
+}
+
+.close-check-card.warning {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.close-check-card.info {
+  border-left-color: #155ee8;
+}
+
+.close-check-card strong {
+  font-size: 16px;
+}
+
+.close-check-card small {
+  color: #5d6259;
+  font-weight: 700;
+}
+
 .report-card {
   padding: 18px;
   border: 1px solid #d9ddd4;
@@ -2976,7 +3068,9 @@ button:focus-visible,
   .vat-reconciliation-panel,
   .invoice-summary-cards,
   .automation-result,
-  .expense-summary-grid {
+  .expense-summary-grid,
+  .close-center-hero,
+  .close-checklist-grid {
     grid-template-columns: 1fr;
   }
 
