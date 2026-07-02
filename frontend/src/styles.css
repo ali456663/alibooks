@@ -1160,6 +1160,72 @@ button:focus-visible,
   font-size: 24px;
 }
 
+.vat-period-panel {
+  align-items: end;
+}
+
+.vat-reconciliation-summary-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.vat-reconciliation-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.vat-status-card,
+.vat-checklist-card {
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.vat-status-card {
+  border-left: 5px solid var(--color-primary);
+}
+
+.vat-status-card.pay {
+  border-left-color: #d64045;
+}
+
+.vat-status-card.reclaim {
+  border-left-color: #155c49;
+}
+
+.vat-status-card span,
+.vat-checklist-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.vat-status-card strong {
+  display: block;
+  font-size: 24px;
+}
+
+.vat-status-card p {
+  margin-bottom: 0;
+  color: #34302a;
+  line-height: 1.5;
+}
+
+.vat-checklist-card ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #34302a;
+  line-height: 1.7;
+}
+
+.vat-drilldown-actions {
+  margin-top: 16px;
+}
+
 .journal-groups {
   display: grid;
   gap: 16px;
@@ -2907,6 +2973,7 @@ button:focus-visible,
   .topbar,
   .stats,
   .vat-report,
+  .vat-reconciliation-panel,
   .invoice-summary-cards,
   .automation-result,
   .expense-summary-grid {

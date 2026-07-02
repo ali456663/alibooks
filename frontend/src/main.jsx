@@ -995,6 +995,8 @@ function App() {
   const [profitAndLoss, setProfitAndLoss] = useState(null);
   const [balanceReport, setBalanceReport] = useState(null);
   const [customerLedgerSearch, setCustomerLedgerSearch] = useState("");
+  const [vatPeriodFrom, setVatPeriodFrom] = useState(() => currentQuarterRange().from);
+  const [vatPeriodTo, setVatPeriodTo] = useState(() => currentQuarterRange().to);
   const [settingsMessage, setSettingsMessage] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -3426,6 +3428,39 @@ function App() {
     downloadLocalCsv("vat-report.csv", rows);
   }
 
+  function downloadVatReconciliationCsv() {
+    setError("");
+    const rows = [
+      ["Momsperiod fran", vatPeriodFrom || "-", "Momsperiod till", vatPeriodTo || "-"],
+      ["Status", vatPeriodStatusText],
+      ["Intakter exkl. moms", vatPeriodRevenue],
+      ["Kostnader exkl. moms", vatPeriodExpenses],
+      ["Utgaende moms 2611", vatPeriodOutputVat],
+      ["Ingaende moms 2641", vatPeriodInputVat],
+      ["Moms att betala/fa tillbaka", vatPeriodToPay],
+      ["Verifikat", vatPeriodVoucherNumbers.size],
+      [],
+      ["Datum", "Verifikat", "Konto", "Kontonamn", "Beskrivning", "Debet", "Kredit"]
+    ];
+
+    vatPeriodEntries
+      .filter((entry) => entry.accountNumber === "2611" || entry.accountNumber === "2641")
+      .sort((first, second) => String(first.voucherDate || "").localeCompare(String(second.voucherDate || "")))
+      .forEach((entry) => {
+        rows.push([
+          entry.voucherDate || "",
+          entry.voucherNumber || "",
+          entry.accountNumber || "",
+          entry.accountName || "",
+          entry.description || "",
+          entry.debit || 0,
+          entry.credit || 0
+        ]);
+      });
+
+    downloadLocalCsv("vat-reconciliation.csv", rows);
+  }
+
   function downloadExpensesCsv() {
     setError("");
     const rows = [
@@ -3891,6 +3926,35 @@ function App() {
   const monthlyReportResultTotal = monthlyReportRows.reduce((sum, row) => sum + row.result, 0);
   const monthlyReportVatToPayTotal = monthlyReportRows.reduce((sum, row) => sum + row.vatToPay, 0);
   const monthlyReportCashChangeTotal = monthlyReportRows.reduce((sum, row) => sum + row.cashChange, 0);
+  const vatPeriodEntries = journalEntries.filter((entry) => {
+    const voucherDate = String(entry.voucherDate || entry.createdAt || "").slice(0, 10);
+    if (!voucherDate) return false;
+    if (vatPeriodFrom && voucherDate < vatPeriodFrom) return false;
+    if (vatPeriodTo && voucherDate > vatPeriodTo) return false;
+    return true;
+  });
+  const vatPeriodOutputVat = vatPeriodEntries
+    .filter((entry) => entry.accountNumber === "2611")
+    .reduce((sum, entry) => sum + (entry.credit || 0) - (entry.debit || 0), 0);
+  const vatPeriodInputVat = vatPeriodEntries
+    .filter((entry) => entry.accountNumber === "2641")
+    .reduce((sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0), 0);
+  const vatPeriodToPay = vatPeriodOutputVat - vatPeriodInputVat;
+  const vatPeriodRevenue = vatPeriodEntries
+    .filter((entry) => String(entry.accountNumber || "").startsWith("3"))
+    .reduce((sum, entry) => sum + (entry.credit || 0) - (entry.debit || 0), 0);
+  const vatPeriodExpenses = vatPeriodEntries
+    .filter((entry) => ["4", "5", "6", "7"].some((prefix) => String(entry.accountNumber || "").startsWith(prefix)))
+    .reduce((sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0), 0);
+  const vatPeriodVoucherNumbers = new Set(vatPeriodEntries.map((entry) => entry.voucherNumber).filter(Boolean));
+  const vatPeriodHasData = vatPeriodEntries.length > 0;
+  const vatPeriodStatusText = !vatPeriodHasData
+    ? (language === "sv" ? "Ingen bokforing i vald period." : "No bookkeeping in the selected period.")
+    : vatPeriodToPay > 0
+      ? (language === "sv" ? "Moms att betala" : "VAT to pay")
+      : vatPeriodToPay < 0
+        ? (language === "sv" ? "Moms att fa tillbaka" : "VAT to reclaim")
+        : (language === "sv" ? "Momsperioden balanserar till 0 SEK" : "The VAT period balances to 0 SEK");
   const revenueNet = invoices.reduce((sum, item) => sum + invoiceNetAmount(item), 0);
   const revenueTotal = invoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
   const expenseNet = expenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
@@ -3941,8 +4005,8 @@ function App() {
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For moms: ga till Momsrapport. Appen summerar utgaende moms minus ingaende moms. Nuvarande moms att betala ar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
-        : `${answerIntro} For VAT: go to VAT report. The app summarizes output VAT minus input VAT. Current VAT to pay is ${vatReport?.vatToPay || 0} SEK. Always verify period and exact dates with the tax authority before filing.`, "vat");
+        ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. Appen summerar 2611 utgaende moms minus 2641 ingaende moms. Vald period visar ${vatPeriodToPay} SEK och hela appen visar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
+        : `${answerIntro} For VAT: go to VAT report. There you have the total VAT report and VAT reconciliation for the selected period. The app summarizes account 2611 output VAT minus account 2641 input VAT. The selected period shows ${vatPeriodToPay} SEK and the full app shows ${vatReport?.vatToPay || 0} SEK. Always verify period and exact dates with the tax authority before filing.`, "vat");
     }
 
     if (normalizedQuestion.includes("bank") || normalizedQuestion.includes("csv") || normalizedQuestion.includes("betal") || normalizedQuestion.includes("payment")) {
@@ -3971,6 +4035,9 @@ function App() {
       profitNet,
       monthlyReportMonths: monthlyReportRows.length,
       monthlyReportCashChange: monthlyReportCashChangeTotal,
+      vatPeriodFrom,
+      vatPeriodTo,
+      vatPeriodToPay,
       expenses: expenses.length,
       customers: customers.length,
       contracts: contracts.length,
@@ -7145,6 +7212,137 @@ function App() {
               <span>{t.vatToPay}</span>
               <strong>{vatReport?.vatToPay || 0} SEK</strong>
             </article>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Momsavstamning" : "VAT reconciliation"}</h2>
+            <div className="button-row">
+              <span className="status">{vatPeriodVoucherNumbers.size} {language === "sv" ? "verifikat i perioden" : "vouchers in period"}</span>
+              <button type="button" className="secondary-button" onClick={downloadVatReconciliationCsv} disabled={vatPeriodEntries.length === 0}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="invoice-filter-panel vat-period-panel">
+            <label>
+              {language === "sv" ? "Fran datum" : "From date"}
+              <input type="date" value={vatPeriodFrom} onChange={(event) => setVatPeriodFrom(event.target.value)} />
+            </label>
+            <label>
+              {language === "sv" ? "Till datum" : "To date"}
+              <input type="date" value={vatPeriodTo} onChange={(event) => setVatPeriodTo(event.target.value)} />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const range = currentMonthRange();
+                setVatPeriodFrom(range.from);
+                setVatPeriodTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Denna manad" : "This month"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const range = currentQuarterRange();
+                setVatPeriodFrom(range.from);
+                setVatPeriodTo(range.to);
+              }}
+            >
+              {language === "sv" ? "Detta kvartal" : "This quarter"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const range = currentYearRange();
+                setVatPeriodFrom(range.from);
+                setVatPeriodTo(range.to);
+              }}
+            >
+              {language === "sv" ? "I ar" : "This year"}
+            </button>
+          </div>
+
+          <div className="expense-summary-grid vat-reconciliation-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Intakter exkl. moms" : "Revenue excl. VAT"}</span>
+              <strong>{vatPeriodRevenue} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kostnader exkl. moms" : "Expenses excl. VAT"}</span>
+              <strong>{vatPeriodExpenses} SEK</strong>
+            </article>
+            <article>
+              <span>{t.outputVat} 2611</span>
+              <strong>{vatPeriodOutputVat} SEK</strong>
+            </article>
+            <article>
+              <span>{t.inputVat} 2641</span>
+              <strong>{vatPeriodInputVat} SEK</strong>
+            </article>
+            <article className={vatPeriodToPay >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+              <span>{language === "sv" ? "Periodens moms" : "Period VAT"}</span>
+              <strong>{vatPeriodToPay} SEK</strong>
+            </article>
+          </div>
+
+          <div className="vat-reconciliation-panel">
+            <article className={vatPeriodToPay > 0 ? "vat-status-card pay" : vatPeriodToPay < 0 ? "vat-status-card reclaim" : "vat-status-card neutral"}>
+              <span>{language === "sv" ? "Status" : "Status"}</span>
+              <strong>{vatPeriodStatusText}</strong>
+              <p>
+                {vatPeriodToPay > 0
+                  ? (language === "sv"
+                    ? "Beloppet ar preliminart moms att betala for vald period. Kontrollera alltid perioden mot Skatteverket innan deklaration."
+                    : "This is the preliminary VAT to pay for the selected period. Always verify the period with the tax authority before filing.")
+                  : vatPeriodToPay < 0
+                    ? (language === "sv"
+                      ? "Negativt belopp betyder preliminar moms att fa tillbaka. Kontrollera underlag och period innan deklaration."
+                      : "A negative amount means preliminary VAT to reclaim. Check receipts and period before filing.")
+                    : (language === "sv"
+                      ? "Ingen moms att betala eller fa tillbaka enligt valda bokforingsrader."
+                      : "No VAT to pay or reclaim according to the selected bookkeeping rows.")}
+              </p>
+            </article>
+
+            <article className="vat-checklist-card">
+              <strong>{language === "sv" ? "Kontroll innan momsdeklaration" : "Checks before VAT filing"}</strong>
+              <ul>
+                <li>{language === "sv" ? "Alla fakturor i perioden ar skapade och bokforda." : "All invoices in the period are created and booked."}</li>
+                <li>{language === "sv" ? "Alla kostnader har ratt datum, moms och underlag." : "All expenses have correct date, VAT and receipt."}</li>
+                <li>{language === "sv" ? "Bank/Stripe ar avstamt mot betalningar." : "Bank/Stripe is reconciled against payments."}</li>
+                <li>{language === "sv" ? "Kontrollera exakta deklarationsdatum hos Skatteverket." : "Verify exact filing dates with the tax authority."}</li>
+              </ul>
+            </article>
+          </div>
+
+          <div className="button-row vat-drilldown-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setActiveView("bookkeeping");
+                setBookkeepingSearch("2611");
+                setBookkeepingDateFrom(vatPeriodFrom);
+                setBookkeepingDateTo(vatPeriodTo);
+              }}
+            >
+              {language === "sv" ? "Visa 2611 i bokforing" : "Show 2611 in bookkeeping"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setActiveView("bookkeeping");
+                setBookkeepingSearch("2641");
+                setBookkeepingDateFrom(vatPeriodFrom);
+                setBookkeepingDateTo(vatPeriodTo);
+              }}
+            >
+              {language === "sv" ? "Visa 2641 i bokforing" : "Show 2641 in bookkeeping"}
+            </button>
           </div>
         </section>}
 
