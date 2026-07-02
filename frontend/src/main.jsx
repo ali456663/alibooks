@@ -3383,6 +3383,36 @@ function App() {
     downloadLocalCsv("customer-receivables.csv", rows);
   }
 
+  function downloadMonthlyReportCsv() {
+    setError("");
+    const rows = [
+      ["Manad", "Intakter", "Kostnader", "Resultat", "Utgaende moms", "Ingaende moms", "Moms att betala", "Kassa in", "Kassa ut", "Kassaforandring", "Bokforingsrader"]
+    ];
+
+    monthlyReportRows.forEach((row) => {
+      rows.push([
+        formatMonthLabel(row.monthKey, language),
+        row.revenue,
+        row.expenses,
+        row.result,
+        row.outputVat,
+        row.inputVat,
+        row.vatToPay,
+        row.cashIn,
+        row.cashOut,
+        row.cashChange,
+        row.voucherCount
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Totalt", monthlyReportRevenueTotal, monthlyReportExpenseTotal, monthlyReportResultTotal, "", "", monthlyReportVatToPayTotal, "", "", monthlyReportCashChangeTotal, ""]
+    );
+
+    downloadLocalCsv("monthly-report.csv", rows);
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -3796,6 +3826,71 @@ function App() {
   const customerLedgerOverdueCustomers = customerLedgerRows.filter((row) => row.overdueTotal > 0).length;
   const customerLedgerOutstandingTotal = customerLedgerRows.reduce((sum, row) => sum + row.outstandingTotal, 0);
   const customerLedgerOverdueTotal = customerLedgerRows.reduce((sum, row) => sum + row.overdueTotal, 0);
+  const monthlyReportMap = new Map();
+  const ensureMonthlyReportRow = (monthKey) => {
+    const safeMonthKey = /^\d{4}-\d{2}$/.test(monthKey || "") ? monthKey : new Date().toISOString().slice(0, 7);
+    if (!monthlyReportMap.has(safeMonthKey)) {
+      monthlyReportMap.set(safeMonthKey, {
+        monthKey: safeMonthKey,
+        revenue: 0,
+        expenses: 0,
+        result: 0,
+        outputVat: 0,
+        inputVat: 0,
+        vatToPay: 0,
+        cashIn: 0,
+        cashOut: 0,
+        cashChange: 0,
+        voucherCount: 0
+      });
+    }
+    return monthlyReportMap.get(safeMonthKey);
+  };
+
+  journalEntries.forEach((entry) => {
+    const monthKey = String(entry.voucherDate || entry.createdAt || "").slice(0, 7);
+    const row = ensureMonthlyReportRow(monthKey);
+    const accountNumber = String(entry.accountNumber || "");
+    const debit = entry.debit || 0;
+    const credit = entry.credit || 0;
+
+    if (accountNumber.startsWith("3")) {
+      row.revenue += credit - debit;
+    }
+
+    if (["4", "5", "6", "7"].some((prefix) => accountNumber.startsWith(prefix))) {
+      row.expenses += debit - credit;
+    }
+
+    if (accountNumber === "2611") {
+      row.outputVat += credit - debit;
+    }
+
+    if (accountNumber === "2641") {
+      row.inputVat += debit - credit;
+    }
+
+    if (accountNumber === "1930") {
+      row.cashIn += debit;
+      row.cashOut += credit;
+    }
+
+    row.voucherCount += 1;
+  });
+
+  const monthlyReportRows = Array.from(monthlyReportMap.values())
+    .map((row) => ({
+      ...row,
+      result: row.revenue - row.expenses,
+      vatToPay: row.outputVat - row.inputVat,
+      cashChange: row.cashIn - row.cashOut
+    }))
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  const monthlyReportRevenueTotal = monthlyReportRows.reduce((sum, row) => sum + row.revenue, 0);
+  const monthlyReportExpenseTotal = monthlyReportRows.reduce((sum, row) => sum + row.expenses, 0);
+  const monthlyReportResultTotal = monthlyReportRows.reduce((sum, row) => sum + row.result, 0);
+  const monthlyReportVatToPayTotal = monthlyReportRows.reduce((sum, row) => sum + row.vatToPay, 0);
+  const monthlyReportCashChangeTotal = monthlyReportRows.reduce((sum, row) => sum + row.cashChange, 0);
   const revenueNet = invoices.reduce((sum, item) => sum + invoiceNetAmount(item), 0);
   const revenueTotal = invoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
   const expenseNet = expenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
@@ -3840,8 +3935,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter for resultat- och balansrapport. I Bokforing kan du exportera verifikat och huvudbok som CSV. I Kunder, Fakturor, Betalningar och Kostnader finns ocksa exportknappar. Just nu visar appen resultat ${profitNet} SEK och moms att betala ${vatReport?.vatToPay || 0} SEK.`
-        : `${answerIntro} For reports: go to Reports for profit and loss and balance report. In Bookkeeping you can export vouchers and account ledger as CSV. Customers, Invoices, Payments and Expenses also have export buttons. The app currently shows profit ${profitNet} SEK and VAT to pay ${vatReport?.vatToPay || 0} SEK.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter for resultatrapport, balansrapport, manadsrapport, forfallorapport och kundreskontra. I Bokforing kan du exportera verifikat och huvudbok som CSV. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports for profit and loss, balance report, monthly report, aging report and customer receivables. In Bookkeeping you can export vouchers and account ledger as CSV. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -3874,6 +3969,8 @@ function App() {
       totalOutstanding,
       vatToPay: vatReport?.vatToPay || 0,
       profitNet,
+      monthlyReportMonths: monthlyReportRows.length,
+      monthlyReportCashChange: monthlyReportCashChangeTotal,
       expenses: expenses.length,
       customers: customers.length,
       contracts: contracts.length,
@@ -7694,6 +7791,81 @@ function App() {
             </div>
           ) : (
             <p className="empty-state">{language === "sv" ? "Ingen balansrapport laddad." : "No balance report loaded."}</p>
+          )}
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Manadsrapport" : "Monthly report"}</h2>
+            <div className="button-row">
+              <span className="status">{monthlyReportRows.length} {language === "sv" ? "manader" : "months"}</span>
+              <button type="button" className="secondary-button" onClick={downloadMonthlyReportCsv} disabled={monthlyReportRows.length === 0}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="expense-summary-grid monthly-report-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Intakter" : "Revenue"}</span>
+              <strong>{monthlyReportRevenueTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+              <strong>{monthlyReportExpenseTotal} SEK</strong>
+            </article>
+            <article className={monthlyReportResultTotal >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+              <span>{language === "sv" ? "Resultat" : "Result"}</span>
+              <strong>{monthlyReportResultTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Moms att betala" : "VAT to pay"}</span>
+              <strong>{monthlyReportVatToPayTotal} SEK</strong>
+            </article>
+            <article className={monthlyReportCashChangeTotal >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+              <span>{language === "sv" ? "Kassaforandring" : "Cash change"}</span>
+              <strong>{monthlyReportCashChangeTotal} SEK</strong>
+            </article>
+          </div>
+
+          {monthlyReportRows.length === 0 ? (
+            <p className="empty-state">{language === "sv" ? "Ingen manadsdata finns annu." : "No monthly data yet."}</p>
+          ) : (
+            <div className="account-table monthly-report-table">
+              <div className="account-row monthly-report-header">
+                <span>{language === "sv" ? "Manad" : "Month"}</span>
+                <span>{language === "sv" ? "Intakter" : "Revenue"}</span>
+                <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                <span>{language === "sv" ? "Resultat" : "Result"}</span>
+                <span>{language === "sv" ? "Moms" : "VAT"}</span>
+                <span>{language === "sv" ? "Kassa" : "Cash"}</span>
+                <span>{language === "sv" ? "Rader" : "Rows"}</span>
+              </div>
+              {monthlyReportRows.map((row) => {
+                const monthRange = monthRangeFromKey(row.monthKey);
+
+                return (
+                  <button
+                    type="button"
+                    className={row.result >= 0 ? "account-row monthly-report-row" : "account-row monthly-report-row negative"}
+                    key={row.monthKey}
+                    onClick={() => {
+                      setActiveView("bookkeeping");
+                      setBookkeepingDateFrom(monthRange.from);
+                      setBookkeepingDateTo(monthRange.to);
+                      setBookkeepingSearch("");
+                    }}
+                    title={language === "sv" ? "Visa bokforing for manaden" : "Show bookkeeping for this month"}
+                  >
+                    <strong>{formatMonthLabel(row.monthKey, language)}</strong>
+                    <span>{row.revenue} SEK</span>
+                    <span>{row.expenses} SEK</span>
+                    <strong className={row.result >= 0 ? "balanced-text" : "unbalanced-text"}>{row.result} SEK</strong>
+                    <span>{row.vatToPay} SEK</span>
+                    <span>{row.cashChange} SEK</span>
+                    <span>{row.voucherCount}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
 
           <div className="section-heading report-subheading">

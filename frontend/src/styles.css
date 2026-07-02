@@ -2436,6 +2436,38 @@ button:focus-visible,
   color: #8f1e1e;
 }
 
+.monthly-report-summary-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.monthly-report-table {
+  margin-top: 14px;
+}
+
+.monthly-report-header,
+.monthly-report-row {
+  grid-template-columns: minmax(150px, 1.1fr) repeat(6, minmax(100px, 1fr));
+}
+
+.monthly-report-row {
+  width: 100%;
+  color: #191815;
+  text-align: left;
+}
+
+.monthly-report-row.negative {
+  border-left: 4px solid #d64045;
+  background: #fff6f3;
+}
+
+.monthly-report-row:not(.negative) {
+  border-left: 4px solid #155c49;
+}
+
+.monthly-report-row:hover {
+  background: #f8fbff;
+}
+
 .muted-line {
   color: #5d6259;
 }
@@ -2948,7 +2980,9 @@ button:focus-visible,
   .aging-report-grid,
   .aging-row,
   .customer-ledger-header,
-  .customer-ledger-row {
+  .customer-ledger-row,
+  .monthly-report-header,
+  .monthly-report-row {
     grid-template-columns: 1fr;
   }
 
