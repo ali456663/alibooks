@@ -3059,6 +3059,54 @@ button:focus-visible,
   font-size: 20px;
 }
 
+.backup-verify-box {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed #9fb8e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.backup-validation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #d9ddd4;
+  background: #ffffff;
+}
+
+.backup-validation.success {
+  border-color: #b8dec6;
+  background: #f2fbf5;
+}
+
+.backup-validation.warning {
+  border-color: #f3d293;
+  background: #fff9ed;
+}
+
+.backup-validation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.backup-validation-header span {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.backup-issues {
+  margin: 0;
+  padding-left: 20px;
+  color: #8a5a00;
+  font-weight: 700;
+}
+
 .config-guide {
   display: grid;
   gap: 8px;

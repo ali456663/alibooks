@@ -997,6 +997,7 @@ function App() {
   const [customerLedgerSearch, setCustomerLedgerSearch] = useState("");
   const [auditTrailFilter, setAuditTrailFilter] = useState("all");
   const [auditTrailSearch, setAuditTrailSearch] = useState("");
+  const [backupValidation, setBackupValidation] = useState(null);
   const [vatPeriodFrom, setVatPeriodFrom] = useState(() => currentQuarterRange().from);
   const [vatPeriodTo, setVatPeriodTo] = useState(() => currentQuarterRange().to);
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -3630,6 +3631,84 @@ function App() {
     });
   }
 
+  async function validateBackupFile(event) {
+    setError("");
+    setSettingsMessage("");
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      const issues = [];
+
+      if (parsed.app !== "AliBooks") {
+        issues.push(language === "sv" ? "Filen verkar inte vara en AliBooks-backup." : "The file does not look like an AliBooks backup.");
+      }
+
+      if (!parsed.version) {
+        issues.push(language === "sv" ? "Backupversion saknas." : "Backup version is missing.");
+      }
+
+      if (!parsed.exportedAt) {
+        issues.push(language === "sv" ? "Exportdatum saknas." : "Export date is missing.");
+      }
+
+      if (!Array.isArray(parsed.customers)) {
+        issues.push(language === "sv" ? "Kundlista saknas eller ar fel format." : "Customer list is missing or has the wrong format.");
+      }
+
+      if (!Array.isArray(parsed.invoices)) {
+        issues.push(language === "sv" ? "Fakturalista saknas eller ar fel format." : "Invoice list is missing or has the wrong format.");
+      }
+
+      if (!Array.isArray(parsed.journalEntries)) {
+        issues.push(language === "sv" ? "Bokforingsrader saknas eller ar fel format." : "Journal entries are missing or have the wrong format.");
+      }
+
+      const summary = parsed.summary || {};
+      setBackupValidation({
+        ok: issues.length === 0,
+        fileName: file.name,
+        exportedAt: parsed.exportedAt || "",
+        version: parsed.version || "-",
+        periodLabel: parsed.period?.label || "-",
+        containsPersonalData: parsed.containsPersonalData !== false,
+        issues,
+        counts: {
+          customers: Array.isArray(parsed.customers) ? parsed.customers.length : summary.customers || 0,
+          invoices: Array.isArray(parsed.invoices) ? parsed.invoices.length : summary.invoices || 0,
+          expenses: Array.isArray(parsed.expenses) ? parsed.expenses.length : summary.expenses || 0,
+          journalEntries: Array.isArray(parsed.journalEntries) ? parsed.journalEntries.length : summary.journalEntries || 0,
+          auditEvents: Array.isArray(parsed.reports?.auditTrail) ? parsed.reports.auditTrail.length : summary.auditEvents || 0
+        }
+      });
+
+      setSettingsMessage(issues.length === 0
+        ? (language === "sv" ? "Backupfilen ser giltig ut. Ingen data har importerats." : "Backup file looks valid. No data has been imported.")
+        : (language === "sv" ? "Backupfilen kunde lasas men har varningar." : "Backup file could be read but has warnings."));
+    } catch {
+      setBackupValidation({
+        ok: false,
+        fileName: file.name,
+        exportedAt: "",
+        version: "-",
+        periodLabel: "-",
+        containsPersonalData: true,
+        issues: [language === "sv" ? "Filen kunde inte lasas som JSON." : "The file could not be read as JSON."],
+        counts: {
+          customers: 0,
+          invoices: 0,
+          expenses: 0,
+          journalEntries: 0,
+          auditEvents: 0
+        }
+      });
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -4232,8 +4311,8 @@ function App() {
 
     if (normalizedQuestion.includes("installning") || normalizedQuestion.includes("smtp") || normalizedQuestion.includes("stripe") || normalizedQuestion.includes("settings")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For installningar: ga till Installningar. Dar styr du foretagstyp, e-postmallar, SMTP-test, automatiska paminnelser, betalningsinformation, lasning av bokforingsperiod och JSON-sakerhetskopia. Stripe- och SMTP-hemligheter laggs sakrast i IntelliJ Run Configuration eller miljo variabler, inte synligt i koden.`
-        : `${answerIntro} For settings: go to Settings. There you control company type, email templates, SMTP test, automatic reminders, payment information, accounting period lock and JSON data backup. Stripe and SMTP secrets should be stored in IntelliJ Run Configuration or environment variables, not visibly in code.`, "settings");
+        ? `${answerIntro} For installningar: ga till Installningar. Dar styr du foretagstyp, e-postmallar, SMTP-test, automatiska paminnelser, betalningsinformation, lasning av bokforingsperiod och JSON-sakerhetskopia. Du kan ocksa kontrollera en backupfil utan att importera data. Stripe- och SMTP-hemligheter laggs sakrast i IntelliJ Run Configuration eller miljo variabler, inte synligt i koden.`
+        : `${answerIntro} For settings: go to Settings. There you control company type, email templates, SMTP test, automatic reminders, payment information, accounting period lock and JSON data backup. You can also verify a backup file without importing data. Stripe and SMTP secrets should be stored in IntelliJ Run Configuration or environment variables, not visibly in code.`, "settings");
     }
 
     return createAnswer(language === "sv"
@@ -9459,6 +9538,71 @@ function App() {
                   <button type="button" className="secondary-button" onClick={downloadDataBackupJson}>
                     {language === "sv" ? "Ladda ner JSON-backup" : "Download JSON backup"}
                   </button>
+                  <div className="backup-verify-box">
+                    <label>
+                      {language === "sv" ? "Kontrollera backupfil" : "Verify backup file"}
+                      <input type="file" accept="application/json,.json" onChange={validateBackupFile} />
+                    </label>
+                    <p className="settings-hint">
+                      {language === "sv"
+                        ? "Detta laser bara filen och visar en kontroll. Ingen data skrivs till databasen."
+                        : "This only reads the file and shows a validation result. No data is written to the database."}
+                    </p>
+                  </div>
+                  {backupValidation && (
+                    <div className={backupValidation.ok ? "backup-validation success" : "backup-validation warning"}>
+                      <div className="backup-validation-header">
+                        <strong>{backupValidation.ok
+                          ? (language === "sv" ? "Backupfilen ser giltig ut" : "Backup file looks valid")
+                          : (language === "sv" ? "Backupfilen behover kontrolleras" : "Backup file needs review")}
+                        </strong>
+                        <span>{backupValidation.fileName}</span>
+                      </div>
+                      <div className="backup-summary-grid">
+                        <article>
+                          <span>{language === "sv" ? "Version" : "Version"}</span>
+                          <strong>{backupValidation.version}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Period" : "Period"}</span>
+                          <strong>{backupValidation.periodLabel}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Exporterad" : "Exported"}</span>
+                          <strong>{formatDateOnly(backupValidation.exportedAt)}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Persondata" : "Personal data"}</span>
+                          <strong>{backupValidation.containsPersonalData ? (language === "sv" ? "Ja" : "Yes") : (language === "sv" ? "Nej" : "No")}</strong>
+                        </article>
+                      </div>
+                      <div className="backup-summary-grid">
+                        <article>
+                          <span>{language === "sv" ? "Kunder" : "Customers"}</span>
+                          <strong>{backupValidation.counts.customers}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Fakturor" : "Invoices"}</span>
+                          <strong>{backupValidation.counts.invoices}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Bokforingsrader" : "Journal rows"}</span>
+                          <strong>{backupValidation.counts.journalEntries}</strong>
+                        </article>
+                        <article>
+                          <span>{language === "sv" ? "Handelser" : "Events"}</span>
+                          <strong>{backupValidation.counts.auditEvents}</strong>
+                        </article>
+                      </div>
+                      {backupValidation.issues.length > 0 && (
+                        <ul className="backup-issues">
+                          {backupValidation.issues.map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <button type="submit">{t.saveSettings}</button>
