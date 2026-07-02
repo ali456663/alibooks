@@ -997,6 +997,8 @@ function App() {
   const [customerLedgerSearch, setCustomerLedgerSearch] = useState("");
   const [auditTrailFilter, setAuditTrailFilter] = useState("all");
   const [auditTrailSearch, setAuditTrailSearch] = useState("");
+  const [dataQualityFilter, setDataQualityFilter] = useState("all");
+  const [dataQualitySearch, setDataQualitySearch] = useState("");
   const [backupValidation, setBackupValidation] = useState(null);
   const [vatPeriodFrom, setVatPeriodFrom] = useState(() => currentQuarterRange().from);
   const [vatPeriodTo, setVatPeriodTo] = useState(() => currentQuarterRange().to);
@@ -3562,6 +3564,30 @@ function App() {
     downloadLocalCsv("audit-trail.csv", rows);
   }
 
+  function downloadDataQualityCsv() {
+    setError("");
+    const rows = [
+      ["Datahalsa / Data quality"],
+      ["Filter", dataQualityFilter],
+      ["Sokning", dataQualitySearch || "-"],
+      ["Antal", filteredDataQualityIssues.length],
+      [],
+      ["Niva", "Omrade", "Kontroll", "Detalj", "Referens"]
+    ];
+
+    filteredDataQualityIssues.forEach((issue) => {
+      rows.push([
+        issue.severity,
+        issue.areaLabel,
+        issue.title,
+        issue.detail,
+        issue.reference || ""
+      ]);
+    });
+
+    downloadLocalCsv("data-quality.csv", rows);
+  }
+
   function downloadDataBackupJson() {
     setError("");
     const backupDate = new Date().toISOString();
@@ -3600,7 +3626,10 @@ function App() {
         vatToPay: vatReport?.vatToPay || 0,
         selectedPeriodVatToPay: vatPeriodToPay,
         totalOutstanding,
-        auditEvents: auditTrailRows.length
+        auditEvents: auditTrailRows.length,
+        dataQualityIssues: dataQualityIssues.length,
+        dataQualityCritical: dataQualityCriticalCount,
+        dataQualityWarnings: dataQualityWarningCount
       },
       settings,
       customers,
@@ -3622,7 +3651,8 @@ function App() {
         })),
         closeChecklist: closeChecklistItems.map(({ action, ...item }) => item),
         archivePackage: sanitizedArchiveItems,
-        auditTrail: sanitizedAuditTrail
+        auditTrail: sanitizedAuditTrail,
+        dataQuality: dataQualityIssues.map(({ action, ...issue }) => issue)
       },
       bank: {
         reconciliationHistory: bankReconciliationHistory,
@@ -4293,8 +4323,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter, och ladda ner en komplett JSON-backup. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports, and download a complete JSON backup. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -4797,6 +4827,17 @@ function App() {
       action: downloadCloseChecklistCsv
     },
     {
+      key: "data-quality",
+      status: "info",
+      title: language === "sv" ? "Datahalsa" : "Data quality",
+      count: "CSV",
+      description: language === "sv"
+        ? "Kontrollerar dubbletter, saknade uppgifter, underlag, forfallna fakturor och obalanserade verifikat."
+        : "Checks duplicates, missing details, receipts, overdue invoices and unbalanced vouchers.",
+      actionLabel: t.exportCsv,
+      action: downloadDataQualityCsv
+    },
+    {
       key: "journal",
       status: unbalancedJournalGroups.length === 0 ? "ok" : "warning",
       title: language === "sv" ? "Verifikationer och huvudbok" : "Vouchers and ledger",
@@ -5012,6 +5053,187 @@ function App() {
     counts[row.type] = (counts[row.type] || 0) + 1;
     return counts;
   }, {});
+  const duplicateCustomerEmails = Object.entries(customers.reduce((groups, customer) => {
+    const key = String(customer.email || "").trim().toLowerCase();
+    if (!key) return groups;
+    groups[key] = [...(groups[key] || []), customer];
+    return groups;
+  }, {})).filter(([, group]) => group.length > 1);
+  const duplicateCustomerPersonalNumbers = Object.entries(customers.reduce((groups, customer) => {
+    const key = String(customer.personalNumber || "").trim();
+    if (!key) return groups;
+    groups[key] = [...(groups[key] || []), customer];
+    return groups;
+  }, {})).filter(([, group]) => group.length > 1);
+  const dataQualityIssues = [
+    ...customers.filter((customer) => !customer.email).map((customer) => ({
+      id: `customer-email-${customer.id}`,
+      severity: "warning",
+      area: "customers",
+      areaLabel: language === "sv" ? "Kunder" : "Customers",
+      title: language === "sv" ? "Kund saknar e-post" : "Customer missing email",
+      detail: customer.name || "-",
+      reference: customer.personalNumber || "",
+      action: () => {
+        setActiveView("customers");
+        setCustomerSearch(customer.name || "");
+      }
+    })),
+    ...customers.filter((customer) => !customer.personalNumber).map((customer) => ({
+      id: `customer-personal-number-${customer.id}`,
+      severity: "warning",
+      area: "customers",
+      areaLabel: language === "sv" ? "Kunder" : "Customers",
+      title: language === "sv" ? "Kund saknar personnummer" : "Customer missing personal number",
+      detail: customer.name || "-",
+      reference: customer.email || "",
+      action: () => {
+        setActiveView("customers");
+        setCustomerSearch(customer.name || customer.email || "");
+      }
+    })),
+    ...customers.filter((customer) => !customer.address || !customer.postalCode || !customer.city).map((customer) => ({
+      id: `customer-address-${customer.id}`,
+      severity: "info",
+      area: "customers",
+      areaLabel: language === "sv" ? "Kunder" : "Customers",
+      title: language === "sv" ? "Kundadress ar inte komplett" : "Customer address is incomplete",
+      detail: customer.name || "-",
+      reference: [customer.address, customer.postalCode, customer.city].filter(Boolean).join(", "),
+      action: () => {
+        setActiveView("customers");
+        setCustomerSearch(customer.name || "");
+      }
+    })),
+    ...duplicateCustomerEmails.map(([email, group]) => ({
+      id: `duplicate-email-${email}`,
+      severity: "warning",
+      area: "customers",
+      areaLabel: language === "sv" ? "Kunder" : "Customers",
+      title: language === "sv" ? "Dubblett e-post" : "Duplicate email",
+      detail: group.map((customer) => customer.name).filter(Boolean).join(", "),
+      reference: email,
+      action: () => {
+        setActiveView("customers");
+        setCustomerSearch(email);
+      }
+    })),
+    ...duplicateCustomerPersonalNumbers.map(([personalNumber, group]) => ({
+      id: `duplicate-personal-number-${personalNumber}`,
+      severity: "warning",
+      area: "customers",
+      areaLabel: language === "sv" ? "Kunder" : "Customers",
+      title: language === "sv" ? "Dubblett personnummer" : "Duplicate personal number",
+      detail: group.map((customer) => customer.name).filter(Boolean).join(", "),
+      reference: personalNumber,
+      action: () => {
+        setActiveView("customers");
+        setCustomerSearch(personalNumber);
+      }
+    })),
+    ...invoices.filter((item) => !(item.customer?.email || item.customerEmail)).map((item) => ({
+      id: `invoice-email-${item.id}`,
+      severity: "warning",
+      area: "invoices",
+      areaLabel: language === "sv" ? "Fakturor" : "Invoices",
+      title: language === "sv" ? "Faktura saknar kundens e-post" : "Invoice missing customer email",
+      detail: item.customerName || item.customer?.name || "-",
+      reference: invoiceNumber(item),
+      action: () => {
+        setActiveView("invoices");
+        setInvoiceSearch(invoiceNumber(item));
+      }
+    })),
+    ...overdueInvoices.map((item) => ({
+      id: `invoice-overdue-${item.id}`,
+      severity: "warning",
+      area: "payments",
+      areaLabel: language === "sv" ? "Betalningar" : "Payments",
+      title: language === "sv" ? "Faktura ar forfallen" : "Invoice is overdue",
+      detail: `${invoiceRemainingAmount(item)} SEK ${language === "sv" ? "kvar att betala" : "outstanding"}`,
+      reference: invoiceNumber(item),
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewSearch(invoiceNumber(item));
+      }
+    })),
+    ...expensesMissingReceipt.map((expense) => ({
+      id: `expense-receipt-${expense.id}`,
+      severity: "warning",
+      area: "receipts",
+      areaLabel: language === "sv" ? "Underlag" : "Receipts",
+      title: language === "sv" ? "Kostnad saknar underlag" : "Expense missing receipt",
+      detail: expense.description || expenseCategoryLabel(expense.category),
+      reference: `${expense.expenseDate || "-"} - ${expense.totalAmount || 0} SEK`,
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseSearch(expense.description || "");
+      }
+    })),
+    ...unbalancedJournalGroups.map((group) => ({
+      id: `voucher-unbalanced-${group.voucherNumber}`,
+      severity: "critical",
+      area: "bookkeeping",
+      areaLabel: language === "sv" ? "Bokforing" : "Bookkeeping",
+      title: language === "sv" ? "Verifikat balanserar inte" : "Voucher is unbalanced",
+      detail: `${language === "sv" ? "Debet" : "Debit"} ${group.debit || 0} / ${language === "sv" ? "Kredit" : "Credit"} ${group.credit || 0}`,
+      reference: group.voucherNumber,
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingSearch(group.voucherNumber);
+      }
+    })),
+    ...(!settings?.contactEmail ? [{
+      id: "settings-contact-email",
+      severity: "info",
+      area: "settings",
+      areaLabel: language === "sv" ? "Installningar" : "Settings",
+      title: language === "sv" ? "Kontakt-e-post saknas" : "Contact email missing",
+      detail: language === "sv" ? "Behovs pa fakturor och mejlmallar." : "Used on invoices and email templates.",
+      reference: "",
+      action: () => setActiveView("settings")
+    }] : []),
+    ...(!settings?.plusGiro ? [{
+      id: "settings-plusgiro",
+      severity: "info",
+      area: "settings",
+      areaLabel: language === "sv" ? "Installningar" : "Settings",
+      title: language === "sv" ? "PlusGiro saknas" : "PlusGiro missing",
+      detail: language === "sv" ? "Betalningsinfo blir svagare pa fakturan." : "Payment information is weaker on the invoice.",
+      reference: "",
+      action: () => setActiveView("settings")
+    }] : []),
+    ...(!backupValidation ? [{
+      id: "backup-not-verified",
+      severity: "info",
+      area: "backup",
+      areaLabel: language === "sv" ? "Backup" : "Backup",
+      title: language === "sv" ? "Ingen backup verifierad" : "No backup verified",
+      detail: language === "sv" ? "Ladda ner och kontrollera en backup i Installningar." : "Download and verify a backup in Settings.",
+      reference: "",
+      action: () => setActiveView("settings")
+    }] : [])
+  ];
+  const filteredDataQualityIssues = dataQualityIssues.filter((issue) => {
+    if (dataQualityFilter !== "all" && issue.severity !== dataQualityFilter && issue.area !== dataQualityFilter) return false;
+
+    const query = dataQualitySearch.toLowerCase().trim();
+    if (!query) return true;
+
+    return [
+      issue.severity,
+      issue.areaLabel,
+      issue.title,
+      issue.detail,
+      issue.reference
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const dataQualityCriticalCount = dataQualityIssues.filter((issue) => issue.severity === "critical").length;
+  const dataQualityWarningCount = dataQualityIssues.filter((issue) => issue.severity === "warning").length;
+  const dataQualityInfoCount = dataQualityIssues.filter((issue) => issue.severity === "info").length;
+  const dataQualityScore = dataQualityIssues.length === 0
+    ? 100
+    : Math.max(0, Math.round(100 - (dataQualityCriticalCount * 25) - (dataQualityWarningCount * 10) - (dataQualityInfoCount * 3)));
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -8563,6 +8785,96 @@ function App() {
                 <small>{item.value}</small>
               </button>
             ))}
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Datahalsa" : "Data quality"}</h2>
+            <div className="button-row">
+              <span className={dataQualityCriticalCount === 0 && dataQualityWarningCount === 0 ? "status success-status" : "status warning-status"}>
+                {dataQualityScore}% {language === "sv" ? "halsa" : "health"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadDataQualityCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="data-quality-panel">
+            <div className="data-quality-summary">
+              <article className={dataQualityCriticalCount > 0 ? "critical" : ""}>
+                <span>{language === "sv" ? "Kritiska" : "Critical"}</span>
+                <strong>{dataQualityCriticalCount}</strong>
+              </article>
+              <article className={dataQualityWarningCount > 0 ? "warning" : ""}>
+                <span>{language === "sv" ? "Varningar" : "Warnings"}</span>
+                <strong>{dataQualityWarningCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Info" : "Info"}</span>
+                <strong>{dataQualityInfoCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Totalt" : "Total"}</span>
+                <strong>{dataQualityIssues.length}</strong>
+              </article>
+            </div>
+
+            <div className="invoice-filter-panel data-quality-filter-panel">
+              <label>
+                {language === "sv" ? "Sok i datahalsa" : "Search data quality"}
+                <input
+                  value={dataQualitySearch}
+                  onChange={(event) => setDataQualitySearch(event.target.value)}
+                  placeholder={language === "sv" ? "Kund, faktura, personnummer, verifikat..." : "Customer, invoice, personal number, voucher..."}
+                />
+              </label>
+              <div className="payment-filter-row">
+                {[
+                  ["all", language === "sv" ? "Alla" : "All"],
+                  ["critical", language === "sv" ? "Kritiska" : "Critical"],
+                  ["warning", language === "sv" ? "Varningar" : "Warnings"],
+                  ["info", "Info"],
+                  ["customers", language === "sv" ? "Kunder" : "Customers"],
+                  ["invoices", language === "sv" ? "Fakturor" : "Invoices"],
+                  ["bookkeeping", language === "sv" ? "Bokforing" : "Bookkeeping"],
+                  ["receipts", language === "sv" ? "Underlag" : "Receipts"]
+                ].map(([key, label]) => (
+                  <button
+                    type="button"
+                    className={dataQualityFilter === key ? "filter-button active" : "filter-button"}
+                    key={key}
+                    onClick={() => setDataQualityFilter(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredDataQualityIssues.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga problem matchar filtret." : "No issues match the filter."}</p>
+            ) : (
+              <div className="data-quality-list">
+                {filteredDataQualityIssues.slice(0, 80).map((issue) => (
+                  <button type="button" className={`data-quality-row ${issue.severity}`} key={issue.id} onClick={issue.action}>
+                    <span>
+                      <strong>{issue.severity === "critical"
+                        ? (language === "sv" ? "Kritisk" : "Critical")
+                        : issue.severity === "warning"
+                          ? (language === "sv" ? "Varning" : "Warning")
+                          : "Info"}
+                      </strong>
+                      <small>{issue.areaLabel}</small>
+                    </span>
+                    <span>
+                      <strong>{issue.title}</strong>
+                      <small>{issue.detail}</small>
+                    </span>
+                    <span>{issue.reference || "-"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="section-heading report-subheading">
