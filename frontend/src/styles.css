@@ -3028,6 +3028,37 @@ button:focus-visible,
   color: var(--color-warning-text) !important;
 }
 
+.backup-panel {
+  border-color: #c8d8ff;
+  background: #f5f8ff;
+}
+
+.backup-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.backup-summary-grid article {
+  padding: 12px;
+  border: 1px solid #dbe4ff;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.backup-summary-grid span {
+  display: block;
+  color: #5d6259;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.backup-summary-grid strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+}
+
 .config-guide {
   display: grid;
   gap: 8px;
@@ -3308,6 +3339,7 @@ button:focus-visible,
   .invoice-summary-cards,
   .automation-result,
   .expense-summary-grid,
+  .backup-summary-grid,
   .close-center-hero,
   .close-checklist-grid,
   .archive-package-panel,

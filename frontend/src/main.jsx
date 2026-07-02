@@ -3327,6 +3327,18 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadLocalJson(filename, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   function downloadBankImportExampleCsv() {
     const exampleInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0);
     const exampleAmount = exampleInvoice ? invoiceRemainingAmount(exampleInvoice) : 999;
@@ -3547,6 +3559,75 @@ function App() {
     });
 
     downloadLocalCsv("audit-trail.csv", rows);
+  }
+
+  function downloadDataBackupJson() {
+    setError("");
+    const backupDate = new Date().toISOString();
+    const safeDate = backupDate.slice(0, 10);
+    const sanitizedAuditTrail = auditTrailRows.map(({ action, ...row }) => row);
+    const sanitizedArchiveItems = archivePackageItems.map(({ action, ...item }) => item);
+
+    downloadLocalJson(`alibooks-backup-${safeDate}.json`, {
+      app: "AliBooks",
+      version: 1,
+      exportedAt: backupDate,
+      language,
+      containsPersonalData: true,
+      note: language === "sv"
+        ? "Denna backup innehaller personuppgifter och ska sparas sakert."
+        : "This backup contains personal data and should be stored securely.",
+      period: {
+        from: vatPeriodFrom || null,
+        to: vatPeriodTo || null,
+        label: archivePeriodLabel,
+        lockedThrough: accountingLockedThroughDate || null
+      },
+      summary: {
+        customers: customers.length,
+        invoices: invoices.length,
+        paidInvoices,
+        unpaidInvoices,
+        expenses: expenses.length,
+        expensesMissingReceipt: expensesMissingReceipt.length,
+        journalEntries: journalEntries.length,
+        vouchers: journalGroups.length,
+        unbalancedVouchers: unbalancedJournalGroups.length,
+        revenueNet,
+        expenseNet,
+        profitNet,
+        vatToPay: vatReport?.vatToPay || 0,
+        selectedPeriodVatToPay: vatPeriodToPay,
+        totalOutstanding,
+        auditEvents: auditTrailRows.length
+      },
+      settings,
+      customers,
+      invoices,
+      expenses,
+      accounts,
+      journalEntries,
+      reports: {
+        profitAndLoss,
+        balanceReport,
+        vatReport,
+        monthlyReportRows,
+        customerLedgerRows,
+        agingBuckets: agingBuckets.map((bucket) => ({
+          key: bucket.key,
+          title: bucket.title,
+          count: bucket.items.length,
+          total: bucket.items.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0)
+        })),
+        closeChecklist: closeChecklistItems.map(({ action, ...item }) => item),
+        archivePackage: sanitizedArchiveItems,
+        auditTrail: sanitizedAuditTrail
+      },
+      bank: {
+        reconciliationHistory: bankReconciliationHistory,
+        stripePayouts
+      }
+    });
   }
 
   function downloadVatReportCsv() {
@@ -4133,8 +4214,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Under Arkivpaket kan du samla export for fakturor, underlag, verifikationer, betalningar, moms och rapporter, och ladda ner en komplett JSON-backup. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Under Archive package you can gather exports for invoices, receipts, vouchers, payments, VAT and reports, and download a complete JSON backup. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -4151,8 +4232,8 @@ function App() {
 
     if (normalizedQuestion.includes("installning") || normalizedQuestion.includes("smtp") || normalizedQuestion.includes("stripe") || normalizedQuestion.includes("settings")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For installningar: ga till Installningar. Dar styr du foretagstyp, e-postmallar, SMTP-test, automatiska paminnelser, betalningsinformation och lasning av bokforingsperiod. Stripe- och SMTP-hemligheter laggs sakrast i IntelliJ Run Configuration eller miljo variabler, inte synligt i koden.`
-        : `${answerIntro} For settings: go to Settings. There you control company type, email templates, SMTP test, automatic reminders, payment information and accounting period lock. Stripe and SMTP secrets should be stored in IntelliJ Run Configuration or environment variables, not visibly in code.`, "settings");
+        ? `${answerIntro} For installningar: ga till Installningar. Dar styr du foretagstyp, e-postmallar, SMTP-test, automatiska paminnelser, betalningsinformation, lasning av bokforingsperiod och JSON-sakerhetskopia. Stripe- och SMTP-hemligheter laggs sakrast i IntelliJ Run Configuration eller miljo variabler, inte synligt i koden.`
+        : `${answerIntro} For settings: go to Settings. There you control company type, email templates, SMTP test, automatic reminders, payment information, accounting period lock and JSON data backup. Stripe and SMTP secrets should be stored in IntelliJ Run Configuration or environment variables, not visibly in code.`, "settings");
     }
 
     return createAnswer(language === "sv"
@@ -4701,6 +4782,17 @@ function App() {
         : "Save payment overview, bank import and reconciliation history.",
       actionLabel: t.exportCsv,
       action: downloadPaymentOverviewCsv
+    },
+    {
+      key: "data-backup",
+      status: "info",
+      title: language === "sv" ? "Sakerhetskopia" : "Data backup",
+      count: "JSON",
+      description: language === "sv"
+        ? "Exporterar en komplett maskinlasbar backup av data, rapportstatus och revisionsspar."
+        : "Exports a complete machine-readable backup of data, report status and audit trail.",
+      actionLabel: language === "sv" ? "Ladda ner backup" : "Download backup",
+      action: downloadDataBackupJson
     }
   ];
   const archivePackageWarnings = archivePackageItems.filter((item) => item.status === "warning").length;
@@ -9334,6 +9426,38 @@ function App() {
                     onClick={() => setSettings({ ...settings, overdueInvoiceReminderTemplate: defaultOverdueInvoiceReminderTemplate() })}
                   >
                     {language === "sv" ? "Aterstall standardmall" : "Reset default template"}
+                  </button>
+                </div>
+
+                <div className="settings-panel backup-panel">
+                  <div>
+                    <strong>{language === "sv" ? "Sakerhetskopia" : "Data backup"}</strong>
+                    <p className="settings-hint">
+                      {language === "sv"
+                        ? "Ladda ner en JSON-backup med kunder, fakturor, kostnader, bokforing, rapportstatus och revisionsspar. Filen innehaller personuppgifter, spara den sakert."
+                        : "Download a JSON backup with customers, invoices, expenses, bookkeeping, report status and audit trail. The file contains personal data, store it securely."}
+                    </p>
+                  </div>
+                  <div className="backup-summary-grid">
+                    <article>
+                      <span>{language === "sv" ? "Kunder" : "Customers"}</span>
+                      <strong>{customers.length}</strong>
+                    </article>
+                    <article>
+                      <span>{language === "sv" ? "Fakturor" : "Invoices"}</span>
+                      <strong>{invoices.length}</strong>
+                    </article>
+                    <article>
+                      <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                      <strong>{expenses.length}</strong>
+                    </article>
+                    <article>
+                      <span>{language === "sv" ? "Handelser" : "Events"}</span>
+                      <strong>{auditTrailRows.length}</strong>
+                    </article>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={downloadDataBackupJson}>
+                    {language === "sv" ? "Ladda ner JSON-backup" : "Download JSON backup"}
                   </button>
                 </div>
 
