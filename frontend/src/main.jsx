@@ -995,6 +995,8 @@ function App() {
   const [profitAndLoss, setProfitAndLoss] = useState(null);
   const [balanceReport, setBalanceReport] = useState(null);
   const [customerLedgerSearch, setCustomerLedgerSearch] = useState("");
+  const [auditTrailFilter, setAuditTrailFilter] = useState("all");
+  const [auditTrailSearch, setAuditTrailSearch] = useState("");
   const [vatPeriodFrom, setVatPeriodFrom] = useState(() => currentQuarterRange().from);
   const [vatPeriodTo, setVatPeriodTo] = useState(() => currentQuarterRange().to);
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -3520,6 +3522,33 @@ function App() {
     downloadLocalCsv("archive-manifest.csv", rows);
   }
 
+  function downloadAuditTrailCsv() {
+    setError("");
+    const rows = [
+      ["Handelselogg / Audit trail"],
+      ["Filter", auditTrailFilter],
+      ["Sokning", auditTrailSearch || "-"],
+      ["Antal", filteredAuditTrailRows.length],
+      [],
+      ["Datum", "Typ", "Handelse", "Referens", "Part", "Belopp", "Status", "Skapad"]
+    ];
+
+    filteredAuditTrailRows.forEach((row) => {
+      rows.push([
+        row.date || "",
+        row.typeLabel,
+        row.title,
+        row.reference || "",
+        row.party || "",
+        row.amount || 0,
+        row.status || "",
+        row.createdAt ? formatDateTime(row.createdAt) : ""
+      ]);
+    });
+
+    downloadLocalCsv("audit-trail.csv", rows);
+  }
+
   function downloadVatReportCsv() {
     setError("");
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
@@ -4682,6 +4711,136 @@ function App() {
       && accountingLockedThroughDate >= vatPeriodTo
   );
   const selectedPeriodCanBeLocked = Boolean(settings && vatPeriodTo && !selectedPeriodIsLocked);
+  const auditTrailRows = [
+    ...invoices.map((item) => ({
+      id: `invoice-${item.id}`,
+      type: "invoice",
+      typeLabel: language === "sv" ? "Faktura" : "Invoice",
+      date: item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+      createdAt: item.createdAt,
+      title: language === "sv" ? "Faktura skapad" : "Invoice created",
+      reference: invoiceNumber(item),
+      party: item.customerName || item.customer?.name || "",
+      amount: invoiceTotalAmount(item),
+      status: statusLabel(item.status, language),
+      action: () => {
+        setActiveView("invoices");
+        setInvoiceSearch(invoiceNumber(item));
+      }
+    })),
+    ...invoices.flatMap((item) => (item.payments || []).map((payment) => ({
+      id: `payment-${payment.id}`,
+      type: "payment",
+      typeLabel: language === "sv" ? "Betalning" : "Payment",
+      date: payment.paymentDate || String(payment.createdAt || "").slice(0, 10),
+      createdAt: payment.createdAt,
+      title: language === "sv" ? "Betalning registrerad" : "Payment registered",
+      reference: invoiceNumber(item),
+      party: item.customerName || item.customer?.name || "",
+      amount: payment.amount || 0,
+      status: payment.reference || item.paymentReference || "-",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewSearch(invoiceNumber(item));
+      }
+    }))),
+    ...invoices.flatMap((item) => (item.reminders || []).map((reminder) => ({
+      id: `reminder-${reminder.id}`,
+      type: "reminder",
+      typeLabel: language === "sv" ? "Paminnelse" : "Reminder",
+      date: String(reminder.createdAt || "").slice(0, 10),
+      createdAt: reminder.createdAt,
+      title: invoiceHistoryLabel(reminder, language),
+      reference: invoiceNumber(item),
+      party: reminder.recipientEmail || item.customerName || item.customer?.name || "",
+      amount: invoiceRemainingAmount(item),
+      status: reminder.status || "",
+      action: () => {
+        setActiveView("invoices");
+        setInvoiceSearch(invoiceNumber(item));
+      }
+    }))),
+    ...expenses.map((expense) => ({
+      id: `expense-${expense.id}`,
+      type: "expense",
+      typeLabel: language === "sv" ? "Kostnad" : "Expense",
+      date: expense.expenseDate || String(expense.createdAt || "").slice(0, 10),
+      createdAt: expense.createdAt,
+      title: expense.description || expenseCategoryLabel(expense.category),
+      reference: expenseCategoryLabel(expense.category),
+      party: expense.paidFrom || "",
+      amount: expense.totalAmount || 0,
+      status: expenseHasReceipt(expense)
+        ? (language === "sv" ? "Underlag sparat" : "Receipt saved")
+        : (language === "sv" ? "Underlag saknas" : "Receipt missing"),
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseSearch(expense.description || expense.receiptFileName || "");
+      }
+    })),
+    ...journalGroups.map((group) => ({
+      id: `voucher-${group.voucherNumber}`,
+      type: "voucher",
+      typeLabel: language === "sv" ? "Verifikat" : "Voucher",
+      date: group.voucherDate || String(group.createdAt || "").slice(0, 10),
+      createdAt: group.createdAt,
+      title: group.description || (language === "sv" ? "Bokforingspost" : "Bookkeeping entry"),
+      reference: group.voucherNumber,
+      party: group.correctionOfVoucherNumber
+        ? `${language === "sv" ? "Rattelse av" : "Correction of"} ${group.correctionOfVoucherNumber}`
+        : "",
+      amount: Math.max(group.debit || 0, group.credit || 0),
+      status: (group.debit || 0) === (group.credit || 0)
+        ? (language === "sv" ? "Balanserar" : "Balanced")
+        : (language === "sv" ? "Obalanserad" : "Unbalanced"),
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingSearch(group.voucherNumber);
+      }
+    })),
+    ...(accountingLockedThroughDate ? [{
+      id: "period-lock",
+      type: "period",
+      typeLabel: language === "sv" ? "Period" : "Period",
+      date: accountingLockedThroughDate,
+      createdAt: accountingLockedThroughDate,
+      title: language === "sv" ? "Bokforingsperiod last" : "Bookkeeping period locked",
+      reference: accountingLockedThroughDate,
+      party: settings?.companyName || "AliBooks",
+      amount: 0,
+      status: language === "sv" ? "Last" : "Locked",
+      action: () => setActiveView("settings")
+    }] : [])
+  ].sort((first, second) => {
+    const firstDate = new Date(first.date || first.createdAt || 0);
+    const secondDate = new Date(second.date || second.createdAt || 0);
+    if (secondDate.getTime() !== firstDate.getTime()) {
+      return secondDate - firstDate;
+    }
+
+    return String(second.createdAt || "").localeCompare(String(first.createdAt || ""));
+  });
+  const filteredAuditTrailRows = auditTrailRows.filter((row) => {
+    if (auditTrailFilter !== "all" && row.type !== auditTrailFilter) return false;
+
+    const query = auditTrailSearch.toLowerCase().trim();
+    if (!query) return true;
+
+    return [
+      row.date,
+      row.typeLabel,
+      row.title,
+      row.reference,
+      row.party,
+      row.amount,
+      row.status,
+      row.createdAt
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const auditTrailTypeCounts = auditTrailRows.reduce((counts, row) => {
+    counts[row.type] = (counts[row.type] || 0) + 1;
+    return counts;
+  }, {});
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -8319,6 +8478,94 @@ function App() {
               </button>
               {periodCloseMessage && <p className="message success">{periodCloseMessage}</p>}
             </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Handelselogg / revisionsspar" : "Event log / audit trail"}</h2>
+            <div className="button-row">
+              <span className="status">{filteredAuditTrailRows.length} {language === "sv" ? "handelser" : "events"}</span>
+              <button type="button" className="secondary-button" onClick={downloadAuditTrailCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="audit-trail-panel">
+            <div className="audit-trail-summary">
+              <article>
+                <span>{language === "sv" ? "Fakturor" : "Invoices"}</span>
+                <strong>{auditTrailTypeCounts.invoice || 0}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Betalningar" : "Payments"}</span>
+                <strong>{auditTrailTypeCounts.payment || 0}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                <strong>{auditTrailTypeCounts.expense || 0}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Verifikat" : "Vouchers"}</span>
+                <strong>{auditTrailTypeCounts.voucher || 0}</strong>
+              </article>
+            </div>
+
+            <div className="invoice-filter-panel audit-trail-filter-panel">
+              <label>
+                {language === "sv" ? "Sok i handelselogg" : "Search event log"}
+                <input
+                  value={auditTrailSearch}
+                  onChange={(event) => setAuditTrailSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Fakturanummer, kund, belopp, status..." : "Invoice number, customer, amount, status..."}
+                />
+              </label>
+              <div className="payment-filter-row">
+                {["all", "invoice", "payment", "expense", "voucher", "reminder", "period"].map((type) => (
+                  <button
+                    type="button"
+                    className={auditTrailFilter === type ? "filter-button active" : "filter-button"}
+                    key={type}
+                    onClick={() => setAuditTrailFilter(type)}
+                  >
+                    {type === "all"
+                      ? (language === "sv" ? "Alla" : "All")
+                      : type === "invoice"
+                        ? (language === "sv" ? "Fakturor" : "Invoices")
+                        : type === "payment"
+                          ? (language === "sv" ? "Betalningar" : "Payments")
+                          : type === "expense"
+                            ? (language === "sv" ? "Kostnader" : "Expenses")
+                            : type === "voucher"
+                              ? (language === "sv" ? "Verifikat" : "Vouchers")
+                              : type === "reminder"
+                                ? (language === "sv" ? "Paminnelser" : "Reminders")
+                                : (language === "sv" ? "Period" : "Period")}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredAuditTrailRows.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga handelser matchar filtret." : "No events match the filter."}</p>
+            ) : (
+              <div className="audit-trail-list">
+                {filteredAuditTrailRows.slice(0, 80).map((row) => (
+                  <button type="button" className={`audit-trail-row ${row.type}`} key={row.id} onClick={row.action}>
+                    <span>
+                      <strong>{formatDateOnly(row.date) || "-"}</strong>
+                      <small>{row.typeLabel}</small>
+                    </span>
+                    <span>
+                      <strong>{row.title}</strong>
+                      <small>{row.reference || "-"}</small>
+                    </span>
+                    <span>{row.party || "-"}</span>
+                    <strong>{row.amount ? `${row.amount} SEK` : "-"}</strong>
+                    <span className="status">{row.status || "-"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="section-heading report-subheading">
