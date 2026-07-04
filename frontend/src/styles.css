@@ -2633,6 +2633,15 @@ button:focus-visible,
   font-weight: 900;
 }
 
+.react-bits-fallback-panel {
+  padding: 18px;
+  border: 1px solid #d7e0ff;
+  border-radius: 8px;
+  background: #f9fbff;
+  color: #34302a;
+  font-weight: 800;
+}
+
 .action-center-score {
   min-width: 120px;
   padding: 12px 16px;

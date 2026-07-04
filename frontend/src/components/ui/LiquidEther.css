@@ -10,3 +10,10 @@
   position: absolute;
   inset: 0;
 }
+
+.liquid-ether-fallback {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(242, 169, 0, 0.35), transparent 32%),
+    radial-gradient(circle at 80% 35%, rgba(98, 214, 163, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(21, 94, 232, 0.95), rgba(17, 24, 39, 0.95));
+}

@@ -100,7 +100,14 @@ export default function LiquidEther({
     const container = mountRef.current;
     if (!container) return undefined;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (error) {
+      console.warn("LiquidEther could not start WebGL renderer", error);
+      container.classList.add("liquid-ether-fallback");
+      return undefined;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
     container.prepend(renderer.domElement);

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import AiLoader from "./components/ui/AiLoader.jsx";
 import AnimatedGlowingSearchBar from "./components/ui/AnimatedGlowingSearchBar.jsx";
 import HeroErrorBoundary from "./components/ui/hero-error-boundary.jsx";
+import SafeRenderBoundary from "./components/ui/SafeRenderBoundary.jsx";
 import "./styles.css";
 
 const apiUrl =
@@ -6172,45 +6173,57 @@ function App() {
         </section>}
 
         {token && activeView === "overview" && (
-          <section className="orders-section react-bits-showcase">
-            <div className="react-bits-ether">
-              <Suspense fallback={null}>
-                <LiquidEther
-                  colors={["#155ee8", "#f2a900", "#62d6a3"]}
-                  mouseForce={18}
-                  cursorSize={130}
-                  resolution={0.55}
-                  autoSpeed={0.35}
-                  autoIntensity={1.7}
-                  autoResumeDelay={1200}
-                />
-              </Suspense>
-            </div>
-
-            <div className="react-bits-copy">
-              <p className="eyebrow">{language === "sv" ? "Interaktivt kontrollrum" : "Interactive control room"}</p>
-              <h2>{language === "sv" ? "Hoppa snabbt mellan de viktigaste delarna" : "Jump quickly between the most important areas"}</h2>
-              <p>
+          <SafeRenderBoundary
+            label="React Bits overview panel failed"
+            resetKey={`${language}-${activeView}`}
+            fallback={
+              <section className="orders-section react-bits-fallback-panel">
                 {language === "sv"
-                  ? "Den har panelen anvander React Bits-kansla for att gora AliBooks mer levande, men varje val leder fortfarande till en riktig arbetsvy."
-                  : "This panel brings a React Bits feel into AliBooks, while every choice still opens a real work view."}
-              </p>
-            </div>
+                  ? "Den visuella snabbpanelen kunde inte laddas, men AliBooks fungerar fortfarande."
+                  : "The visual quick panel could not load, but AliBooks is still available."}
+              </section>
+            }
+          >
+            <section className="orders-section react-bits-showcase">
+              <div className="react-bits-ether">
+                <Suspense fallback={null}>
+                  <LiquidEther
+                    colors={["#155ee8", "#f2a900", "#62d6a3"]}
+                    mouseForce={18}
+                    cursorSize={130}
+                    resolution={0.55}
+                    autoSpeed={0.35}
+                    autoIntensity={1.7}
+                    autoResumeDelay={1200}
+                  />
+                </Suspense>
+              </div>
 
-            <div className="react-bits-menu-frame">
-              <Suspense fallback={<div className="react-bits-loading">{language === "sv" ? "Laddar meny..." : "Loading menu..."}</div>}>
-                <FlowingMenu
-                  items={reactBitsMenuItems}
-                  speed={18}
-                  textColor="#ffffff"
-                  bgColor="#111827"
-                  marqueeBgColor="#f2a900"
-                  marqueeTextColor="#111827"
-                  borderColor="rgba(255, 255, 255, 0.22)"
-                />
-              </Suspense>
-            </div>
-          </section>
+              <div className="react-bits-copy">
+                <p className="eyebrow">{language === "sv" ? "Interaktivt kontrollrum" : "Interactive control room"}</p>
+                <h2>{language === "sv" ? "Hoppa snabbt mellan de viktigaste delarna" : "Jump quickly between the most important areas"}</h2>
+                <p>
+                  {language === "sv"
+                    ? "Den har panelen anvander React Bits-kansla for att gora AliBooks mer levande, men varje val leder fortfarande till en riktig arbetsvy."
+                    : "This panel brings a React Bits feel into AliBooks, while every choice still opens a real work view."}
+                </p>
+              </div>
+
+              <div className="react-bits-menu-frame">
+                <Suspense fallback={<div className="react-bits-loading">{language === "sv" ? "Laddar meny..." : "Loading menu..."}</div>}>
+                  <FlowingMenu
+                    items={reactBitsMenuItems}
+                    speed={18}
+                    textColor="#ffffff"
+                    bgColor="#111827"
+                    marqueeBgColor="#f2a900"
+                    marqueeTextColor="#111827"
+                    borderColor="rgba(255, 255, 255, 0.22)"
+                  />
+                </Suspense>
+              </div>
+            </section>
+          </SafeRenderBoundary>
         )}
 
         {token && activeView === "overview" && (
