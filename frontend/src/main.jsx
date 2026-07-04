@@ -5234,6 +5234,119 @@ function App() {
   const dataQualityScore = dataQualityIssues.length === 0
     ? 100
     : Math.max(0, Math.round(100 - (dataQualityCriticalCount * 25) - (dataQualityWarningCount * 10) - (dataQualityInfoCount * 3)));
+  const topCriticalDataQualityIssue = dataQualityIssues.find((issue) => issue.severity === "critical");
+  const overdueOutstanding = overdueInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const actionCenterItems = [
+    dataQualityCriticalCount > 0 && {
+      key: "critical-data-quality",
+      severity: "critical",
+      title: language === "sv" ? "Kritiska kontroller" : "Critical checks",
+      detail: topCriticalDataQualityIssue
+        ? `${topCriticalDataQualityIssue.title}: ${topCriticalDataQualityIssue.reference || topCriticalDataQualityIssue.detail}`
+        : (language === "sv" ? "Kontrollera datahalsa innan du stanger perioden." : "Review data quality before closing the period."),
+      meta: `${dataQualityCriticalCount} ${language === "sv" ? "kritiska" : "critical"}`,
+      actionLabel: language === "sv" ? "Oppna datahalsa" : "Open data quality",
+      action: () => {
+        setActiveView("reports");
+        setDataQualityFilter("critical");
+        setDataQualitySearch("");
+      }
+    },
+    overdueInvoices.length > 0 && {
+      key: "overdue-invoices",
+      severity: "warning",
+      title: language === "sv" ? "Forfallna fakturor" : "Overdue invoices",
+      detail: `${overdueInvoices.length} ${language === "sv" ? "fakturor behover foljas upp." : "invoices need follow-up."}`,
+      meta: `${overdueOutstanding} SEK`,
+      actionLabel: language === "sv" ? "Oppna betalningar" : "Open payments",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("overdue");
+        setPaymentOverviewSearch("");
+      }
+    },
+    expensesMissingReceipt.length > 0 && {
+      key: "missing-receipts",
+      severity: "warning",
+      title: language === "sv" ? "Kostnader saknar underlag" : "Expenses missing receipts",
+      detail: language === "sv"
+        ? "Ladda upp kvitton eller fakturaunderlag sa bokforingen blir komplett."
+        : "Upload receipts or invoice documents so bookkeeping is complete.",
+      meta: `${expensesMissingReceipt.length} ${language === "sv" ? "saknas" : "missing"}`,
+      actionLabel: language === "sv" ? "Oppna underlag" : "Open receipts",
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+        setExpenseSearch("");
+      }
+    },
+    totalOutstanding > 0 && overdueInvoices.length === 0 && {
+      key: "open-receivables",
+      severity: "info",
+      title: language === "sv" ? "Obetalda kundfordringar" : "Open receivables",
+      detail: language === "sv"
+        ? "Det finns fakturor kvar att fa betalt, men inga ar forfallna just nu."
+        : "Some invoices are still outstanding, but none are overdue right now.",
+      meta: `${totalOutstanding} SEK`,
+      actionLabel: language === "sv" ? "Visa betalningar" : "View payments",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("open");
+        setPaymentOverviewSearch("");
+      }
+    },
+    vatPeriodToPay > 0 && {
+      key: "vat-to-pay",
+      severity: "info",
+      title: language === "sv" ? "Moms att bevaka" : "VAT to monitor",
+      detail: language === "sv"
+        ? "Momsrapporten visar belopp att betala for vald period."
+        : "The VAT report shows an amount payable for the selected period.",
+      meta: `${vatPeriodToPay} SEK`,
+      actionLabel: language === "sv" ? "Oppna momsrapport" : "Open VAT report",
+      action: () => setActiveView("vat")
+    },
+    dataQualityWarningCount > 0 && dataQualityCriticalCount === 0 && {
+      key: "warning-data-quality",
+      severity: "warning",
+      title: language === "sv" ? "Datahalsa har varningar" : "Data quality has warnings",
+      detail: language === "sv"
+        ? "Det finns saker att fixa, men inget kritiskt blockerar just nu."
+        : "There are items to fix, but nothing critical is blocking right now.",
+      meta: `${dataQualityWarningCount} ${language === "sv" ? "varningar" : "warnings"}`,
+      actionLabel: language === "sv" ? "Granska varningar" : "Review warnings",
+      action: () => {
+        setActiveView("reports");
+        setDataQualityFilter("warning");
+        setDataQualitySearch("");
+      }
+    },
+    !backupValidation && {
+      key: "backup-verification",
+      severity: "info",
+      title: language === "sv" ? "Verifiera backup" : "Verify backup",
+      detail: language === "sv"
+        ? "Ladda ner en JSON-backup och kontrollera att filen gar att lasa."
+        : "Download a JSON backup and check that the file can be read.",
+      meta: language === "sv" ? "Inte verifierad" : "Not verified",
+      actionLabel: language === "sv" ? "Oppna installningar" : "Open settings",
+      action: () => setActiveView("settings")
+    },
+    selectedPeriodCanBeLocked && {
+      key: "period-close",
+      severity: "info",
+      title: language === "sv" ? "Period kan lasas" : "Period can be locked",
+      detail: language === "sv"
+        ? `Efter kontroll kan perioden lasas till ${formatDateOnly(vatPeriodTo)}.`
+        : `After review, the period can be locked through ${formatDateOnly(vatPeriodTo)}.`,
+      meta: archivePeriodLabel,
+      actionLabel: language === "sv" ? "Oppna rapporter" : "Open reports",
+      action: () => setActiveView("reports")
+    }
+  ].filter(Boolean);
+  const actionCenterCriticalCount = actionCenterItems.filter((item) => item.severity === "critical").length;
+  const actionCenterWarningCount = actionCenterItems.filter((item) => item.severity === "warning").length;
+  const actionCenterInfoCount = actionCenterItems.filter((item) => item.severity === "info").length;
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -5559,6 +5672,74 @@ function App() {
             <strong>{revenueTotal - expenseTotal} SEK</strong>
           </article>
         </section>}
+
+        {token && activeView === "overview" && (
+          <section className="orders-section action-center-section">
+            <div className="section-heading">
+              <div>
+                <h2>{language === "sv" ? "Atgardscenter" : "Action center"}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "AliBooks samlar det viktigaste som behover kontrolleras innan du fakturerar, bokfor eller stanger perioden."
+                    : "AliBooks gathers the most important items to review before invoicing, bookkeeping or closing the period."}
+                </p>
+              </div>
+              <div className="action-center-score">
+                <span>{language === "sv" ? "Datahalsa" : "Data health"}</span>
+                <strong>{dataQualityScore}%</strong>
+              </div>
+            </div>
+
+            <div className="action-center-summary">
+              <article className="critical">
+                <span>{language === "sv" ? "Kritiska" : "Critical"}</span>
+                <strong>{actionCenterCriticalCount}</strong>
+              </article>
+              <article className="warning">
+                <span>{language === "sv" ? "Varningar" : "Warnings"}</span>
+                <strong>{actionCenterWarningCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bevaka" : "Monitor"}</span>
+                <strong>{actionCenterInfoCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Totalt" : "Total"}</span>
+                <strong>{actionCenterItems.length}</strong>
+              </article>
+            </div>
+
+            {actionCenterItems.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Allt ser lugnt ut just nu. Inga akuta atgarder finns i oversikten."
+                  : "Everything looks calm right now. No urgent actions are listed on the overview."}
+              </p>
+            ) : (
+              <div className="action-center-list">
+                {actionCenterItems.map((item) => (
+                  <button type="button" className={`action-center-row ${item.severity}`} key={item.key} onClick={item.action}>
+                    <span className="action-center-priority">
+                      {item.severity === "critical"
+                        ? (language === "sv" ? "Kritisk" : "Critical")
+                        : item.severity === "warning"
+                          ? (language === "sv" ? "Varning" : "Warning")
+                          : (language === "sv" ? "Bevaka" : "Monitor")}
+                    </span>
+                    <span className="action-center-main">
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    <span className="action-center-meta">
+                      <strong>{item.meta}</strong>
+                      <small>{item.actionLabel}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {token && activeView === "overview" && dueContracts.length > 0 && (
           <section className="orders-section">
