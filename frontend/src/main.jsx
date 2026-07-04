@@ -20,6 +20,7 @@ const copy = {
     invoices: "Invoices",
     contracts: "Contracts",
     services: "Services",
+    activities: "Events",
     serviceAdmin: "Service admin",
     serviceName: "Service name",
     serviceDescription: "Service description",
@@ -149,6 +150,7 @@ const copy = {
     invoices: "Fakturor",
     contracts: "Avtal",
     services: "Tjanster",
+    activities: "Handelser",
     serviceAdmin: "Tjansteadministration",
     serviceName: "Tjanstens namn",
     serviceDescription: "Beskrivning",
@@ -921,6 +923,7 @@ const viewKeys = [
   "invoices",
   "contracts",
   "services",
+  "activities",
   "payments",
   "uploaded",
   "bookkeeping",
@@ -935,6 +938,7 @@ const expenseFilterKeys = ["all", "withReceipt", "missingReceipt"];
 const customerFilterKeys = ["active", "archived", "all", "outstanding"];
 const paymentOverviewFilterKeys = ["open", "overdue", "dueSoon", "partiallyPaid", "sent"];
 const bookkeepingFilterKeys = ["all", "original", "corrections", "corrected"];
+const activityFilterKeys = ["all", "invoice", "payment", "expense", "voucher", "reminder", "bank", "stripe", "period"];
 const expenseCategoryKeys = ["5420", "5410", "5800", "6570", "4010"];
 const localPreferenceKeys = [
   "alibooks-language",
@@ -952,6 +956,8 @@ const localPreferenceKeys = [
   "alibooks-customer-search",
   "alibooks-payment-overview-filter",
   "alibooks-payment-overview-search",
+  "alibooks-activity-filter",
+  "alibooks-activity-search",
   "alibooks-bookkeeping-filter",
   "alibooks-bookkeeping-search",
   "alibooks-bookkeeping-date-from",
@@ -1078,6 +1084,11 @@ function App() {
     return paymentOverviewFilterKeys.includes(savedFilter) ? savedFilter : "open";
   });
   const [paymentOverviewSearch, setPaymentOverviewSearch] = useState(() => localStorage.getItem("alibooks-payment-overview-search") || "");
+  const [activityFilter, setActivityFilter] = useState(() => {
+    const savedFilter = localStorage.getItem("alibooks-activity-filter");
+    return activityFilterKeys.includes(savedFilter) ? savedFilter : "all";
+  });
+  const [activitySearch, setActivitySearch] = useState(() => localStorage.getItem("alibooks-activity-search") || "");
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1166,6 +1177,11 @@ function App() {
     localStorage.setItem("alibooks-payment-overview-filter", paymentOverviewFilter);
     localStorage.setItem("alibooks-payment-overview-search", paymentOverviewSearch);
   }, [paymentOverviewFilter, paymentOverviewSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-activity-filter", activityFilter);
+    localStorage.setItem("alibooks-activity-search", activitySearch);
+  }, [activityFilter, activitySearch]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -3564,6 +3580,35 @@ function App() {
     downloadLocalCsv("audit-trail.csv", rows);
   }
 
+  function downloadActivityCsv() {
+    setError("");
+    const rows = [
+      ["Affarshandelser / Business events"],
+      ["Filter", activityFilter],
+      ["Sokning", activitySearch || "-"],
+      ["Antal", filteredActivityRows.length],
+      ["Intaktsflode", activityIncomeTotal],
+      ["Kostnadsflode", activityExpenseTotal],
+      [],
+      ["Datum", "Typ", "Handelse", "Referens", "Part/Beskrivning", "Belopp", "Status", "Skapad"]
+    ];
+
+    filteredActivityRows.forEach((row) => {
+      rows.push([
+        row.date || "",
+        row.typeLabel,
+        row.title,
+        row.reference || "",
+        row.party || "",
+        row.amount || 0,
+        row.status || "",
+        row.createdAt ? formatDateTime(row.createdAt) : ""
+      ]);
+    });
+
+    downloadLocalCsv("affarshandelser.csv", rows);
+  }
+
   function downloadDataQualityCsv() {
     setError("");
     const rows = [
@@ -4327,6 +4372,12 @@ function App() {
         : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
+    if (normalizedQuestion.includes("handelse") || normalizedQuestion.includes("hant") || normalizedQuestion.includes("timeline") || normalizedQuestion.includes("event")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For handelser: ga till Handelser. Dar ser du en samlad tidslinje for fakturor, betalningar, bankimport, Stripe, kostnader, paminnelser och verifikat. Du kan filtrera pa typ, soka pa fakturanummer, kund, bankreferens eller verifikat och exportera listan som CSV. Just nu finns ${auditTrailRows.length} handelser och ${activityOpenBankRows} oppna bankrader.`
+        : `${answerIntro} For events: go to Events. There you can see a combined timeline for invoices, payments, bank import, Stripe, expenses, reminders and vouchers. You can filter by type, search by invoice number, customer, bank reference or voucher and export the list as CSV. There are currently ${auditTrailRows.length} events and ${activityOpenBankRows} open bank rows.`, "activities");
+    }
+
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. Appen summerar 2611 utgaende moms minus 2641 ingaende moms. Vald period visar ${vatPeriodToPay} SEK och hela appen visar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
@@ -4365,6 +4416,8 @@ function App() {
       expenses: expenses.length,
       customers: customers.length,
       contracts: contracts.length,
+      events: auditTrailRows.length,
+      openBankRows: activityOpenBankRows,
       bankImportRows: bankImportRows.length
     });
   }
@@ -4424,6 +4477,7 @@ function App() {
       invoices: t.invoices,
       bookkeeping: t.bookkeeping,
       uploaded: t.uploaded,
+      activities: t.activities,
       reports: t.reports,
       vat: t.vatReport,
       payments: t.payments,
@@ -4451,8 +4505,8 @@ function App() {
       : ["How do I bookkeep?", "Reports?", "Receipts?"];
     const questionsByView = {
       overview: language === "sv"
-        ? ["Vad ska jag kontrollera idag?", "Hur tolkar jag dashboarden?", "Vad betyder moms att betala?"]
-        : ["What should I check today?", "How do I read the dashboard?", "What does VAT to pay mean?"],
+        ? ["Vad ska jag kontrollera idag?", "Vad har hant i foretaget?", "Vad betyder moms att betala?"]
+        : ["What should I check today?", "What happened in the business?", "What does VAT to pay mean?"],
       customers: language === "sv"
         ? ["Hur skapar jag en kund?", "Varfor arkivera kund?", "Hur exporterar jag kunder?"]
         : ["How do I create a customer?", "Why archive a customer?", "How do I export customers?"],
@@ -4462,6 +4516,9 @@ function App() {
       payments: language === "sv"
         ? ["Hur registrerar jag betalning?", "Hur funkar bankimport?", "Hur gor jag delbetalning?"]
         : ["How do I register payment?", "How does bank import work?", "How do I make partial payment?"],
+      activities: language === "sv"
+        ? ["Vad visar Handelser?", "Hur hittar jag en bankrad?", "Hur exporterar jag handelser?"]
+        : ["What does Events show?", "How do I find a bank row?", "How do I export events?"],
       uploaded: language === "sv"
         ? ["Hur laddar jag upp underlag?", "Vilka kvitton maste sparas?", "Hur kopplas underlag till kostnad?"]
         : ["How do I upload receipts?", "Which receipts must be kept?", "How are receipts linked to expenses?"],
@@ -5010,6 +5067,74 @@ function App() {
         setBookkeepingSearch(group.voucherNumber);
       }
     })),
+    ...bankImportRows.map((row) => ({
+      id: `bank-open-${row.id}`,
+      type: "bank",
+      typeLabel: language === "sv" ? "Bankrad" : "Bank row",
+      date: row.date || "",
+      createdAt: row.date || "",
+      title: language === "sv" ? "Importerad bankrad" : "Imported bank row",
+      reference: row.reference || "",
+      party: row.description || "",
+      amount: row.amount || 0,
+      status: findBankImportMatch(row)
+        ? (language === "sv" ? "Matchningsforslag" : "Match suggestion")
+        : (language === "sv" ? "Ohanterad" : "Open"),
+      action: () => {
+        setActiveView("payments");
+        setBankImportSearch(row.reference || row.description || "");
+      }
+    })),
+    ...bankReconciliationHistory.map((entry) => ({
+      id: `bank-reconciliation-${entry.id}`,
+      type: "bank",
+      typeLabel: language === "sv" ? "Bankavstamning" : "Bank reconciliation",
+      date: entry.date || String(entry.bookedAt || "").slice(0, 10),
+      createdAt: entry.bookedAt,
+      title: entry.status === "skipped"
+        ? (language === "sv" ? "Bankrad hoppades over" : "Bank row skipped")
+        : (language === "sv" ? "Bankrad bokford" : "Bank row booked"),
+      reference: entry.reference || "",
+      party: entry.description || "",
+      amount: entry.amount || 0,
+      status: entry.matchLabel || entry.status || "",
+      action: () => {
+        setActiveView("payments");
+        setBankImportSearch(entry.reference || entry.description || "");
+      }
+    })),
+    ...stripeWebsiteSaleEntries.map((entry) => ({
+      id: `stripe-sale-${entry.id}`,
+      type: "stripe",
+      typeLabel: language === "sv" ? "Stripe" : "Stripe",
+      date: entry.voucherDate || String(entry.createdAt || "").slice(0, 10),
+      createdAt: entry.createdAt,
+      title: language === "sv" ? "Stripe-forsaljning fran hemsida" : "Stripe website sale",
+      reference: entry.voucherNumber || "",
+      party: entry.description || "Stripe",
+      amount: entry.debit || 0,
+      status: language === "sv" ? "Bokford" : "Booked",
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingSearch(entry.voucherNumber || "1580");
+      }
+    })),
+    ...stripePayouts.map((payout) => ({
+      id: `stripe-payout-${payout.id}`,
+      type: "stripe",
+      typeLabel: language === "sv" ? "Stripe" : "Stripe",
+      date: payout.payoutDate || String(payout.createdAt || "").slice(0, 10),
+      createdAt: payout.createdAt,
+      title: language === "sv" ? "Stripe-utbetalning till bank" : "Stripe payout to bank",
+      reference: payout.reference || payout.voucherNumber || "",
+      party: "Stripe",
+      amount: payout.netAmount || payout.grossAmount || 0,
+      status: `${language === "sv" ? "Avgift" : "Fee"} ${payout.feeAmount || 0} SEK`,
+      action: () => {
+        setActiveView("payments");
+        setBankImportSearch(payout.reference || "");
+      }
+    })),
     ...(accountingLockedThroughDate ? [{
       id: "period-lock",
       type: "period",
@@ -5053,6 +5178,31 @@ function App() {
     counts[row.type] = (counts[row.type] || 0) + 1;
     return counts;
   }, {});
+  const filteredActivityRows = auditTrailRows.filter((row) => {
+    if (activityFilter !== "all" && row.type !== activityFilter) return false;
+
+    const query = activitySearch.toLowerCase().trim();
+    if (!query) return true;
+
+    return [
+      row.date,
+      row.typeLabel,
+      row.title,
+      row.reference,
+      row.party,
+      row.amount,
+      row.status,
+      row.createdAt
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const activityIncomeTotal = filteredActivityRows
+    .filter((row) => ["invoice", "payment", "stripe"].includes(row.type) && (row.amount || 0) > 0)
+    .reduce((sum, row) => sum + (row.amount || 0), 0);
+  const activityExpenseTotal = filteredActivityRows
+    .filter((row) => row.type === "expense" || (row.type === "bank" && (row.amount || 0) < 0))
+    .reduce((sum, row) => sum + Math.abs(row.amount || 0), 0);
+  const activityOpenBankRows = bankImportRows.length;
+  const activityLatestDate = filteredActivityRows[0]?.date || "";
   const duplicateCustomerEmails = Object.entries(customers.reduce((groups, customer) => {
     const key = String(customer.email || "").trim().toLowerCase();
     if (!key) return groups;
@@ -5489,6 +5639,7 @@ function App() {
     if (activeView === "invoices") return t.invoices;
     if (activeView === "contracts") return t.contracts;
     if (activeView === "services") return t.services;
+    if (activeView === "activities") return t.activities;
     if (activeView === "payments") return t.payments;
     if (activeView === "uploaded") return t.uploaded;
     if (activeView === "bookkeeping") return t.bookkeeping;
@@ -5497,6 +5648,18 @@ function App() {
     if (activeView === "reports") return t.reports;
     if (activeView === "settings") return t.settings;
     return t.overview;
+  }
+
+  function activityFilterLabel(type) {
+    if (type === "all") return language === "sv" ? "Alla" : "All";
+    if (type === "invoice") return language === "sv" ? "Fakturor" : "Invoices";
+    if (type === "payment") return language === "sv" ? "Betalningar" : "Payments";
+    if (type === "expense") return language === "sv" ? "Kostnader" : "Expenses";
+    if (type === "voucher") return language === "sv" ? "Verifikat" : "Vouchers";
+    if (type === "reminder") return language === "sv" ? "Paminnelser" : "Reminders";
+    if (type === "bank") return language === "sv" ? "Bank" : "Bank";
+    if (type === "stripe") return language === "sv" ? "Stripe" : "Stripe";
+    return language === "sv" ? "Period" : "Period";
   }
 
   return (
@@ -5510,6 +5673,7 @@ function App() {
           {navButton("invoices", t.invoices)}
           {navButton("contracts", t.contracts)}
           {navButton("services", t.services)}
+          {navButton("activities", t.activities)}
           {navButton("payments", t.payments)}
           {navButton("uploaded", t.uploaded)}
           {navButton("bookkeeping", t.bookkeeping)}
@@ -6604,6 +6768,108 @@ function App() {
                 ))
               )}
             </div>
+          </section>
+        )}
+
+        {activeView === "activities" && (
+          <section className="orders-section activity-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.activities}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Samlad tidslinje for fakturor, betalningar, bankimport, Stripe, kostnader, paminnelser och verifikat."
+                    : "A combined timeline for invoices, payments, bank import, Stripe, expenses, reminders and vouchers."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className="status">{filteredActivityRows.length} {language === "sv" ? "handelser" : "events"}</span>
+                <button type="button" className="secondary-button" onClick={downloadActivityCsv}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="activity-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Alla handelser" : "All events"}</span>
+                <strong>{auditTrailRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bank och Stripe" : "Bank and Stripe"}</span>
+                <strong>{(auditTrailTypeCounts.bank || 0) + (auditTrailTypeCounts.stripe || 0)}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Oppna bankrader" : "Open bank rows"}</span>
+                <strong>{activityOpenBankRows}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Belopp in i filter" : "Amount in filter"}</span>
+                <strong>{activityIncomeTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Belopp ut i filter" : "Amount out in filter"}</span>
+                <strong>{activityExpenseTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Senaste datum" : "Latest date"}</span>
+                <strong>{activityLatestDate ? formatDateOnly(activityLatestDate) : "-"}</strong>
+              </article>
+            </div>
+
+            <div className="invoice-filter-panel activity-filter-panel">
+              <label>
+                {language === "sv" ? "Sok handelser" : "Search events"}
+                <div className="search-actions">
+                  <input
+                    value={activitySearch}
+                    onChange={(event) => setActivitySearch(event.target.value)}
+                    placeholder={language === "sv" ? "Fakturanummer, kund, bankreferens, verifikat..." : "Invoice number, customer, bank reference, voucher..."}
+                  />
+                  {activitySearch && (
+                    <button type="button" className="secondary-button" onClick={() => setActivitySearch("")}>
+                      {language === "sv" ? "Rensa" : "Clear"}
+                    </button>
+                  )}
+                </div>
+              </label>
+              <div className="payment-filter-row">
+                {activityFilterKeys.map((type) => (
+                  <button
+                    type="button"
+                    className={activityFilter === type ? "filter-button active" : "filter-button"}
+                    key={type}
+                    onClick={() => setActivityFilter(type)}
+                  >
+                    {activityFilterLabel(type)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredActivityRows.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga handelser matchar filtret." : "No events match the filter."}</p>
+            ) : (
+              <div className="activity-timeline">
+                {filteredActivityRows.slice(0, 100).map((row) => (
+                  <button type="button" className={`activity-row ${row.type}`} key={row.id} onClick={row.action}>
+                    <span className="activity-date">
+                      <strong>{formatDateOnly(row.date) || "-"}</strong>
+                      <small>{row.typeLabel}</small>
+                    </span>
+                    <span className="activity-main">
+                      <strong>{row.title}</strong>
+                      <small>{row.reference || "-"}</small>
+                    </span>
+                    <span className="activity-party">{row.party || "-"}</span>
+                    <strong className={Number(row.amount || 0) < 0 ? "unbalanced-text" : ""}>
+                      {row.amount ? `${row.amount} SEK` : "-"}
+                    </strong>
+                    <span className="status">{row.status || "-"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -9172,6 +9438,14 @@ function App() {
                 <span>{language === "sv" ? "Verifikat" : "Vouchers"}</span>
                 <strong>{auditTrailTypeCounts.voucher || 0}</strong>
               </article>
+              <article>
+                <span>{language === "sv" ? "Bank" : "Bank"}</span>
+                <strong>{auditTrailTypeCounts.bank || 0}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Stripe" : "Stripe"}</span>
+                <strong>{auditTrailTypeCounts.stripe || 0}</strong>
+              </article>
             </div>
 
             <div className="invoice-filter-panel audit-trail-filter-panel">
@@ -9184,26 +9458,14 @@ function App() {
                 />
               </label>
               <div className="payment-filter-row">
-                {["all", "invoice", "payment", "expense", "voucher", "reminder", "period"].map((type) => (
+                {activityFilterKeys.map((type) => (
                   <button
                     type="button"
                     className={auditTrailFilter === type ? "filter-button active" : "filter-button"}
                     key={type}
                     onClick={() => setAuditTrailFilter(type)}
                   >
-                    {type === "all"
-                      ? (language === "sv" ? "Alla" : "All")
-                      : type === "invoice"
-                        ? (language === "sv" ? "Fakturor" : "Invoices")
-                        : type === "payment"
-                          ? (language === "sv" ? "Betalningar" : "Payments")
-                          : type === "expense"
-                            ? (language === "sv" ? "Kostnader" : "Expenses")
-                            : type === "voucher"
-                              ? (language === "sv" ? "Verifikat" : "Vouchers")
-                              : type === "reminder"
-                                ? (language === "sv" ? "Paminnelser" : "Reminders")
-                                : (language === "sv" ? "Period" : "Period")}
+                    {activityFilterLabel(type)}
                   </button>
                 ))}
               </div>

@@ -2906,6 +2906,16 @@ button:focus-visible,
   border-left-color: #f2a900;
 }
 
+.audit-trail-row.bank {
+  border-left-color: #1f6f8b;
+  background: #f7fcff;
+}
+
+.audit-trail-row.stripe {
+  border-left-color: #635bff;
+  background: #fbfbff;
+}
+
 .audit-trail-row.period {
   border-left-color: #1f6f8b;
   background: #eef8ff;
@@ -2922,6 +2932,110 @@ button:focus-visible,
 }
 
 .audit-trail-row small {
+  color: #5d6259;
+  font-weight: 700;
+}
+
+.activity-section {
+  border-color: #d8e2ee;
+  background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
+}
+
+.activity-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.activity-summary-grid article {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-small);
+}
+
+.activity-summary-grid span {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.activity-summary-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+}
+
+.activity-filter-panel {
+  align-items: end;
+}
+
+.activity-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 120px minmax(220px, 1.4fr) minmax(150px, 0.9fr) 110px 150px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e2e6dd;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  transition: box-shadow 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+}
+
+.activity-row.payment {
+  border-left-color: #155c49;
+}
+
+.activity-row.expense {
+  border-left-color: #d64045;
+}
+
+.activity-row.voucher {
+  border-left-color: #7c4dff;
+}
+
+.activity-row.reminder {
+  border-left-color: #f2a900;
+}
+
+.activity-row.bank {
+  border-left-color: #1f6f8b;
+  background: #f7fcff;
+}
+
+.activity-row.stripe {
+  border-left-color: #635bff;
+  background: #fbfbff;
+}
+
+.activity-row.period {
+  border-left-color: #5d6259;
+  background: #f6f7f4;
+}
+
+.activity-row:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+}
+
+.activity-date,
+.activity-main {
+  display: grid;
+  gap: 3px;
+}
+
+.activity-row small,
+.activity-party {
   color: #5d6259;
   font-weight: 700;
 }
@@ -3615,6 +3729,8 @@ button:focus-visible,
   .close-checklist-grid,
   .action-center-summary,
   .action-center-row,
+  .activity-summary-grid,
+  .activity-row,
   .data-quality-summary,
   .data-quality-row,
   .archive-package-panel,
