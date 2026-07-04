@@ -23,6 +23,7 @@ const copy = {
     activities: "Events",
     serviceAdmin: "Service admin",
     cashflow: "Cashflow",
+    budget: "Budget & goals",
     serviceName: "Service name",
     serviceDescription: "Service description",
     ordinaryPrice: "Ordinary price",
@@ -154,6 +155,7 @@ const copy = {
     activities: "Handelser",
     serviceAdmin: "Tjansteadministration",
     cashflow: "Likviditet",
+    budget: "Budget & mal",
     serviceName: "Tjanstens namn",
     serviceDescription: "Beskrivning",
     ordinaryPrice: "Ordinarie pris",
@@ -933,6 +935,7 @@ const viewKeys = [
   "services",
   "activities",
   "cashflow",
+  "budget",
   "payments",
   "uploaded",
   "bookkeeping",
@@ -968,6 +971,9 @@ const localPreferenceKeys = [
   "alibooks-activity-filter",
   "alibooks-activity-search",
   "alibooks-cashflow-horizon-days",
+  "alibooks-budget-revenue-target",
+  "alibooks-budget-expense-limit",
+  "alibooks-budget-reserve-percent",
   "alibooks-bookkeeping-filter",
   "alibooks-bookkeeping-search",
   "alibooks-bookkeeping-date-from",
@@ -1103,6 +1109,9 @@ function App() {
     const savedHorizon = Number(localStorage.getItem("alibooks-cashflow-horizon-days") || 30);
     return [30, 60, 90].includes(savedHorizon) ? savedHorizon : 30;
   });
+  const [budgetRevenueTarget, setBudgetRevenueTarget] = useState(() => localStorage.getItem("alibooks-budget-revenue-target") || "25000");
+  const [budgetExpenseLimit, setBudgetExpenseLimit] = useState(() => localStorage.getItem("alibooks-budget-expense-limit") || "12000");
+  const [budgetReservePercent, setBudgetReservePercent] = useState(() => localStorage.getItem("alibooks-budget-reserve-percent") || "30");
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1200,6 +1209,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem("alibooks-cashflow-horizon-days", String(cashflowHorizonDays));
   }, [cashflowHorizonDays]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-budget-revenue-target", budgetRevenueTarget);
+    localStorage.setItem("alibooks-budget-expense-limit", budgetExpenseLimit);
+    localStorage.setItem("alibooks-budget-reserve-percent", budgetReservePercent);
+  }, [budgetRevenueTarget, budgetExpenseLimit, budgetReservePercent]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -2022,6 +2037,10 @@ function App() {
     setExpenseDateFrom("");
     setExpenseDateTo("");
     setExpenseSearch("");
+    setCashflowHorizonDays(30);
+    setBudgetRevenueTarget("25000");
+    setBudgetExpenseLimit("12000");
+    setBudgetReservePercent("30");
     setSelectedCustomerId(customers[0]?.id ? String(customers[0].id) : "");
     setSelectedServiceId(services[0]?.id ? String(services[0].id) : "");
     setInvoiceQuantity("1");
@@ -3675,6 +3694,37 @@ function App() {
     downloadLocalCsv("likviditetsprognos.csv", rows);
   }
 
+  function downloadBudgetCsv() {
+    setError("");
+    const rows = [
+      ["Budget och mal / Budget and goals"],
+      ["Intaktsmal per manad", budgetMonthlyRevenueTarget],
+      ["Kostnadstak per manad", budgetMonthlyExpenseLimit],
+      ["Reservprocent", budgetReserveRate],
+      ["Perioder", budgetRows.length],
+      [],
+      ["Manad", "Intakter", "Intaktsmal", "Intaktsavvikelse", "Kostnader", "Kostnadstak", "Kostnadsutrymme", "Resultat", "Reserv", "Efter reserv", "Status"]
+    ];
+
+    budgetRows.forEach((row) => {
+      rows.push([
+        formatMonthLabel(row.monthKey, language),
+        row.revenue,
+        budgetMonthlyRevenueTarget,
+        row.revenueVariance,
+        row.expenses,
+        budgetMonthlyExpenseLimit,
+        row.expenseRoom,
+        row.result,
+        row.reserve,
+        row.afterReserve,
+        row.statusLabel
+      ]);
+    });
+
+    downloadLocalCsv("budget-mal.csv", rows);
+  }
+
   function downloadDataQualityCsv() {
     setError("");
     const rows = [
@@ -4496,6 +4546,56 @@ function App() {
       action: () => setActiveView("reports")
     }] : [])
   ].sort((first, second) => String(first.date || "").localeCompare(String(second.date || "")));
+  const budgetMonthlyRevenueTarget = Math.max(0, Number(budgetRevenueTarget) || 0);
+  const budgetMonthlyExpenseLimit = Math.max(0, Number(budgetExpenseLimit) || 0);
+  const budgetReserveRate = Math.min(80, Math.max(0, Number(budgetReservePercent) || 0));
+  const budgetSourceRows = monthlyReportRows.length > 0
+    ? monthlyReportRows.slice(0, 12)
+    : [{
+      monthKey: todayInput.slice(0, 7),
+      revenue: revenueNet,
+      expenses: expenseNet,
+      result: profitNet,
+      outputVat: vatReport?.outputVat || 0,
+      inputVat: vatReport?.inputVat || 0,
+      vatToPay: vatReport?.vatToPay || 0,
+      cashIn: totalPaid,
+      cashOut: expenseTotal,
+      cashChange: totalPaid - expenseTotal,
+      voucherCount: journalEntries.length
+    }];
+  const budgetRows = budgetSourceRows.map((row) => {
+    const revenueVariance = row.revenue - budgetMonthlyRevenueTarget;
+    const expenseRoom = budgetMonthlyExpenseLimit - row.expenses;
+    const reserve = Math.round(Math.max(row.result, 0) * (budgetReserveRate / 100));
+    const afterReserve = row.result - reserve;
+    const onTrack = revenueVariance >= 0 && expenseRoom >= 0 && afterReserve >= 0;
+
+    return {
+      ...row,
+      revenueVariance,
+      expenseRoom,
+      reserve,
+      afterReserve,
+      status: onTrack ? "ok" : afterReserve < 0 ? "risk" : "watch",
+      statusLabel: onTrack
+        ? (language === "sv" ? "Pa plan" : "On track")
+        : afterReserve < 0
+          ? (language === "sv" ? "Risk" : "Risk")
+          : (language === "sv" ? "Bevaka" : "Watch")
+    };
+  });
+  const budgetCurrentRow = budgetRows[0] || null;
+  const budgetRevenueProgress = budgetMonthlyRevenueTarget > 0 && budgetCurrentRow
+    ? Math.round((budgetCurrentRow.revenue / budgetMonthlyRevenueTarget) * 100)
+    : 0;
+  const budgetExpenseUsage = budgetMonthlyExpenseLimit > 0 && budgetCurrentRow
+    ? Math.round((budgetCurrentRow.expenses / budgetMonthlyExpenseLimit) * 100)
+    : 0;
+  const budgetReserveTotal = budgetRows.reduce((sum, row) => sum + row.reserve, 0);
+  const budgetAfterReserveTotal = budgetRows.reduce((sum, row) => sum + row.afterReserve, 0);
+  const budgetRiskMonths = budgetRows.filter((row) => row.status === "risk").length;
+  const budgetWatchMonths = budgetRows.filter((row) => row.status === "watch").length;
 
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
@@ -4551,6 +4651,12 @@ function App() {
         : `${answerIntro} For cashflow: go to Cashflow. There you see opening cash on account 1930, expected invoice payments, Stripe receivable, VAT to pay, expense reserve and 30/60/90 day forecasts. The selected horizon is ${cashflowHorizonDays} days, forecast ${cashflowProjectedBalance} SEK and average spending ${averageMonthlyCashOut} SEK per month.`, "cashflow");
     }
 
+    if (normalizedQuestion.includes("budget") || normalizedQuestion.includes("mal") || normalizedQuestion.includes("mål") || normalizedQuestion.includes("target")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For budget: ga till Budget & mal. Dar satter du intaktsmal, kostnadstak och reservprocent. AliBooks jamfor varje manad mot planen och visar om du ligger pa plan, behover bevaka eller har risk. Den senaste perioden visar ${budgetCurrentRow?.revenue || 0} SEK i intakter, ${budgetCurrentRow?.expenses || 0} SEK i kostnader och ${budgetCurrentRow?.afterReserve || 0} SEK efter reserv.`
+        : `${answerIntro} For budget: go to Budget & goals. Set revenue target, expense limit and reserve percentage. AliBooks compares each month against plan and shows whether you are on track, should watch, or have risk. The latest period shows ${budgetCurrentRow?.revenue || 0} SEK revenue, ${budgetCurrentRow?.expenses || 0} SEK expenses and ${budgetCurrentRow?.afterReserve || 0} SEK after reserve.`, "budget");
+    }
+
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. Appen summerar 2611 utgaende moms minus 2641 ingaende moms. Vald period visar ${vatPeriodToPay} SEK och hela appen visar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
@@ -4594,6 +4700,9 @@ function App() {
       cashflowForecast: cashflowProjectedBalance,
       cashflowHorizonDays,
       averageMonthlyCashOut,
+      budgetRevenueTarget: budgetMonthlyRevenueTarget,
+      budgetExpenseLimit: budgetMonthlyExpenseLimit,
+      budgetAfterReserve: budgetCurrentRow?.afterReserve || 0,
       bankImportRows: bankImportRows.length
     });
   }
@@ -4655,6 +4764,7 @@ function App() {
       uploaded: t.uploaded,
       activities: t.activities,
       cashflow: t.cashflow,
+      budget: t.budget,
       reports: t.reports,
       vat: t.vatReport,
       payments: t.payments,
@@ -4699,6 +4809,9 @@ function App() {
       cashflow: language === "sv"
         ? ["Hur ser kassan ut?", "Klarar jag momsbetalningen?", "Vad betyder kostnadsreserv?"]
         : ["How does cash look?", "Can I cover the VAT payment?", "What does expense reserve mean?"],
+      budget: language === "sv"
+        ? ["Ligger jag pa budget?", "Vad betyder reserv?", "Hur justerar jag mina mal?"]
+        : ["Am I on budget?", "What does reserve mean?", "How do I adjust my goals?"],
       uploaded: language === "sv"
         ? ["Hur laddar jag upp underlag?", "Vilka kvitton maste sparas?", "Hur kopplas underlag till kostnad?"]
         : ["How do I upload receipts?", "Which receipts must be kept?", "How are receipts linked to expenses?"],
@@ -5821,6 +5934,7 @@ function App() {
     if (activeView === "services") return t.services;
     if (activeView === "activities") return t.activities;
     if (activeView === "cashflow") return t.cashflow;
+    if (activeView === "budget") return t.budget;
     if (activeView === "payments") return t.payments;
     if (activeView === "uploaded") return t.uploaded;
     if (activeView === "bookkeeping") return t.bookkeeping;
@@ -5856,6 +5970,7 @@ function App() {
           {navButton("services", t.services)}
           {navButton("activities", t.activities)}
           {navButton("cashflow", t.cashflow)}
+          {navButton("budget", t.budget)}
           {navButton("payments", t.payments)}
           {navButton("uploaded", t.uploaded)}
           {navButton("bookkeeping", t.bookkeeping)}
@@ -7188,6 +7303,135 @@ function App() {
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {activeView === "budget" && (
+          <section className="orders-section budget-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.budget}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Satt manadsmal och jamfor mot verkliga intakter, kostnader, resultat och reserv."
+                    : "Set monthly goals and compare against actual revenue, expenses, result and reserve."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className={budgetRiskMonths === 0 ? "status success-status" : "status warning-status"}>
+                  {budgetRiskMonths} {language === "sv" ? "riskmanader" : "risk months"}
+                </span>
+                <button type="button" className="secondary-button" onClick={downloadBudgetCsv}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="budget-control-panel">
+              <label>
+                {language === "sv" ? "Intaktsmal per manad" : "Monthly revenue target"}
+                <input
+                  type="number"
+                  min="0"
+                  value={budgetRevenueTarget}
+                  onChange={(event) => setBudgetRevenueTarget(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Kostnadstak per manad" : "Monthly expense limit"}
+                <input
+                  type="number"
+                  min="0"
+                  value={budgetExpenseLimit}
+                  onChange={(event) => setBudgetExpenseLimit(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Reserv for skatt/moms %" : "Tax/VAT reserve %"}
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={budgetReservePercent}
+                  onChange={(event) => setBudgetReservePercent(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="budget-hero">
+              <article className={budgetCurrentRow?.status === "ok" ? "budget-main-card ok" : budgetCurrentRow?.status === "risk" ? "budget-main-card risk" : "budget-main-card watch"}>
+                <span>{language === "sv" ? "Senaste period" : "Latest period"}</span>
+                <strong>{budgetCurrentRow ? budgetCurrentRow.statusLabel : "-"}</strong>
+                <p>
+                  {budgetCurrentRow
+                    ? `${formatMonthLabel(budgetCurrentRow.monthKey, language)}: ${budgetCurrentRow.afterReserve} SEK ${language === "sv" ? "efter reserv" : "after reserve"}`
+                    : (language === "sv" ? "Ingen manadsdata annu." : "No monthly data yet.")}
+                </p>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Intaktsmal uppnatt" : "Revenue target reached"}</span>
+                <strong>{budgetRevenueProgress}%</strong>
+                <p>{budgetCurrentRow?.revenue || 0} / {budgetMonthlyRevenueTarget} SEK</p>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kostnadstak anvant" : "Expense limit used"}</span>
+                <strong>{budgetExpenseUsage}%</strong>
+                <p>{budgetCurrentRow?.expenses || 0} / {budgetMonthlyExpenseLimit} SEK</p>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Reserv totalt" : "Total reserve"}</span>
+                <strong>{budgetReserveTotal} SEK</strong>
+                <p>{budgetReserveRate}% {language === "sv" ? "pa positivt resultat" : "of positive result"}</p>
+              </article>
+              <article className={budgetAfterReserveTotal >= 0 ? "ok" : "risk"}>
+                <span>{language === "sv" ? "Efter reserv" : "After reserve"}</span>
+                <strong>{budgetAfterReserveTotal} SEK</strong>
+                <p>{budgetRows.length} {language === "sv" ? "perioder" : "periods"}</p>
+              </article>
+            </div>
+
+            <div className="budget-status-strip">
+              <span>{budgetRows.filter((row) => row.status === "ok").length} {language === "sv" ? "pa plan" : "on track"}</span>
+              <span>{budgetWatchMonths} {language === "sv" ? "att bevaka" : "to watch"}</span>
+              <span>{budgetRiskMonths} {language === "sv" ? "risk" : "risk"}</span>
+            </div>
+
+            <div className="budget-table">
+              <div className="budget-row budget-header">
+                <span>{language === "sv" ? "Manad" : "Month"}</span>
+                <span>{language === "sv" ? "Intakter" : "Revenue"}</span>
+                <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                <span>{language === "sv" ? "Resultat" : "Result"}</span>
+                <span>{language === "sv" ? "Reserv" : "Reserve"}</span>
+                <span>{language === "sv" ? "Efter reserv" : "After reserve"}</span>
+                <span>Status</span>
+              </div>
+              {budgetRows.map((row) => {
+                const monthRange = monthRangeFromKey(row.monthKey);
+
+                return (
+                  <button
+                    type="button"
+                    className={`budget-row ${row.status}`}
+                    key={row.monthKey}
+                    onClick={() => {
+                      setActiveView("bookkeeping");
+                      setBookkeepingDateFrom(monthRange.from);
+                      setBookkeepingDateTo(monthRange.to);
+                      setBookkeepingSearch("");
+                    }}
+                  >
+                    <strong>{formatMonthLabel(row.monthKey, language)}</strong>
+                    <span>{row.revenue} SEK <small>{row.revenueVariance >= 0 ? "+" : ""}{row.revenueVariance}</small></span>
+                    <span>{row.expenses} SEK <small>{row.expenseRoom >= 0 ? "+" : ""}{row.expenseRoom}</small></span>
+                    <strong className={row.result >= 0 ? "balanced-text" : "unbalanced-text"}>{row.result} SEK</strong>
+                    <span>{row.reserve} SEK</span>
+                    <strong className={row.afterReserve >= 0 ? "balanced-text" : "unbalanced-text"}>{row.afterReserve} SEK</strong>
+                    <span className="status">{row.statusLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
           </section>
         )}
 
