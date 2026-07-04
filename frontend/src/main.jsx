@@ -10,6 +10,8 @@ const apiUrl =
   import.meta.env.VITE_API_URL ||
   "http://localhost:3000";
 const LiquidMetalHero = lazy(() => import("./components/ui/liquid-metal-hero.jsx"));
+const FlowingMenu = lazy(() => import("./components/ui/FlowingMenu.jsx"));
+const LiquidEther = lazy(() => import("./components/ui/LiquidEther.jsx"));
 
 const copy = {
   en: {
@@ -5957,6 +5959,41 @@ function App() {
     return language === "sv" ? "Period" : "Period";
   }
 
+  const reactBitsMenuItems = [
+    {
+      text: language === "sv" ? "Fakturor" : "Invoices",
+      image: "https://picsum.photos/600/400?random=31",
+      onClick: (event) => {
+        event.preventDefault();
+        setActiveView("invoices");
+      }
+    },
+    {
+      text: language === "sv" ? "Bankimport" : "Bank import",
+      image: "https://picsum.photos/600/400?random=32",
+      onClick: (event) => {
+        event.preventDefault();
+        setActiveView("bank");
+      }
+    },
+    {
+      text: language === "sv" ? "Budget & mal" : "Budget goals",
+      image: "https://picsum.photos/600/400?random=33",
+      onClick: (event) => {
+        event.preventDefault();
+        setActiveView("budget");
+      }
+    },
+    {
+      text: language === "sv" ? "Rapporter" : "Reports",
+      image: "https://picsum.photos/600/400?random=34",
+      onClick: (event) => {
+        event.preventDefault();
+        setActiveView("reports");
+      }
+    }
+  ];
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -6133,6 +6170,48 @@ function App() {
             <strong>{revenueTotal - expenseTotal} SEK</strong>
           </article>
         </section>}
+
+        {token && activeView === "overview" && (
+          <section className="orders-section react-bits-showcase">
+            <div className="react-bits-ether">
+              <Suspense fallback={null}>
+                <LiquidEther
+                  colors={["#155ee8", "#f2a900", "#62d6a3"]}
+                  mouseForce={18}
+                  cursorSize={130}
+                  resolution={0.55}
+                  autoSpeed={0.35}
+                  autoIntensity={1.7}
+                  autoResumeDelay={1200}
+                />
+              </Suspense>
+            </div>
+
+            <div className="react-bits-copy">
+              <p className="eyebrow">{language === "sv" ? "Interaktivt kontrollrum" : "Interactive control room"}</p>
+              <h2>{language === "sv" ? "Hoppa snabbt mellan de viktigaste delarna" : "Jump quickly between the most important areas"}</h2>
+              <p>
+                {language === "sv"
+                  ? "Den har panelen anvander React Bits-kansla for att gora AliBooks mer levande, men varje val leder fortfarande till en riktig arbetsvy."
+                  : "This panel brings a React Bits feel into AliBooks, while every choice still opens a real work view."}
+              </p>
+            </div>
+
+            <div className="react-bits-menu-frame">
+              <Suspense fallback={<div className="react-bits-loading">{language === "sv" ? "Laddar meny..." : "Loading menu..."}</div>}>
+                <FlowingMenu
+                  items={reactBitsMenuItems}
+                  speed={18}
+                  textColor="#ffffff"
+                  bgColor="#111827"
+                  marqueeBgColor="#f2a900"
+                  marqueeTextColor="#111827"
+                  borderColor="rgba(255, 255, 255, 0.22)"
+                />
+              </Suspense>
+            </div>
+          </section>
+        )}
 
         {token && activeView === "overview" && (
           <section className="orders-section action-center-section">
