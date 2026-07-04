@@ -22,6 +22,7 @@ const copy = {
     services: "Services",
     activities: "Events",
     serviceAdmin: "Service admin",
+    cashflow: "Cashflow",
     serviceName: "Service name",
     serviceDescription: "Service description",
     ordinaryPrice: "Ordinary price",
@@ -152,6 +153,7 @@ const copy = {
     services: "Tjanster",
     activities: "Handelser",
     serviceAdmin: "Tjansteadministration",
+    cashflow: "Likviditet",
     serviceName: "Tjanstens namn",
     serviceDescription: "Beskrivning",
     ordinaryPrice: "Ordinarie pris",
@@ -798,6 +800,12 @@ function dateInputString(date) {
   return localDate.toISOString().slice(0, 10);
 }
 
+function addDaysInputString(value, days) {
+  const date = value ? new Date(`${value}T12:00:00`) : new Date();
+  date.setDate(date.getDate() + days);
+  return dateInputString(date);
+}
+
 function currentMonthRange() {
   const now = new Date();
   return {
@@ -924,6 +932,7 @@ const viewKeys = [
   "contracts",
   "services",
   "activities",
+  "cashflow",
   "payments",
   "uploaded",
   "bookkeeping",
@@ -958,6 +967,7 @@ const localPreferenceKeys = [
   "alibooks-payment-overview-search",
   "alibooks-activity-filter",
   "alibooks-activity-search",
+  "alibooks-cashflow-horizon-days",
   "alibooks-bookkeeping-filter",
   "alibooks-bookkeeping-search",
   "alibooks-bookkeeping-date-from",
@@ -1089,6 +1099,10 @@ function App() {
     return activityFilterKeys.includes(savedFilter) ? savedFilter : "all";
   });
   const [activitySearch, setActivitySearch] = useState(() => localStorage.getItem("alibooks-activity-search") || "");
+  const [cashflowHorizonDays, setCashflowHorizonDays] = useState(() => {
+    const savedHorizon = Number(localStorage.getItem("alibooks-cashflow-horizon-days") || 30);
+    return [30, 60, 90].includes(savedHorizon) ? savedHorizon : 30;
+  });
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1182,6 +1196,10 @@ function App() {
     localStorage.setItem("alibooks-activity-filter", activityFilter);
     localStorage.setItem("alibooks-activity-search", activitySearch);
   }, [activityFilter, activitySearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-cashflow-horizon-days", String(cashflowHorizonDays));
+  }, [cashflowHorizonDays]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -3609,6 +3627,54 @@ function App() {
     downloadLocalCsv("affarshandelser.csv", rows);
   }
 
+  function downloadCashflowCsv() {
+    setError("");
+    const rows = [
+      ["Likviditetsprognos / Cashflow forecast"],
+      ["Fran", todayInput],
+      ["Till", cashflowEndDate],
+      ["Horisont dagar", cashflowHorizonDays],
+      ["Startkassa 1930", cashOpeningBalance],
+      ["Vantat in", cashflowExpectedIn],
+      ["Vantat ut", cashflowExpectedOut],
+      ["Prognos kassa", cashflowProjectedBalance],
+      ["Kostnadssnitt per manad", averageMonthlyCashOut],
+      [],
+      ["Prognos per period"],
+      ["Dagar", "Till datum", "Fakturor in", "Stripe in", "Kostnadsreserv", "Moms ut", "Prognos kassa"]
+    ];
+
+    cashflowProjectionRows.forEach((row) => {
+      rows.push([
+        row.days,
+        row.endDate,
+        row.invoiceIn,
+        row.stripeIn,
+        row.reserve,
+        row.vatOut,
+        row.projectedBalance
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["Detaljer"]);
+    rows.push(["Datum", "Typ", "Kalla", "Rubrik", "Detalj", "Belopp", "Status"]);
+
+    cashflowTimelineRows.forEach((row) => {
+      rows.push([
+        row.date,
+        row.type === "in" ? "In" : "Ut",
+        row.source,
+        row.title,
+        row.detail,
+        row.amount,
+        row.status
+      ]);
+    });
+
+    downloadLocalCsv("likviditetsprognos.csv", rows);
+  }
+
   function downloadDataQualityCsv() {
     setError("");
     const rows = [
@@ -4329,6 +4395,107 @@ function App() {
   const expenseNet = expenses.reduce((sum, item) => sum + (item.netAmount || 0), 0);
   const expenseTotal = expenses.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
   const profitNet = revenueNet - expenseNet;
+  const todayInput = dateInputString(new Date());
+  const cashflowEndDate = addDaysInputString(todayInput, cashflowHorizonDays);
+  const cashAccountBalanceFromJournal = journalEntries
+    .filter((entry) => entry.accountNumber === "1930")
+    .reduce((sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0), 0);
+  const cashAccountBalanceFromReport = balanceReport?.assets?.find((line) => line.accountNumber === "1930")?.amount;
+  const cashOpeningBalance = Number.isFinite(cashAccountBalanceFromReport)
+    ? cashAccountBalanceFromReport
+    : cashAccountBalanceFromJournal;
+  const openInvoiceCashflowRows = invoices
+    .filter((item) => invoiceRemainingAmount(item) > 0)
+    .map((item) => {
+      const plannedDate = item.dueDate || item.invoiceDate || String(item.createdAt || "").slice(0, 10) || todayInput;
+      return {
+        id: `cash-invoice-${item.id}`,
+        type: "in",
+        source: language === "sv" ? "Faktura" : "Invoice",
+        date: plannedDate < todayInput ? todayInput : plannedDate,
+        title: invoiceNumber(item),
+        detail: item.customerName || item.customer?.name || "-",
+        amount: invoiceRemainingAmount(item),
+        status: invoiceIsOverdue(item)
+          ? (language === "sv" ? "Forfallen" : "Overdue")
+          : invoiceDueStatus(item, language).label,
+        action: () => {
+          setActiveView("invoices");
+          setInvoiceSearch(invoiceNumber(item));
+        }
+      };
+    });
+  const cashflowInvoicesInHorizon = openInvoiceCashflowRows.filter((row) => row.date <= cashflowEndDate);
+  const cashflowInvoiceInTotal = cashflowInvoicesInHorizon.reduce((sum, row) => sum + (row.amount || 0), 0);
+  const cashflowStripeInTotal = Math.max(stripeReceivableBalance, 0);
+  const recentCashOutRows = monthlyReportRows.filter((row) => (row.cashOut || 0) > 0).slice(0, 3);
+  const averageMonthlyCashOut = recentCashOutRows.length === 0
+    ? 0
+    : Math.round(recentCashOutRows.reduce((sum, row) => sum + (row.cashOut || 0), 0) / recentCashOutRows.length);
+  const cashflowExpenseReserve = Math.round(averageMonthlyCashOut * (cashflowHorizonDays / 30));
+  const cashflowVatOutTotal = Math.max(vatPeriodToPay, 0);
+  const cashflowExpectedIn = cashflowInvoiceInTotal + cashflowStripeInTotal;
+  const cashflowExpectedOut = cashflowExpenseReserve + cashflowVatOutTotal;
+  const cashflowProjectedBalance = cashOpeningBalance + cashflowExpectedIn - cashflowExpectedOut;
+  const cashflowRunwayMonths = averageMonthlyCashOut > 0
+    ? Math.max(0, Math.round((cashflowProjectedBalance / averageMonthlyCashOut) * 10) / 10)
+    : null;
+  const cashflowProjectionRows = [30, 60, 90].map((days) => {
+    const endDate = addDaysInputString(todayInput, days);
+    const invoiceIn = openInvoiceCashflowRows
+      .filter((row) => row.date <= endDate)
+      .reduce((sum, row) => sum + (row.amount || 0), 0);
+    const reserve = Math.round(averageMonthlyCashOut * (days / 30));
+    const vatOut = cashflowVatOutTotal > 0 ? cashflowVatOutTotal : 0;
+
+    return {
+      days,
+      endDate,
+      invoiceIn,
+      stripeIn: cashflowStripeInTotal,
+      reserve,
+      vatOut,
+      projectedBalance: cashOpeningBalance + invoiceIn + cashflowStripeInTotal - reserve - vatOut
+    };
+  });
+  const cashflowTimelineRows = [
+    ...cashflowInvoicesInHorizon,
+    ...(cashflowStripeInTotal > 0 ? [{
+      id: "cash-stripe-receivable",
+      type: "in",
+      source: "Stripe",
+      date: todayInput,
+      title: language === "sv" ? "Stripe-fordran" : "Stripe receivable",
+      detail: language === "sv" ? "Belopp kvar pa konto 1580" : "Remaining balance on account 1580",
+      amount: cashflowStripeInTotal,
+      status: language === "sv" ? "Att stamma av" : "To reconcile",
+      action: () => setActiveView("payments")
+    }] : []),
+    ...(cashflowVatOutTotal > 0 ? [{
+      id: "cash-vat",
+      type: "out",
+      source: language === "sv" ? "Moms" : "VAT",
+      date: vatPeriodTo && vatPeriodTo > todayInput ? vatPeriodTo : todayInput,
+      title: language === "sv" ? "Preliminar moms att betala" : "Preliminary VAT to pay",
+      detail: `${vatPeriodFrom || "-"} - ${vatPeriodTo || "-"}`,
+      amount: cashflowVatOutTotal,
+      status: language === "sv" ? "Kontrollera datum" : "Verify date",
+      action: () => setActiveView("vat")
+    }] : []),
+    ...(cashflowExpenseReserve > 0 ? [{
+      id: "cash-expense-reserve",
+      type: "out",
+      source: language === "sv" ? "Reserv" : "Reserve",
+      date: cashflowEndDate,
+      title: language === "sv" ? "Kostnadsreserv" : "Expense reserve",
+      detail: language === "sv"
+        ? `Baserad pa snitt av senaste ${recentCashOutRows.length} manad(er)`
+        : `Based on the average of the latest ${recentCashOutRows.length} month(s)`,
+      amount: cashflowExpenseReserve,
+      status: language === "sv" ? "Prognos" : "Forecast",
+      action: () => setActiveView("reports")
+    }] : [])
+  ].sort((first, second) => String(first.date || "").localeCompare(String(second.date || "")));
 
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
@@ -4378,6 +4545,12 @@ function App() {
         : `${answerIntro} For events: go to Events. There you can see a combined timeline for invoices, payments, bank import, Stripe, expenses, reminders and vouchers. You can filter by type, search by invoice number, customer, bank reference or voucher and export the list as CSV. There are currently ${auditTrailRows.length} events and ${activityOpenBankRows} open bank rows.`, "activities");
     }
 
+    if (normalizedQuestion.includes("likvid") || normalizedQuestion.includes("kassa") || normalizedQuestion.includes("cash") || normalizedQuestion.includes("runway") || normalizedQuestion.includes("prognos")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For likviditet: ga till Likviditet. Dar ser du startkassa pa 1930, vantade fakturainbetalningar, Stripe-fordran, moms att betala, kostnadsreserv och prognos for 30/60/90 dagar. Just nu visar vald horisont ${cashflowHorizonDays} dagar, prognos ${cashflowProjectedBalance} SEK och kostnadssnitt ${averageMonthlyCashOut} SEK per manad.`
+        : `${answerIntro} For cashflow: go to Cashflow. There you see opening cash on account 1930, expected invoice payments, Stripe receivable, VAT to pay, expense reserve and 30/60/90 day forecasts. The selected horizon is ${cashflowHorizonDays} days, forecast ${cashflowProjectedBalance} SEK and average spending ${averageMonthlyCashOut} SEK per month.`, "cashflow");
+    }
+
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. Appen summerar 2611 utgaende moms minus 2641 ingaende moms. Vald period visar ${vatPeriodToPay} SEK och hela appen visar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
@@ -4418,6 +4591,9 @@ function App() {
       contracts: contracts.length,
       events: auditTrailRows.length,
       openBankRows: activityOpenBankRows,
+      cashflowForecast: cashflowProjectedBalance,
+      cashflowHorizonDays,
+      averageMonthlyCashOut,
       bankImportRows: bankImportRows.length
     });
   }
@@ -4478,6 +4654,7 @@ function App() {
       bookkeeping: t.bookkeeping,
       uploaded: t.uploaded,
       activities: t.activities,
+      cashflow: t.cashflow,
       reports: t.reports,
       vat: t.vatReport,
       payments: t.payments,
@@ -4519,6 +4696,9 @@ function App() {
       activities: language === "sv"
         ? ["Vad visar Handelser?", "Hur hittar jag en bankrad?", "Hur exporterar jag handelser?"]
         : ["What does Events show?", "How do I find a bank row?", "How do I export events?"],
+      cashflow: language === "sv"
+        ? ["Hur ser kassan ut?", "Klarar jag momsbetalningen?", "Vad betyder kostnadsreserv?"]
+        : ["How does cash look?", "Can I cover the VAT payment?", "What does expense reserve mean?"],
       uploaded: language === "sv"
         ? ["Hur laddar jag upp underlag?", "Vilka kvitton maste sparas?", "Hur kopplas underlag till kostnad?"]
         : ["How do I upload receipts?", "Which receipts must be kept?", "How are receipts linked to expenses?"],
@@ -5640,6 +5820,7 @@ function App() {
     if (activeView === "contracts") return t.contracts;
     if (activeView === "services") return t.services;
     if (activeView === "activities") return t.activities;
+    if (activeView === "cashflow") return t.cashflow;
     if (activeView === "payments") return t.payments;
     if (activeView === "uploaded") return t.uploaded;
     if (activeView === "bookkeeping") return t.bookkeeping;
@@ -5674,6 +5855,7 @@ function App() {
           {navButton("contracts", t.contracts)}
           {navButton("services", t.services)}
           {navButton("activities", t.activities)}
+          {navButton("cashflow", t.cashflow)}
           {navButton("payments", t.payments)}
           {navButton("uploaded", t.uploaded)}
           {navButton("bookkeeping", t.bookkeeping)}
@@ -6866,6 +7048,142 @@ function App() {
                       {row.amount ? `${row.amount} SEK` : "-"}
                     </strong>
                     <span className="status">{row.status || "-"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeView === "cashflow" && (
+          <section className="orders-section cashflow-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.cashflow}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Prognos for kassan baserad pa 1930 Foretagskonto, obetalda fakturor, Stripe-fordran, moms och historisk kostnadstakt."
+                    : "Cash forecast based on account 1930 bank balance, unpaid invoices, Stripe receivable, VAT and historical spending pace."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className={cashflowProjectedBalance >= 0 ? "status success-status" : "status warning-status"}>
+                  {language === "sv" ? "Prognos" : "Forecast"} {cashflowProjectedBalance} SEK
+                </span>
+                <button type="button" className="secondary-button" onClick={downloadCashflowCsv}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="cashflow-hero">
+              <article className={cashflowProjectedBalance >= 0 ? "cashflow-main-card positive" : "cashflow-main-card negative"}>
+                <span>{language === "sv" ? "Beraknad kassa efter period" : "Projected cash after period"}</span>
+                <strong>{cashflowProjectedBalance} SEK</strong>
+                <p>
+                  {language === "sv"
+                    ? `Period: ${todayInput} till ${cashflowEndDate}. Det har ar en arbetsprognos, inte ett bankbesked.`
+                    : `Period: ${todayInput} to ${cashflowEndDate}. This is a working forecast, not a bank statement.`}
+                </p>
+              </article>
+              <article className="cashflow-advice-card">
+                <span>{language === "sv" ? "Kassalage" : "Cash position"}</span>
+                <strong>
+                  {cashflowProjectedBalance < 0
+                    ? (language === "sv" ? "Risk for minus" : "Risk of negative cash")
+                    : cashflowRunwayMonths === null
+                      ? (language === "sv" ? "Ingen kostnadstakt annu" : "No spending pace yet")
+                      : `${cashflowRunwayMonths} ${language === "sv" ? "manader runway" : "months runway"}`}
+                </strong>
+                <p>
+                  {cashflowProjectedBalance < 0
+                    ? (language === "sv"
+                      ? "Prioritera forfallna fakturor, kontrollera Stripe-utbetalningar och planera momsbetalningen."
+                      : "Prioritize overdue invoices, check Stripe payouts and plan the VAT payment.")
+                    : (language === "sv"
+                      ? "Kassan ser positiv ut i vald horisont. Kontrollera anda momsdatum och stora kommande kostnader."
+                      : "Cash looks positive in the selected horizon. Still verify VAT dates and large upcoming costs.")}
+                </p>
+              </article>
+            </div>
+
+            <div className="payment-filter-row cashflow-horizon-row">
+              {[30, 60, 90].map((days) => (
+                <button
+                  type="button"
+                  className={cashflowHorizonDays === days ? "filter-button active" : "filter-button"}
+                  key={days}
+                  onClick={() => setCashflowHorizonDays(days)}
+                >
+                  {days} {language === "sv" ? "dagar" : "days"}
+                </button>
+              ))}
+            </div>
+
+            <div className="cashflow-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Startkassa 1930" : "Opening cash 1930"}</span>
+                <strong>{cashOpeningBalance} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Fakturor in" : "Invoices in"}</span>
+                <strong>{cashflowInvoiceInTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Stripe-fordran" : "Stripe receivable"}</span>
+                <strong>{cashflowStripeInTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Moms ut" : "VAT out"}</span>
+                <strong>{cashflowVatOutTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kostnadsreserv" : "Expense reserve"}</span>
+                <strong>{cashflowExpenseReserve} SEK</strong>
+              </article>
+            </div>
+
+            <div className="cashflow-projection-grid">
+              {cashflowProjectionRows.map((row) => (
+                <article className={row.projectedBalance >= 0 ? "cashflow-projection-card positive" : "cashflow-projection-card negative"} key={row.days}>
+                  <header>
+                    <span>{row.days} {language === "sv" ? "dagar" : "days"}</span>
+                    <strong>{row.projectedBalance} SEK</strong>
+                  </header>
+                  <p><span>{language === "sv" ? "Till" : "Until"}</span><strong>{formatDateOnly(row.endDate)}</strong></p>
+                  <p><span>{language === "sv" ? "In" : "In"}</span><strong>{row.invoiceIn + row.stripeIn} SEK</strong></p>
+                  <p><span>{language === "sv" ? "Ut" : "Out"}</span><strong>{row.reserve + row.vatOut} SEK</strong></p>
+                </article>
+              ))}
+            </div>
+
+            <div className="section-heading report-subheading">
+              <div>
+                <h2>{language === "sv" ? "Pengar in och ut" : "Cash in and out"}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Klicka pa en rad for att oppna faktura, betalningar, momsrapport eller rapporter."
+                    : "Click a row to open the invoice, payments, VAT report or reports."}
+                </p>
+              </div>
+            </div>
+
+            {cashflowTimelineRows.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Ingen likviditetsdata finns annu." : "No cashflow data yet."}</p>
+            ) : (
+              <div className="cashflow-timeline">
+                {cashflowTimelineRows.map((row) => (
+                  <button type="button" className={`cashflow-row ${row.type}`} key={row.id} onClick={row.action}>
+                    <span>
+                      <strong>{formatDateOnly(row.date)}</strong>
+                      <small>{row.source}</small>
+                    </span>
+                    <span>
+                      <strong>{row.title}</strong>
+                      <small>{row.detail}</small>
+                    </span>
+                    <strong>{row.type === "out" ? "-" : "+"}{row.amount} SEK</strong>
+                    <span className="status">{row.status}</span>
                   </button>
                 ))}
               </div>
