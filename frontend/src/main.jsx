@@ -1009,6 +1009,7 @@ const localPreferenceKeys = [
   "alibooks-bookkeeping-date-from",
   "alibooks-bookkeeping-date-to",
   "alibooks-bank-import-rules",
+  "alibooks-bokio-import-queue",
   "alibooks-selected-customer-id",
   "alibooks-selected-service-id",
   "alibooks-invoice-quantity",
@@ -1040,6 +1041,15 @@ function App() {
   });
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [aiAssistantLoading, setAiAssistantLoading] = useState(false);
+  const [bokioImportQueue, setBokioImportQueue] = useState(() => {
+    try {
+      const savedQueue = JSON.parse(localStorage.getItem("alibooks-bokio-import-queue") || "[]");
+      return Array.isArray(savedQueue) ? savedQueue : [];
+    } catch {
+      return [];
+    }
+  });
+  const [bokioImportMessage, setBokioImportMessage] = useState("");
   const [automaticReminderMessage, setAutomaticReminderMessage] = useState("");
   const [automaticReminderResult, setAutomaticReminderResult] = useState(null);
   const [settings, setSettings] = useState(null);
@@ -1274,6 +1284,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("alibooks-bank-import-rules", JSON.stringify(bankImportRules));
   }, [bankImportRules]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-bokio-import-queue", JSON.stringify(bokioImportQueue));
+  }, [bokioImportQueue]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-ai-assistant-messages", JSON.stringify(aiAssistantMessages.slice(-8)));
@@ -3675,6 +3689,83 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  function bokioImportKind(fileName = "", fileType = "") {
+    const lowerName = fileName.toLowerCase();
+    const lowerType = fileType.toLowerCase();
+
+    if (lowerName.endsWith(".sie") || lowerName.endsWith(".se")) return "SIE";
+    if (lowerName.endsWith(".csv") || lowerType.includes("csv")) return "CSV";
+    if (lowerName.endsWith(".zip") || lowerType.includes("zip")) return "ZIP";
+    if (lowerName.endsWith(".pdf") || lowerType.includes("pdf")) return "PDF";
+    if (lowerType.startsWith("image/")) return language === "sv" ? "Bild" : "Image";
+    return language === "sv" ? "Okand fil" : "Unknown file";
+  }
+
+  function bokioImportFileSize(bytes = 0) {
+    if (!bytes) return "0 KB";
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function handleBokioImportFiles(event) {
+    const files = Array.from(event.target.files || []);
+
+    if (files.length === 0) return;
+
+    const importedAt = new Date().toISOString();
+    const newRows = files.map((file, index) => ({
+      id: `${Date.now()}-${index}-${file.name}`,
+      fileName: file.name,
+      fileType: file.type || "-",
+      kind: bokioImportKind(file.name, file.type),
+      size: file.size || 0,
+      lastModified: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : "",
+      importedAt,
+      status: "review",
+      note: ""
+    }));
+
+    setBokioImportQueue((current) => [...newRows, ...current]);
+    setBokioImportMessage(language === "sv"
+      ? `${newRows.length} fil(er) lades i importkon. Granska innan du bokfor.`
+      : `${newRows.length} file(s) were added to the import queue. Review before bookkeeping.`);
+    event.target.value = "";
+  }
+
+  function updateBokioImportRow(rowId, patch) {
+    setBokioImportQueue((current) => current.map((row) => (
+      row.id === rowId ? { ...row, ...patch } : row
+    )));
+  }
+
+  function removeBokioImportRow(rowId) {
+    setBokioImportQueue((current) => current.filter((row) => row.id !== rowId));
+  }
+
+  function clearReviewedBokioImports() {
+    setBokioImportQueue((current) => current.filter((row) => row.status !== "imported"));
+    setBokioImportMessage(language === "sv"
+      ? "Importerade rader doljs fran importkon."
+      : "Imported rows are hidden from the import queue.");
+  }
+
+  function downloadBokioImportQueueCsv() {
+    const rows = [
+      ["Filnamn", "Typ", "Storlek", "Filens datum", "Tillagd", "Status", "Anteckning"],
+      ...bokioImportQueue.map((row) => [
+        row.fileName,
+        row.kind,
+        bokioImportFileSize(row.size),
+        row.lastModified || "",
+        String(row.importedAt || "").slice(0, 10),
+        row.status,
+        row.note || ""
+      ])
+    ];
+
+    downloadLocalCsv("bokio-import-checklista.csv", rows);
+  }
+
   function downloadLocalJson(filename, data) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -5308,6 +5399,9 @@ function App() {
   const filteredExpensesMissingReceipt = filteredExpenses.filter((expense) => !expenseHasReceipt(expense));
   const filteredReceiptTotal = filteredExpensesWithReceipt.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
   const filteredMissingReceiptTotal = filteredExpensesMissingReceipt.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  const bokioImportReviewCount = bokioImportQueue.filter((row) => row.status === "review").length;
+  const bokioImportReadyCount = bokioImportQueue.filter((row) => row.status === "ready").length;
+  const bokioImportImportedCount = bokioImportQueue.filter((row) => row.status === "imported").length;
   const expenseCategorySummary = Object.values(filteredExpenses.reduce((groups, expense) => {
     const key = expense.category || "unknown";
 
@@ -9897,6 +9991,112 @@ function App() {
                 {t.exportCsv}
               </button>
             </div>
+          </div>
+
+          <div className="bokio-import-panel">
+            <div className="bokio-import-intro">
+              <div>
+                <span>{language === "sv" ? "Flytta fran Bokio" : "Move from Bokio"}</span>
+                <h3>{language === "sv" ? "Importera gamla underlag" : "Import old documents"}</h3>
+                <p>
+                  {language === "sv"
+                    ? "Lagg PDF, bilder, CSV, SIE eller ZIP fran Bokio i en granskningsko. AliBooks bokfor inte automatiskt forran du har kontrollerat filerna."
+                    : "Add PDF, images, CSV, SIE or ZIP files from Bokio to a review queue. AliBooks does not bookkeep automatically until you have checked the files."}
+                </p>
+              </div>
+              <div className="bokio-import-actions">
+                <label className="file-button primary-file-button">
+                  {language === "sv" ? "Valj filer" : "Choose files"}
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.csv,.sie,.se,.zip,application/pdf,image/*,text/csv"
+                    onChange={handleBokioImportFiles}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={downloadBokioImportQueueCsv}
+                  disabled={bokioImportQueue.length === 0}
+                >
+                  {language === "sv" ? "Exportera checklista" : "Export checklist"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={clearReviewedBokioImports}
+                  disabled={bokioImportImportedCount === 0}
+                >
+                  {language === "sv" ? "Dolj importerade" : "Hide imported"}
+                </button>
+              </div>
+            </div>
+
+            <div className="bokio-import-summary">
+              <article>
+                <span>{language === "sv" ? "I kon" : "In queue"}</span>
+                <strong>{bokioImportQueue.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Att granska" : "To review"}</span>
+                <strong>{bokioImportReviewCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Redo" : "Ready"}</span>
+                <strong>{bokioImportReadyCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Importerade" : "Imported"}</span>
+                <strong>{bokioImportImportedCount}</strong>
+              </article>
+            </div>
+
+            {bokioImportMessage && <p className="message success">{bokioImportMessage}</p>}
+
+            {bokioImportQueue.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Ingen Bokio-import startad annu. Exportera eller ladda ner dina underlag fran Bokio och valj filerna har."
+                  : "No Bokio import has been started yet. Export or download your documents from Bokio and choose the files here."}
+              </p>
+            ) : (
+              <div className="bokio-import-list">
+                {bokioImportQueue.map((row) => (
+                  <div className={`bokio-import-row ${row.status}`} key={row.id}>
+                    <div>
+                      <strong>{row.fileName}</strong>
+                      <span>
+                        {row.kind} - {bokioImportFileSize(row.size)}
+                        {row.lastModified ? ` - ${language === "sv" ? "fildatum" : "file date"} ${row.lastModified}` : ""}
+                      </span>
+                    </div>
+                    <label>
+                      {language === "sv" ? "Status" : "Status"}
+                      <select
+                        value={row.status}
+                        onChange={(event) => updateBokioImportRow(row.id, { status: event.target.value })}
+                      >
+                        <option value="review">{language === "sv" ? "Granska" : "Review"}</option>
+                        <option value="ready">{language === "sv" ? "Redo att importera" : "Ready to import"}</option>
+                        <option value="imported">{language === "sv" ? "Importerad" : "Imported"}</option>
+                      </select>
+                    </label>
+                    <label>
+                      {language === "sv" ? "Anteckning" : "Note"}
+                      <input
+                        value={row.note || ""}
+                        onChange={(event) => updateBokioImportRow(row.id, { note: event.target.value })}
+                        placeholder={language === "sv" ? "Ex: koppla till inkop, faktura eller ar 2025" : "Ex: link to expense, invoice or year 2025"}
+                      />
+                    </label>
+                    <button type="button" className="danger-button soft" onClick={() => removeBokioImportRow(row.id)}>
+                      {language === "sv" ? "Ta bort" : "Remove"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="stats compact-stats">

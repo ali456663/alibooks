@@ -4124,6 +4124,135 @@ button:focus-visible,
   margin-top: 18px;
 }
 
+.bokio-import-panel {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #c7d7ff;
+  border-left: 5px solid var(--color-primary);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f8fbff, #ffffff);
+  box-shadow: var(--shadow-small);
+}
+
+.bokio-import-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.bokio-import-intro span {
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.bokio-import-intro h3,
+.bokio-import-intro p {
+  margin: 0;
+}
+
+.bokio-import-intro h3 {
+  margin-top: 4px;
+}
+
+.bokio-import-intro p {
+  max-width: 760px;
+  color: #4b5563;
+}
+
+.bokio-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primary-file-button {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.primary-file-button:hover {
+  background: var(--color-primary-dark);
+  color: #ffffff;
+}
+
+.bokio-import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bokio-import-summary article {
+  padding: 12px;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bokio-import-summary span {
+  display: block;
+  color: #5d6259;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bokio-import-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+.bokio-import-list {
+  display: grid;
+  gap: 10px;
+}
+
+.bokio-import-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 180px) minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #dce4ef;
+  border-left: 5px solid #f0ad00;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bokio-import-row.ready {
+  border-left-color: var(--color-primary);
+}
+
+.bokio-import-row.imported {
+  border-left-color: var(--color-success-text);
+  background: #f7fcf9;
+}
+
+.bokio-import-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.bokio-import-row span {
+  color: #5d6259;
+  font-size: 14px;
+}
+
+.bokio-import-row label {
+  display: grid;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.danger-button.soft {
+  background: #fff0f0;
+}
+
 .receipt-panel {
   padding: 18px;
   border: 1px solid var(--color-border);
@@ -4662,6 +4791,9 @@ button:focus-visible,
   .tax-plan-card,
   .archive-package-panel,
   .archive-package-grid,
+  .bokio-import-intro,
+  .bokio-import-summary,
+  .bokio-import-row,
   .period-close-panel,
   .audit-trail-summary,
   .audit-trail-row {
