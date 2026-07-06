@@ -3711,27 +3711,144 @@ function App() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function handleBokioImportFiles(event) {
+  function parseSieAmount(value = "") {
+    return Number(String(value).replace(",", ".").replace(/[^\d.-]/g, "")) || 0;
+  }
+
+  function normalizeSieDate(value = "") {
+    if (!/^\d{8}$/.test(value)) return "";
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+
+  function analyzeSieText(text = "") {
+    const lines = text.split(/\r?\n/);
+    const vouchers = [];
+    const accounts = new Set();
+    let currentVoucher = null;
+
+    function closeVoucher() {
+      if (!currentVoucher) return;
+      const difference = Math.round(currentVoucher.sum * 100) / 100;
+      vouchers.push({
+        ...currentVoucher,
+        difference
+      });
+      currentVoucher = null;
+    }
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim();
+
+      if (line.startsWith("#VER ")) {
+        closeVoucher();
+        const dateMatch = line.match(/\s(\d{8})(?:\s|$)/);
+        currentVoucher = {
+          date: normalizeSieDate(dateMatch?.[1] || ""),
+          transactions: 0,
+          sum: 0
+        };
+        return;
+      }
+
+      if (line.startsWith("#TRANS ") || line.startsWith("#RTRANS ") || line.startsWith("#BTRANS ")) {
+        const match = line.match(/^#(?:R|B)?TRANS\s+(\d+)\s+(?:\{[^}]*\}\s+)?(-?\d+(?:[.,]\d+)?)/);
+        if (!match) return;
+
+        if (!currentVoucher) {
+          currentVoucher = {
+            date: "",
+            transactions: 0,
+            sum: 0
+          };
+        }
+
+        accounts.add(match[1]);
+        currentVoucher.transactions += 1;
+        currentVoucher.sum += parseSieAmount(match[2]);
+      }
+    });
+
+    closeVoucher();
+
+    const dates = vouchers.map((voucher) => voucher.date).filter(Boolean).sort();
+    const totalTransactions = vouchers.reduce((sum, voucher) => sum + voucher.transactions, 0);
+    const totalDifference = vouchers.reduce((sum, voucher) => sum + voucher.difference, 0);
+    const unbalancedVouchers = vouchers.filter((voucher) => Math.abs(voucher.difference) > 0.01).length;
+    const accountList = [...accounts].sort((first, second) => Number(first) - Number(second));
+
+    return {
+      kind: "SIE",
+      vouchers: vouchers.length,
+      transactions: totalTransactions,
+      accounts: accountList.length,
+      sampleAccounts: accountList.slice(0, 8).join(", "),
+      unbalancedVouchers,
+      totalDifference: Math.round(totalDifference * 100) / 100,
+      firstDate: dates[0] || "",
+      lastDate: dates[dates.length - 1] || ""
+    };
+  }
+
+  function analyzeCsvText(text = "") {
+    const rows = text.split(/\r?\n/).filter((line) => line.trim());
+    const separator = (rows[0]?.match(/;/g)?.length || 0) >= (rows[0]?.match(/,/g)?.length || 0) ? ";" : ",";
+    const header = rows[0] ? splitCsvLine(rows[0], separator) : [];
+    const amountColumn = header.find((column) => /belopp|amount|summa|total/i.test(column));
+    const dateColumn = header.find((column) => /datum|date/i.test(column));
+
+    return {
+      kind: "CSV",
+      rows: Math.max(rows.length - 1, 0),
+      columns: header.length,
+      separator,
+      amountColumn: amountColumn || "",
+      dateColumn: dateColumn || ""
+    };
+  }
+
+  async function analyzeBokioImportFile(file, kind) {
+    if (!["SIE", "CSV"].includes(kind)) return null;
+
+    try {
+      const text = await file.text();
+      return kind === "SIE" ? analyzeSieText(text) : analyzeCsvText(text);
+    } catch {
+      return {
+        kind,
+        error: language === "sv" ? "Kunde inte lasa filen." : "Could not read file."
+      };
+    }
+  }
+
+  async function handleBokioImportFiles(event) {
     const files = Array.from(event.target.files || []);
 
     if (files.length === 0) return;
 
     const importedAt = new Date().toISOString();
-    const newRows = files.map((file, index) => ({
-      id: `${Date.now()}-${index}-${file.name}`,
-      fileName: file.name,
-      fileType: file.type || "-",
-      kind: bokioImportKind(file.name, file.type),
-      size: file.size || 0,
-      lastModified: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : "",
-      importedAt,
-      status: "review",
-      expenseDate: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      description: `Bokio: ${file.name.replace(/\.[^/.]+$/, "").replaceAll("_", " ")}`,
-      netAmount: "",
-      vatAmount: "",
-      category: "5420",
-      note: ""
+    const newRows = await Promise.all(files.map(async (file, index) => {
+      const kind = bokioImportKind(file.name, file.type);
+      const analysis = await analyzeBokioImportFile(file, kind);
+
+      return {
+        id: `${Date.now()}-${index}-${file.name}`,
+        fileName: file.name,
+        fileType: file.type || "-",
+        kind,
+        size: file.size || 0,
+        lastModified: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : "",
+        importedAt,
+        status: "review",
+        expenseDate: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        description: `Bokio: ${file.name.replace(/\.[^/.]+$/, "").replaceAll("_", " ")}`,
+        netAmount: "",
+        vatAmount: "",
+        category: "5420",
+        analysis,
+        note: analysis?.kind === "SIE"
+          ? (language === "sv" ? "SIE kontrollerad. Importera verifikat i nasta steg." : "SIE checked. Import vouchers in the next step.")
+          : ""
+      };
     }));
 
     setBokioImportFiles((current) => files.reduce((nextFiles, file, index) => ({
@@ -3847,7 +3964,7 @@ function App() {
 
   function downloadBokioImportQueueCsv() {
     const rows = [
-      ["Filnamn", "Typ", "Storlek", "Filens datum", "Tillagd", "Status", "Datum", "Beskrivning", "Netto", "Moms", "Kategori", "Kostnad ID", "Anteckning"],
+      ["Filnamn", "Typ", "Storlek", "Filens datum", "Tillagd", "Status", "Analys", "Datum", "Beskrivning", "Netto", "Moms", "Kategori", "Kostnad ID", "Anteckning"],
       ...bokioImportQueue.map((row) => [
         row.fileName,
         row.kind,
@@ -3855,6 +3972,11 @@ function App() {
         row.lastModified || "",
         String(row.importedAt || "").slice(0, 10),
         row.status,
+        row.analysis
+          ? (row.analysis.error || (row.analysis.kind === "SIE"
+            ? `${row.analysis.vouchers} verifikat, ${row.analysis.transactions} rader, ${row.analysis.unbalancedVouchers} obalanserade`
+            : `${row.analysis.rows} rader, ${row.analysis.columns} kolumner`))
+          : "",
         row.expenseDate || "",
         row.description || "",
         row.netAmount || "",
@@ -5504,6 +5626,7 @@ function App() {
   const bokioImportReviewCount = bokioImportQueue.filter((row) => row.status === "review").length;
   const bokioImportReadyCount = bokioImportQueue.filter((row) => row.status === "ready").length;
   const bokioImportImportedCount = bokioImportQueue.filter((row) => row.status === "imported").length;
+  const bokioImportAnalyzedCount = bokioImportQueue.filter((row) => row.analysis && !row.analysis.error).length;
   const expenseCategorySummary = Object.values(filteredExpenses.reduce((groups, expense) => {
     const key = expense.category || "unknown";
 
@@ -10152,6 +10275,10 @@ function App() {
                 <span>{language === "sv" ? "Importerade" : "Imported"}</span>
                 <strong>{bokioImportImportedCount}</strong>
               </article>
+              <article>
+                <span>{language === "sv" ? "Analyserade filer" : "Analyzed files"}</span>
+                <strong>{bokioImportAnalyzedCount}</strong>
+              </article>
             </div>
 
             {bokioImportMessage && <p className="message success">{bokioImportMessage}</p>}
@@ -10179,6 +10306,42 @@ function App() {
                       </span>
                       {row.importedExpenseId && (
                         <span>{language === "sv" ? "Kostnad ID" : "Expense ID"}: {row.importedExpenseId}</span>
+                      )}
+                      {row.analysis?.error && (
+                        <span className="bokio-analysis-warning">{row.analysis.error}</span>
+                      )}
+                      {row.analysis?.kind === "SIE" && !row.analysis.error && (
+                        <div className={row.analysis.unbalancedVouchers > 0 ? "bokio-analysis warning" : "bokio-analysis ok"}>
+                          <span>
+                            SIE: {row.analysis.vouchers} {language === "sv" ? "verifikat" : "vouchers"},
+                            {" "}{row.analysis.transactions} {language === "sv" ? "rader" : "rows"},
+                            {" "}{row.analysis.accounts} {language === "sv" ? "konton" : "accounts"}
+                          </span>
+                          <span>
+                            {language === "sv" ? "Period" : "Period"}: {row.analysis.firstDate || "-"} - {row.analysis.lastDate || "-"}
+                          </span>
+                          <span>
+                            {row.analysis.unbalancedVouchers === 0
+                              ? (language === "sv" ? "Alla verifikat verkar balansera." : "All vouchers appear balanced.")
+                              : `${row.analysis.unbalancedVouchers} ${language === "sv" ? "verifikat balanserar inte" : "vouchers are unbalanced"}`}
+                          </span>
+                          {row.analysis.sampleAccounts && <span>{language === "sv" ? "Konton" : "Accounts"}: {row.analysis.sampleAccounts}</span>}
+                        </div>
+                      )}
+                      {row.analysis?.kind === "CSV" && !row.analysis.error && (
+                        <div className="bokio-analysis ok">
+                          <span>
+                            CSV: {row.analysis.rows} {language === "sv" ? "rader" : "rows"},
+                            {" "}{row.analysis.columns} {language === "sv" ? "kolumner" : "columns"}
+                          </span>
+                          <span>
+                            {language === "sv" ? "Separator" : "Separator"}: {row.analysis.separator}
+                            {row.analysis.dateColumn ? ` - ${language === "sv" ? "datumkolumn" : "date column"}: ${row.analysis.dateColumn}` : ""}
+                          </span>
+                          {row.analysis.amountColumn && (
+                            <span>{language === "sv" ? "Beloppskolumn" : "Amount column"}: {row.analysis.amountColumn}</span>
+                          )}
+                        </div>
                       )}
                     </div>
                     <label>

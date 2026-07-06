@@ -4183,7 +4183,7 @@ button:focus-visible,
 
 .bokio-import-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
@@ -4267,6 +4267,35 @@ button:focus-visible,
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.bokio-analysis {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #d7e6dc;
+  border-radius: 8px;
+  background: #f7fcf9;
+}
+
+.bokio-analysis.warning {
+  border-color: #f2d27b;
+  background: #fff8e3;
+}
+
+.bokio-analysis span,
+.bokio-analysis-warning {
+  display: block;
+  font-size: 13px;
+}
+
+.bokio-analysis-warning {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #f2d27b;
+  border-radius: 8px;
+  background: #fff8e3;
+  color: var(--color-warning-text);
+  font-weight: 800;
 }
 
 .receipt-panel {
