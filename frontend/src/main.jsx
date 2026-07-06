@@ -1003,6 +1003,7 @@ const localPreferenceKeys = [
   "alibooks-budget-revenue-target",
   "alibooks-budget-expense-limit",
   "alibooks-budget-reserve-percent",
+  "alibooks-month-close-selected-month",
   "alibooks-bookkeeping-filter",
   "alibooks-bookkeeping-search",
   "alibooks-bookkeeping-date-from",
@@ -1142,6 +1143,7 @@ function App() {
   const [budgetRevenueTarget, setBudgetRevenueTarget] = useState(() => localStorage.getItem("alibooks-budget-revenue-target") || "25000");
   const [budgetExpenseLimit, setBudgetExpenseLimit] = useState(() => localStorage.getItem("alibooks-budget-expense-limit") || "12000");
   const [budgetReservePercent, setBudgetReservePercent] = useState(() => localStorage.getItem("alibooks-budget-reserve-percent") || "30");
+  const [monthCloseSelectedMonth, setMonthCloseSelectedMonth] = useState(() => localStorage.getItem("alibooks-month-close-selected-month") || new Date().toISOString().slice(0, 7));
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1257,6 +1259,10 @@ function App() {
     localStorage.setItem("alibooks-budget-expense-limit", budgetExpenseLimit);
     localStorage.setItem("alibooks-budget-reserve-percent", budgetReservePercent);
   }, [budgetRevenueTarget, budgetExpenseLimit, budgetReservePercent]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
+  }, [monthCloseSelectedMonth]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -3816,6 +3822,33 @@ function App() {
     downloadLocalCsv("monthly-report.csv", rows);
   }
 
+  function downloadMonthlyCloseCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks manadsavslut"],
+      ["Manad", formatMonthLabel(monthCloseSelectedMonth, language)],
+      ["Period", `${monthlyCloseRange.from || "-"} - ${monthlyCloseRange.to || "-"}`],
+      ["Status", monthlyCloseStatusText],
+      ["Klarhet", `${monthlyCloseReadiness}%`],
+      [],
+      ["Nyckeltal", "Belopp"],
+      ["Intakter", monthlyCloseRow.revenue],
+      ["Kostnader", monthlyCloseRow.expenses],
+      ["Resultat", monthlyCloseRow.result],
+      ["Moms att betala", monthlyCloseRow.vatToPay],
+      ["Kassaforandring", monthlyCloseRow.cashChange],
+      ["Verifikationsrader", monthlyCloseRow.voucherCount],
+      [],
+      ["Kontroll", "Status", "Detalj"]
+    ];
+
+    monthlyCloseChecklist.forEach((item) => {
+      rows.push([item.title, item.status, item.detail]);
+    });
+
+    downloadLocalCsv(`monthly-close-${monthCloseSelectedMonth || "month"}.csv`, rows);
+  }
+
   function downloadCloseChecklistCsv() {
     setError("");
     const rows = [
@@ -4971,8 +5004,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Skatteplanen visar preliminara steg for moms, skattekonto, deklaration och arkivering. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. The Tax plan shows preliminary steps for VAT, tax account, declaration and archiving. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Manadsavslut visar vald manads nyckeltal, varningar och kontrollpunkter innan du exporterar. Skatteplanen visar preliminara steg for moms, skattekonto, deklaration och arkivering. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Vald manad ar ${formatMonthLabel(monthCloseSelectedMonth, language)} med ${monthlyCloseWarnings} varningar.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. Monthly close shows the selected month's metrics, warnings and checks before export. The Tax plan shows preliminary steps for VAT, tax account, declaration and archiving. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. The selected month is ${formatMonthLabel(monthCloseSelectedMonth, language)} with ${monthlyCloseWarnings} warnings.`, "reports");
     }
 
     if (normalizedQuestion.includes("handelse") || normalizedQuestion.includes("hant") || normalizedQuestion.includes("timeline") || normalizedQuestion.includes("event")) {
@@ -5025,6 +5058,11 @@ function App() {
       profitNet,
       monthlyReportMonths: monthlyReportRows.length,
       monthlyReportCashChange: monthlyReportCashChangeTotal,
+      monthCloseSelectedMonth,
+      monthCloseReadiness: monthlyCloseReadiness,
+      monthCloseWarnings: monthlyCloseWarnings,
+      monthCloseResult: monthlyCloseRow.result,
+      monthCloseVatToPay: monthlyCloseRow.vatToPay,
       vatPeriodFrom,
       vatPeriodTo,
       vatPeriodToPay,
@@ -5176,8 +5214,8 @@ function App() {
         ? ["Hur fungerar momsrapport?", "Vad ar utgaende moms?", "Vad ar ingaende moms?"]
         : ["How does VAT report work?", "What is output VAT?", "What is input VAT?"],
       reports: language === "sv"
-        ? ["Hur laser jag resultatrapport?", "Hur laser jag balansrapport?", "Hur exporterar jag rapport?"]
-        : ["How do I read profit and loss?", "How do I read balance report?", "How do I export a report?"],
+        ? ["Hur gor jag manadsavslut?", "Hur laser jag resultatrapport?", "Hur exporterar jag rapport?"]
+        : ["How do I do monthly close?", "How do I read profit and loss?", "How do I export a report?"],
       settings: language === "sv"
         ? ["Hur staller jag in SMTP?", "Hur staller jag in Stripe?", "Vad betyder periodlasning?"]
         : ["How do I set up SMTP?", "How do I set up Stripe?", "What is period locking?"]
@@ -5377,6 +5415,128 @@ function App() {
   const filteredJournalDebit = filteredJournalGroups.reduce((sum, group) => sum + group.debit, 0);
   const filteredJournalCredit = filteredJournalGroups.reduce((sum, group) => sum + group.credit, 0);
   const filteredJournalDifference = filteredJournalDebit - filteredJournalCredit;
+  const monthlyCloseRange = monthRangeFromKey(monthCloseSelectedMonth);
+  const monthlyCloseRow = monthlyReportRows.find((row) => row.monthKey === monthCloseSelectedMonth) || {
+    monthKey: monthCloseSelectedMonth,
+    revenue: 0,
+    expenses: 0,
+    result: 0,
+    outputVat: 0,
+    inputVat: 0,
+    vatToPay: 0,
+    cashIn: 0,
+    cashOut: 0,
+    cashChange: 0,
+    voucherCount: 0
+  };
+  const monthlyCloseInvoices = invoices.filter((item) => {
+    const invoiceDate = item.invoiceDate || String(item.createdAt || "").slice(0, 10);
+    return invoiceDate >= monthlyCloseRange.from && invoiceDate <= monthlyCloseRange.to;
+  });
+  const monthlyCloseOpenInvoices = monthlyCloseInvoices.filter((item) => invoiceRemainingAmount(item) > 0);
+  const monthlyCloseOverdueInvoices = monthlyCloseOpenInvoices.filter((item) => invoiceIsOverdue(item));
+  const monthlyCloseExpenses = expenses.filter((expense) => {
+    const expenseDateValue = expense.expenseDate || String(expense.createdAt || "").slice(0, 10);
+    return expenseDateValue >= monthlyCloseRange.from && expenseDateValue <= monthlyCloseRange.to;
+  });
+  const monthlyCloseMissingReceipts = monthlyCloseExpenses.filter((expense) => !expenseHasReceipt(expense));
+  const monthlyCloseJournalGroups = journalGroups.filter((group) => {
+    const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
+    return voucherDate >= monthlyCloseRange.from && voucherDate <= monthlyCloseRange.to;
+  });
+  const monthlyCloseUnbalancedGroups = monthlyCloseJournalGroups.filter((group) => (group.debit || 0) !== (group.credit || 0));
+  const monthlyCloseBankRows = bankImportRows.filter((row) => {
+    const rowDate = bankImportPaymentDate(row);
+    return rowDate >= monthlyCloseRange.from && rowDate <= monthlyCloseRange.to;
+  });
+  const monthlyCloseBankNeedsReview = monthlyCloseBankRows.filter((row) => ["expenseReview", "incomingReview"].includes(bankImportWorkflow(row).key));
+  const monthlyCloseBudgetRow = budgetRows.find((row) => row.monthKey === monthCloseSelectedMonth);
+  const monthlyCloseChecklist = [
+    {
+      key: "bookkeeping",
+      status: monthlyCloseUnbalancedGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Bokforing balanserar" : "Bookkeeping balances",
+      detail: monthlyCloseUnbalancedGroups.length === 0
+        ? `${monthlyCloseJournalGroups.length} ${language === "sv" ? "verifikat i manaden" : "vouchers in month"}`
+        : `${monthlyCloseUnbalancedGroups.length} ${language === "sv" ? "obalanserade verifikat" : "unbalanced vouchers"}`,
+      actionLabel: language === "sv" ? "Oppna bokforing" : "Open bookkeeping",
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingDateFrom(monthlyCloseRange.from);
+        setBookkeepingDateTo(monthlyCloseRange.to);
+        setBookkeepingSearch(monthlyCloseUnbalancedGroups[0]?.voucherNumber || "");
+      }
+    },
+    {
+      key: "receipts",
+      status: monthlyCloseMissingReceipts.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag finns" : "Receipts exist",
+      detail: monthlyCloseMissingReceipts.length === 0
+        ? `${monthlyCloseExpenses.length} ${language === "sv" ? "kostnader kontrollerade" : "expenses checked"}`
+        : `${monthlyCloseMissingReceipts.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      actionLabel: language === "sv" ? "Oppna underlag" : "Open receipts",
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+        setExpenseDateFrom(monthlyCloseRange.from);
+        setExpenseDateTo(monthlyCloseRange.to);
+      }
+    },
+    {
+      key: "invoices",
+      status: monthlyCloseOpenInvoices.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Fakturor avstamda" : "Invoices reconciled",
+      detail: monthlyCloseOpenInvoices.length === 0
+        ? `${monthlyCloseInvoices.length} ${language === "sv" ? "fakturor i manaden" : "invoices in month"}`
+        : `${monthlyCloseOpenInvoices.length} ${language === "sv" ? "oppna, varav" : "open, including"} ${monthlyCloseOverdueInvoices.length} ${language === "sv" ? "forfallna" : "overdue"}`,
+      actionLabel: language === "sv" ? "Oppna betalningar" : "Open payments",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("open");
+        setPaymentOverviewSearch("");
+      }
+    },
+    {
+      key: "bank",
+      status: monthlyCloseBankNeedsReview.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Bankimport kontrollerad" : "Bank import reviewed",
+      detail: monthlyCloseBankNeedsReview.length === 0
+        ? `${monthlyCloseBankRows.length} ${language === "sv" ? "bankrader i manaden" : "bank rows in month"}`
+        : `${monthlyCloseBankNeedsReview.length} ${language === "sv" ? "bankrader behover kontroll" : "bank rows need review"}`,
+      actionLabel: language === "sv" ? "Oppna bankimport" : "Open bank import",
+      action: () => {
+        setActiveView("payments");
+        setBankImportFilter(monthlyCloseBankNeedsReview.length > 0 ? "review" : "all");
+      }
+    },
+    {
+      key: "vat",
+      status: monthlyCloseRow.voucherCount > 0 ? "ok" : "info",
+      title: language === "sv" ? "Moms beraknad" : "VAT calculated",
+      detail: `${monthlyCloseRow.vatToPay} SEK ${language === "sv" ? "preliminar moms" : "preliminary VAT"}`,
+      actionLabel: language === "sv" ? "Oppna moms" : "Open VAT",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(monthlyCloseRange.from);
+        setVatPeriodTo(monthlyCloseRange.to);
+      }
+    },
+    {
+      key: "budget",
+      status: !monthlyCloseBudgetRow || monthlyCloseBudgetRow.status === "ok" ? "ok" : monthlyCloseBudgetRow.status === "risk" ? "warning" : "info",
+      title: language === "sv" ? "Budget jamford" : "Budget compared",
+      detail: monthlyCloseBudgetRow
+        ? `${monthlyCloseBudgetRow.statusLabel}: ${monthlyCloseBudgetRow.afterReserve} SEK ${language === "sv" ? "efter reserv" : "after reserve"}`
+        : (language === "sv" ? "Ingen budgetrad for manaden" : "No budget row for month"),
+      actionLabel: language === "sv" ? "Oppna budget" : "Open budget",
+      action: () => setActiveView("budget")
+    }
+  ];
+  const monthlyCloseWarnings = monthlyCloseChecklist.filter((item) => item.status === "warning").length;
+  const monthlyCloseReadiness = Math.round(((monthlyCloseChecklist.length - monthlyCloseWarnings) / monthlyCloseChecklist.length) * 100);
+  const monthlyCloseStatusText = monthlyCloseWarnings === 0
+    ? (language === "sv" ? "Manaden ser redo ut" : "Month looks ready")
+    : `${monthlyCloseWarnings} ${language === "sv" ? "saker att kontrollera" : "items to check"}`;
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -5549,6 +5709,17 @@ function App() {
         : "Checks duplicates, missing details, receipts, overdue invoices and unbalanced vouchers.",
       actionLabel: t.exportCsv,
       action: downloadDataQualityCsv
+    },
+    {
+      key: "monthly-close",
+      status: monthlyCloseWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Manadsavslut" : "Monthly close",
+      count: `${monthlyCloseReadiness}%`,
+      description: language === "sv"
+        ? "Exporterar vald manads kontrollpunkter, nyckeltal och status for snabb avstamning."
+        : "Exports the selected month's checks, metrics and status for quick reconciliation.",
+      actionLabel: t.exportCsv,
+      action: downloadMonthlyCloseCsv
     },
     {
       key: "journal",
@@ -10983,6 +11154,78 @@ function App() {
           ) : (
             <p className="empty-state">{language === "sv" ? "Ingen balansrapport laddad." : "No balance report loaded."}</p>
           )}
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Manadsavslut" : "Monthly close"}</h2>
+            <div className="button-row">
+              <span className={monthlyCloseWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {monthlyCloseReadiness}% {language === "sv" ? "klart" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadMonthlyCloseCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="monthly-close-panel">
+            <div className="monthly-close-hero">
+              <div>
+                <label>
+                  {language === "sv" ? "Valj manad" : "Choose month"}
+                  <input
+                    type="month"
+                    value={monthCloseSelectedMonth}
+                    onChange={(event) => setMonthCloseSelectedMonth(event.target.value)}
+                  />
+                </label>
+                <strong>{monthlyCloseStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? `Period ${monthlyCloseRange.from} - ${monthlyCloseRange.to}. Anvand detta som en snabb manadsstangning innan du exporterar rapporter eller laser period.`
+                    : `Period ${monthlyCloseRange.from} - ${monthlyCloseRange.to}. Use this as a quick monthly close before exporting reports or locking a period.`}
+                </p>
+              </div>
+              <div className="monthly-close-score">
+                <span>{language === "sv" ? "Klarhet" : "Readiness"}</span>
+                <strong>{monthlyCloseReadiness}%</strong>
+                <small>{monthlyCloseWarnings} {language === "sv" ? "varningar" : "warnings"}</small>
+              </div>
+            </div>
+
+            <div className="expense-summary-grid monthly-close-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Intakter" : "Revenue"}</span>
+                <strong>{monthlyCloseRow.revenue} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                <strong>{monthlyCloseRow.expenses} SEK</strong>
+              </article>
+              <article className={monthlyCloseRow.result >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Resultat" : "Result"}</span>
+                <strong>{monthlyCloseRow.result} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Moms" : "VAT"}</span>
+                <strong>{monthlyCloseRow.vatToPay} SEK</strong>
+              </article>
+              <article className={monthlyCloseRow.cashChange >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Kassa" : "Cash"}</span>
+                <strong>{monthlyCloseRow.cashChange} SEK</strong>
+              </article>
+            </div>
+
+            <div className="monthly-close-checklist">
+              {monthlyCloseChecklist.map((item) => (
+                <button type="button" className={`monthly-close-card ${item.status}`} key={item.key} onClick={item.action}>
+                  <span>{item.status === "ok" ? "OK" : item.status === "warning" ? (language === "sv" ? "Kontrollera" : "Check") : "Info"}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                  <em>{item.actionLabel}</em>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="section-heading report-subheading">
             <h2>{language === "sv" ? "Manadsrapport" : "Monthly report"}</h2>

@@ -3867,6 +3867,112 @@ button:focus-visible,
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.monthly-close-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d7e0ff;
+  border-radius: 8px;
+  background: #f9fbff;
+  box-shadow: var(--shadow-small);
+}
+
+.monthly-close-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(180px, 0.35fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.monthly-close-hero > div:first-child,
+.monthly-close-score {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.monthly-close-hero label {
+  display: grid;
+  max-width: 240px;
+  gap: 6px;
+  font-weight: 900;
+}
+
+.monthly-close-hero strong {
+  font-size: 24px;
+}
+
+.monthly-close-hero p,
+.monthly-close-score span,
+.monthly-close-score small,
+.monthly-close-card small,
+.monthly-close-card em {
+  margin: 0;
+  color: #5d6259;
+  line-height: 1.5;
+}
+
+.monthly-close-score {
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.monthly-close-score strong {
+  font-size: 38px;
+}
+
+.monthly-close-summary-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+}
+
+.monthly-close-checklist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.monthly-close-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #d8e2ee;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.monthly-close-card.ok {
+  border-left-color: #155c49;
+}
+
+.monthly-close-card.warning {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.monthly-close-card.info {
+  border-left-color: #155ee8;
+}
+
+.monthly-close-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(21, 94, 232, 0.1);
+}
+
+.monthly-close-card span,
+.monthly-close-card em {
+  font-weight: 900;
+  font-style: normal;
+}
+
 .monthly-report-table {
   margin-top: 14px;
 }
@@ -4432,6 +4538,9 @@ button:focus-visible,
   .budget-control-panel,
   .budget-hero,
   .budget-row,
+  .monthly-close-hero,
+  .monthly-close-summary-grid,
+  .monthly-close-checklist,
   .data-quality-summary,
   .data-quality-row,
   .tax-plan-panel,
