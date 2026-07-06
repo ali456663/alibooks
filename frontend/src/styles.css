@@ -163,6 +163,13 @@ textarea {
   box-shadow: var(--shadow-small);
 }
 
+.customer-360-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -179,9 +186,114 @@ textarea {
   color: #5d6259;
 }
 
+.customer-next-action {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #d8e2ee;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.customer-next-action.ok {
+  border-left-color: #155c49;
+  background: #f5fff8;
+}
+
+.customer-next-action.warning {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.customer-next-action.info {
+  border-left-color: #155ee8;
+}
+
+.customer-next-action span,
+.customer-next-action p {
+  margin: 0;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.customer-next-action strong {
+  font-size: 20px;
+}
+
 .customer-stats {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   margin: 18px 0;
+}
+
+.customer-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-insight-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.customer-insight-grid span,
+.customer-insight-grid small {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.customer-insight-grid strong {
+  font-size: 20px;
+}
+
+.customer-activity-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #d7e0ff;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.customer-activity-panel h3 {
+  margin: 0;
+}
+
+.customer-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.customer-activity-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+}
+
+.customer-activity-row:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(21, 94, 232, 0.1);
+}
+
+.customer-activity-row span,
+.customer-activity-row small {
+  color: #5d6259;
+  font-weight: 800;
 }
 
 .customer-balance {
@@ -4518,6 +4630,9 @@ button:focus-visible,
 
   .topbar,
   .stats,
+  .customer-360-hero,
+  .customer-insight-grid,
+  .customer-activity-row,
   .vat-report,
   .vat-reconciliation-panel,
   .invoice-summary-cards,

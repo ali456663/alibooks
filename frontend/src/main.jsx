@@ -3715,6 +3715,50 @@ function App() {
     await downloadCsv("/customers/export", "customers.csv", "Could not export customers.");
   }
 
+  function downloadSelectedCustomerCsv() {
+    if (!selectedCustomer) return;
+
+    setError("");
+    const rows = [
+      ["AliBooks kundkort"],
+      ["Kund", selectedCustomer.name || ""],
+      ["E-post", selectedCustomer.email || ""],
+      ["Personnummer", selectedCustomer.personalNumber || ""],
+      ["Telefon", selectedCustomer.phone || ""],
+      ["Adress", `${selectedCustomer.address || ""} ${selectedCustomer.postalCode || ""} ${selectedCustomer.city || ""}`.trim()],
+      ["Status", selectedCustomer.archived ? "Arkiverad" : "Aktiv"],
+      [],
+      ["Sammanfattning"],
+      ["Fakturor", selectedCustomerInvoices.length],
+      ["Betalda", selectedCustomerPaidInvoices.length],
+      ["Obetalda", selectedCustomerUnpaidInvoices.length],
+      ["Fakturerat", selectedCustomerTotal],
+      ["Betalt", selectedCustomerPaidTotal],
+      ["Kvar att betala", selectedCustomerOutstanding],
+      ["Forfallet", selectedCustomerOverdueAmount],
+      [],
+      ["Fakturor"],
+      ["Fakturanummer", "Datum", "Forfallodatum", "Status", "Total", "Betalt", "Kvar", "OCR", "Senaste paminnelse"]
+    ];
+
+    selectedCustomerInvoices.forEach((item) => {
+      const latestReminder = (item.reminders || []).slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+      rows.push([
+        invoiceNumber(item),
+        item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+        item.dueDate || "",
+        statusLabel(item.status, language),
+        invoiceTotalAmount(item),
+        invoicePaidAmount(item),
+        invoiceRemainingAmount(item),
+        item.ocrNumber || "",
+        latestReminder ? formatDateOnly(latestReminder.createdAt) : ""
+      ]);
+    });
+
+    downloadLocalCsv(`customer-${selectedCustomer.id || "selected"}.csv`, rows);
+  }
+
   function downloadCustomerLedgerCsv() {
     setError("");
     const rows = [
@@ -4978,6 +5022,12 @@ function App() {
         : `${answerIntro} For invoices: create or choose a customer, choose a service, create the invoice and send PDF/email. When an invoice is created it is booked automatically as 1510 debit, 3041 credit and 2611 credit. You currently have ${openInvoiceCount} open invoices and ${totalOutstanding} SEK outstanding.`, "invoices");
     }
 
+    if (normalizedQuestion.includes("kund") || normalizedQuestion.includes("customer") || normalizedQuestion.includes("personnummer")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For kunder: ga till Kunder. Kundkortet visar kontaktuppgifter, fakturor, betalt/obetalt, forfallet belopp, senaste aktivitet och nasta rekommenderade steg. Du har ${customers.length} kunder, ${activeCustomers.length} aktiva och ${customersWithOutstanding.length} med utestaende saldo.`
+        : `${answerIntro} For customers: go to Customers. The customer card shows contact details, invoices, paid/unpaid amounts, overdue balance, recent activity and the next recommended step. You have ${customers.length} customers, ${activeCustomers.length} active and ${customersWithOutstanding.length} with outstanding balance.`, "customers");
+    }
+
     if (normalizedQuestion.includes("avtal") || normalizedQuestion.includes("aterkommande") || normalizedQuestion.includes("contract") || normalizedQuestion.includes("recurring")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For avtalsfakturering: ga till Avtal, valj kund, tjanst, intervall och nasta fakturadatum. Nar avtalet ar redo klickar du Skapa faktura, sa skapas en vanlig faktura med automatisk bokforing och nasta datum flyttas fram. Du har ${activeContracts.length} aktiva avtal och ${dueContracts.length} redo att fakturera.`
@@ -5068,6 +5118,9 @@ function App() {
       vatPeriodToPay,
       expenses: expenses.length,
       customers: customers.length,
+      selectedCustomer: selectedCustomer?.name || "",
+      selectedCustomerOutstanding,
+      selectedCustomerOverdueAmount,
       contracts: contracts.length,
       events: auditTrailRows.length,
       openBankRows: activityOpenBankRows,
@@ -5329,6 +5382,91 @@ function App() {
   const selectedCustomerUnpaidInvoices = selectedCustomerInvoices.filter((item) => item.status !== "PAID");
   const selectedCustomerTotal = selectedCustomerInvoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
   const selectedCustomerOutstanding = selectedCustomer ? customerOutstandingAmount(selectedCustomer, invoices) : 0;
+  const selectedCustomerPaidTotal = selectedCustomerInvoices.reduce((sum, item) => sum + invoicePaidAmount(item), 0);
+  const selectedCustomerOverdueInvoices = selectedCustomerInvoices.filter((item) => invoiceIsOverdue(item));
+  const selectedCustomerOverdueAmount = selectedCustomerOverdueInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const selectedCustomerLatestInvoice = selectedCustomerInvoices
+    .slice()
+    .sort((first, second) => String(second.invoiceDate || second.createdAt || "").localeCompare(String(first.invoiceDate || first.createdAt || "")))[0] || null;
+  const selectedCustomerLastPayment = selectedCustomerInvoices
+    .flatMap((item) => (item.payments || []).map((payment) => ({
+      ...payment,
+      invoiceNumber: invoiceNumber(item),
+      customerName: item.customerName || item.customer?.name || ""
+    })))
+    .sort((first, second) => String(second.paymentDate || second.createdAt || "").localeCompare(String(first.paymentDate || first.createdAt || "")))[0] || null;
+  const selectedCustomerRecentActivity = selectedCustomerInvoices
+    .flatMap((item) => [
+      {
+        id: `invoice-${item.id}`,
+        date: item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+        title: language === "sv" ? "Faktura skapad" : "Invoice created",
+        detail: `${invoiceNumber(item)} - ${invoiceTotalAmount(item)} SEK`,
+        action: () => {
+          setActiveView("invoices");
+          setInvoiceSearch(invoiceNumber(item));
+        }
+      },
+      ...(item.payments || []).map((payment) => ({
+        id: `payment-${payment.id}`,
+        date: payment.paymentDate || String(payment.createdAt || "").slice(0, 10),
+        title: language === "sv" ? "Betalning registrerad" : "Payment registered",
+        detail: `${invoiceNumber(item)} - ${payment.amount || 0} SEK`,
+        action: () => {
+          setActiveView("payments");
+          setPaymentOverviewSearch(invoiceNumber(item));
+        }
+      })),
+      ...(item.reminders || []).map((reminder) => ({
+        id: `reminder-${reminder.id}`,
+        date: String(reminder.createdAt || "").slice(0, 10),
+        title: invoiceHistoryLabel(reminder, language),
+        detail: `${invoiceNumber(item)} - ${reminder.recipientEmail || ""}`,
+        action: () => {
+          setActiveView("invoices");
+          setInvoiceSearch(invoiceNumber(item));
+        }
+      }))
+    ])
+    .filter((activity) => activity.date)
+    .sort((first, second) => String(second.date || "").localeCompare(String(first.date || "")))
+    .slice(0, 6);
+  const selectedCustomerNextAction = !selectedCustomer
+    ? null
+    : selectedCustomerOverdueInvoices.length > 0
+      ? {
+        status: "warning",
+        title: language === "sv" ? "Forfallen betalning" : "Overdue payment",
+        detail: `${selectedCustomerOverdueInvoices.length} ${language === "sv" ? "fakturor" : "invoices"} - ${selectedCustomerOverdueAmount} SEK`,
+        label: language === "sv" ? "Oppna betalningar" : "Open payments",
+        action: () => {
+          setActiveView("payments");
+          setPaymentOverviewFilter("overdue");
+          setPaymentOverviewSearch(selectedCustomer.name || "");
+        }
+      }
+      : selectedCustomerOutstanding > 0
+        ? {
+          status: "info",
+          title: language === "sv" ? "Obetalda fakturor" : "Unpaid invoices",
+          detail: `${selectedCustomerOutstanding} SEK ${language === "sv" ? "kvar att betala" : "remaining"}`,
+          label: language === "sv" ? "Visa betalningar" : "View payments",
+          action: () => {
+            setActiveView("payments");
+            setPaymentOverviewFilter("open");
+            setPaymentOverviewSearch(selectedCustomer.name || "");
+          }
+        }
+        : {
+          status: "ok",
+          title: language === "sv" ? "Kunden ar avstamd" : "Customer reconciled",
+          detail: language === "sv" ? "Inga obetalda fakturor just nu." : "No unpaid invoices right now.",
+          label: language === "sv" ? "Skapa faktura" : "Create invoice",
+          action: () => {
+            setActiveView("invoices");
+            setSelectedCustomerId(String(selectedCustomer.id));
+          }
+        };
   const activeCustomers = customers.filter((customer) => !customer.archived);
   const archivedCustomers = customers.filter((customer) => customer.archived);
   const customersWithOutstanding = customers.filter((customer) => customerOutstandingAmount(customer, invoices) > 0);
@@ -7351,6 +7489,9 @@ function App() {
                   <h2>{selectedCustomer.name}</h2>
                   <div className="button-row">
                     <span className="status">{selectedCustomerInvoices.length} {t.invoices}</span>
+                    <button type="button" className="secondary-button" onClick={downloadSelectedCustomerCsv}>
+                      {language === "sv" ? "Exportera kundkort" : "Export customer card"}
+                    </button>
                     <button type="button" className="secondary-button" onClick={() => startEditCustomer(selectedCustomer)}>
                       {language === "sv" ? "Redigera" : "Edit"}
                     </button>
@@ -7373,13 +7514,25 @@ function App() {
                   </div>
                 </div>
 
-                <div className="detail-grid">
-                  <p><strong>{t.email}</strong><span>{selectedCustomer.email || "-"}</span></p>
-                  <p><strong>{t.personalNumber}</strong><span>{selectedCustomer.personalNumber || "-"}</span></p>
-                  <p><strong>{t.address}</strong><span>{selectedCustomer.address || "-"}</span></p>
-                  <p><strong>{t.postalCode}</strong><span>{selectedCustomer.postalCode || "-"}</span></p>
-                  <p><strong>{t.city}</strong><span>{selectedCustomer.city || "-"}</span></p>
-                  <p><strong>{t.phone}</strong><span>{selectedCustomer.phone || "-"}</span></p>
+                <div className="customer-360-hero">
+                  <div className="detail-grid">
+                    <p><strong>{t.email}</strong><span>{selectedCustomer.email || "-"}</span></p>
+                    <p><strong>{t.personalNumber}</strong><span>{selectedCustomer.personalNumber || "-"}</span></p>
+                    <p><strong>{t.address}</strong><span>{selectedCustomer.address || "-"}</span></p>
+                    <p><strong>{t.postalCode}</strong><span>{selectedCustomer.postalCode || "-"}</span></p>
+                    <p><strong>{t.city}</strong><span>{selectedCustomer.city || "-"}</span></p>
+                    <p><strong>{t.phone}</strong><span>{selectedCustomer.phone || "-"}</span></p>
+                  </div>
+                  {selectedCustomerNextAction && (
+                    <article className={`customer-next-action ${selectedCustomerNextAction.status}`}>
+                      <span>{language === "sv" ? "Nasta steg" : "Next step"}</span>
+                      <strong>{selectedCustomerNextAction.title}</strong>
+                      <p>{selectedCustomerNextAction.detail}</p>
+                      <button type="button" className="primary-small-button" onClick={selectedCustomerNextAction.action}>
+                        {selectedCustomerNextAction.label}
+                      </button>
+                    </article>
+                  )}
                 </div>
 
                 <div className="stats compact-stats customer-stats">
@@ -7403,7 +7556,58 @@ function App() {
                     <span>{t.total}</span>
                     <strong>{selectedCustomerTotal} SEK</strong>
                   </article>
+                  <article className={selectedCustomerOverdueAmount > 0 ? "unbalanced-summary" : "balanced-summary"}>
+                    <span>{language === "sv" ? "Forfallet" : "Overdue"}</span>
+                    <strong>{selectedCustomerOverdueAmount} SEK</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Betalt totalt" : "Paid total"}</span>
+                    <strong>{selectedCustomerPaidTotal} SEK</strong>
+                  </article>
                 </div>
+
+                <div className="customer-insight-grid">
+                  <article>
+                    <span>{language === "sv" ? "Senaste faktura" : "Latest invoice"}</span>
+                    <strong>{selectedCustomerLatestInvoice ? invoiceNumber(selectedCustomerLatestInvoice) : "-"}</strong>
+                    <small>
+                      {selectedCustomerLatestInvoice
+                        ? `${formatDateOnly(selectedCustomerLatestInvoice.invoiceDate || selectedCustomerLatestInvoice.createdAt)} - ${invoiceTotalAmount(selectedCustomerLatestInvoice)} SEK`
+                        : (language === "sv" ? "Ingen faktura annu" : "No invoice yet")}
+                    </small>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Senaste betalning" : "Latest payment"}</span>
+                    <strong>{selectedCustomerLastPayment ? `${selectedCustomerLastPayment.amount || 0} SEK` : "-"}</strong>
+                    <small>
+                      {selectedCustomerLastPayment
+                        ? `${formatDateOnly(selectedCustomerLastPayment.paymentDate || selectedCustomerLastPayment.createdAt)} - ${selectedCustomerLastPayment.invoiceNumber}`
+                        : (language === "sv" ? "Ingen betalning annu" : "No payment yet")}
+                    </small>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Betalningsgrad" : "Payment rate"}</span>
+                    <strong>{selectedCustomerTotal > 0 ? Math.round((selectedCustomerPaidTotal / selectedCustomerTotal) * 100) : 0}%</strong>
+                    <small>{selectedCustomerPaidTotal} / {selectedCustomerTotal} SEK</small>
+                  </article>
+                </div>
+
+                {selectedCustomerRecentActivity.length > 0 && (
+                  <div className="customer-activity-panel">
+                    <div className="section-heading">
+                      <h3>{language === "sv" ? "Senaste aktivitet" : "Recent activity"}</h3>
+                    </div>
+                    <div className="customer-activity-list">
+                      {selectedCustomerRecentActivity.map((activity) => (
+                        <button type="button" className="customer-activity-row" key={activity.id} onClick={activity.action}>
+                          <span>{formatDateOnly(activity.date)}</span>
+                          <strong>{activity.title}</strong>
+                          <small>{activity.detail}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {selectedCustomerInvoices.length > 0 && (
                   <div className="mini-list">
