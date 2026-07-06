@@ -45,6 +45,15 @@ public class AccountingController {
     return accountingService.createManualEntry(request);
   }
 
+  @PostMapping("/journal-entries/manual-multi")
+  public List<JournalEntry> createManualMultiLineJournalEntry(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody CreateManualMultiLineJournalEntryRequest request
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
+    return accountingService.createManualMultiLineEntry(request);
+  }
+
   @PostMapping("/journal-entries/stripe-website-sale")
   public List<JournalEntry> createStripeWebsiteSaleJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

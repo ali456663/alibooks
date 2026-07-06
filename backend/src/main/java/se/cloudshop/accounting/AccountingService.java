@@ -378,6 +378,59 @@ public class AccountingService {
   }
 
   @Transactional
+  public List<JournalEntry> createManualMultiLineEntry(CreateManualMultiLineJournalEntryRequest request) {
+    if (request.description() == null || request.description().isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Description is required.");
+    }
+
+    if (request.lines() == null || request.lines().size() < 2) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least two journal lines are required.");
+    }
+
+    int totalDebit = request.lines().stream().mapToInt(CreateManualJournalEntryLineRequest::debit).sum();
+    int totalCredit = request.lines().stream().mapToInt(CreateManualJournalEntryLineRequest::credit).sum();
+
+    if (totalDebit <= 0 || totalCredit <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debit and credit must be greater than zero.");
+    }
+
+    if (totalDebit != totalCredit) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher must balance debit and credit.");
+    }
+
+    LocalDate voucherDate = request.voucherDate() == null ? LocalDate.now() : request.voucherDate();
+    requireUnlockedAccountingDate(voucherDate);
+
+    String voucherNumber = voucherNumberService.nextVoucherNumber("M");
+    return request.lines().stream()
+        .filter(line -> line.debit() > 0 || line.credit() > 0)
+        .map(line -> {
+          if (line.accountNumber() == null || line.accountNumber().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Account is required.");
+          }
+
+          if (line.debit() < 0 || line.credit() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debit and credit cannot be negative.");
+          }
+
+          if (line.debit() > 0 && line.credit() > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A line cannot have both debit and credit.");
+          }
+
+          return journalEntryRepository.save(new JournalEntry(
+              null,
+              account(line.accountNumber()),
+              voucherNumber,
+              line.debit(),
+              line.credit(),
+              request.description(),
+              voucherDate
+          ));
+        })
+        .toList();
+  }
+
+  @Transactional
   public List<JournalEntry> createCorrectionEntry(String voucherNumber, CreateCorrectionJournalEntryRequest request) {
     if (voucherNumber == null || voucherNumber.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher number is required.");

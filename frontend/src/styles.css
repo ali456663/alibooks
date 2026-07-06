@@ -2231,6 +2231,120 @@ button:focus-visible,
   margin: 0;
 }
 
+.payroll-warning-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #f2d27b;
+  border-left: 5px solid #f0ad00;
+  border-radius: 8px;
+  background: #fff8e3;
+}
+
+.payroll-warning-panel p {
+  margin: 6px 0 0;
+  color: #5d4b12;
+}
+
+.payroll-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.payroll-summary-grid article,
+.payroll-preview-card,
+.payroll-booking-panel,
+.payroll-draft-card {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.payroll-summary-grid span,
+.payroll-preview-card span {
+  display: block;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.payroll-summary-grid strong,
+.payroll-preview-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+}
+
+.payroll-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.payroll-preview-card p {
+  margin: 5px 0 0;
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.payroll-booking-panel {
+  margin: 16px 0;
+}
+
+.payroll-booking-panel h3 {
+  margin-top: 0;
+}
+
+.payroll-booking-grid {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(80px, 1fr) minmax(120px, 1fr);
+  gap: 8px;
+}
+
+.payroll-booking-grid span,
+.payroll-booking-grid strong {
+  padding: 8px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
+.payroll-draft-list {
+  display: grid;
+  gap: 12px;
+}
+
+.payroll-draft-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border-left: 5px solid #f0ad00;
+}
+
+.payroll-draft-card.booked {
+  border-left-color: var(--color-success-text);
+  background: #f7fcf9;
+}
+
+.payroll-draft-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-draft-card span {
+  color: #5d6259;
+}
+
+.payroll-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .invoice-filter-panel {
   display: flex;
   flex-wrap: wrap;
@@ -4770,7 +4884,9 @@ button:focus-visible,
   .stats,
   .customer-stats,
   .invoice-summary-cards,
-  .expense-summary-grid {
+  .expense-summary-grid,
+  .payroll-summary-grid,
+  .payroll-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -4861,6 +4977,9 @@ button:focus-visible,
   .budget-control-panel,
   .budget-hero,
   .budget-row,
+  .payroll-summary-grid,
+  .payroll-form,
+  .payroll-draft-card,
   .monthly-close-hero,
   .monthly-close-summary-grid,
   .monthly-close-checklist,

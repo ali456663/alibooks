@@ -27,6 +27,7 @@ const copy = {
     serviceAdmin: "Service admin",
     cashflow: "Cashflow",
     budget: "Budget & goals",
+    payroll: "Payroll",
     serviceName: "Service name",
     serviceDescription: "Service description",
     ordinaryPrice: "Ordinary price",
@@ -159,6 +160,7 @@ const copy = {
     serviceAdmin: "Tjansteadministration",
     cashflow: "Likviditet",
     budget: "Budget & mal",
+    payroll: "Lon",
     serviceName: "Tjanstens namn",
     serviceDescription: "Beskrivning",
     ordinaryPrice: "Ordinarie pris",
@@ -958,6 +960,7 @@ const viewKeys = [
   "activities",
   "cashflow",
   "budget",
+  "payroll",
   "payments",
   "uploaded",
   "bookkeeping",
@@ -1003,6 +1006,10 @@ const localPreferenceKeys = [
   "alibooks-budget-revenue-target",
   "alibooks-budget-expense-limit",
   "alibooks-budget-reserve-percent",
+  "alibooks-payroll-drafts",
+  "alibooks-payroll-tax-rate",
+  "alibooks-payroll-employer-rate",
+  "alibooks-payroll-salary-account",
   "alibooks-month-close-selected-month",
   "alibooks-bookkeeping-filter",
   "alibooks-bookkeeping-search",
@@ -1154,6 +1161,22 @@ function App() {
   const [budgetRevenueTarget, setBudgetRevenueTarget] = useState(() => localStorage.getItem("alibooks-budget-revenue-target") || "25000");
   const [budgetExpenseLimit, setBudgetExpenseLimit] = useState(() => localStorage.getItem("alibooks-budget-expense-limit") || "12000");
   const [budgetReservePercent, setBudgetReservePercent] = useState(() => localStorage.getItem("alibooks-budget-reserve-percent") || "30");
+  const [payrollEmployeeName, setPayrollEmployeeName] = useState("");
+  const [payrollEmployeePersonalNumber, setPayrollEmployeePersonalNumber] = useState("");
+  const [payrollPeriod, setPayrollPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [payrollGrossSalary, setPayrollGrossSalary] = useState("");
+  const [payrollTaxRate, setPayrollTaxRate] = useState(() => localStorage.getItem("alibooks-payroll-tax-rate") || "30");
+  const [payrollEmployerRate, setPayrollEmployerRate] = useState(() => localStorage.getItem("alibooks-payroll-employer-rate") || "31.42");
+  const [payrollSalaryAccount, setPayrollSalaryAccount] = useState(() => localStorage.getItem("alibooks-payroll-salary-account") || "7010");
+  const [payrollMessage, setPayrollMessage] = useState("");
+  const [payrollDrafts, setPayrollDrafts] = useState(() => {
+    try {
+      const savedDrafts = JSON.parse(localStorage.getItem("alibooks-payroll-drafts") || "[]");
+      return Array.isArray(savedDrafts) ? savedDrafts : [];
+    } catch {
+      return [];
+    }
+  });
   const [monthCloseSelectedMonth, setMonthCloseSelectedMonth] = useState(() => localStorage.getItem("alibooks-month-close-selected-month") || new Date().toISOString().slice(0, 7));
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
@@ -1270,6 +1293,13 @@ function App() {
     localStorage.setItem("alibooks-budget-expense-limit", budgetExpenseLimit);
     localStorage.setItem("alibooks-budget-reserve-percent", budgetReservePercent);
   }, [budgetRevenueTarget, budgetExpenseLimit, budgetReservePercent]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-payroll-drafts", JSON.stringify(payrollDrafts));
+    localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
+    localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
+    localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
+  }, [payrollDrafts, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
@@ -2108,6 +2138,11 @@ function App() {
     setBudgetRevenueTarget("25000");
     setBudgetExpenseLimit("12000");
     setBudgetReservePercent("30");
+    setPayrollDrafts([]);
+    setPayrollTaxRate("30");
+    setPayrollEmployerRate("31.42");
+    setPayrollSalaryAccount("7010");
+    setPayrollMessage("");
     setSelectedCustomerId(customers[0]?.id ? String(customers[0].id) : "");
     setSelectedServiceId(services[0]?.id ? String(services[0].id) : "");
     setInvoiceQuantity("1");
@@ -4581,6 +4616,155 @@ function App() {
     downloadLocalCsv("budget-mal.csv", rows);
   }
 
+  function payrollCalculationFromValues(grossSalary, taxRate, employerRate) {
+    const gross = Math.round(Number(grossSalary || 0));
+    const tax = Math.max(0, Number(taxRate || 0));
+    const employer = Math.max(0, Number(employerRate || 0));
+    const withheldTax = Math.round(gross * tax / 100);
+    const employerFee = Math.round(gross * employer / 100);
+    const netPay = Math.max(0, gross - withheldTax);
+
+    return {
+      gross,
+      withheldTax,
+      employerFee,
+      netPay,
+      totalCost: gross + employerFee
+    };
+  }
+
+  function payrollDraftCalculation(draft) {
+    return payrollCalculationFromValues(draft.grossSalary, draft.taxRate, draft.employerRate);
+  }
+
+  function currentPayrollCalculation() {
+    return payrollCalculationFromValues(payrollGrossSalary, payrollTaxRate, payrollEmployerRate);
+  }
+
+  function handleSavePayrollDraft(event) {
+    event.preventDefault();
+    setError("");
+
+    const calculation = currentPayrollCalculation();
+
+    if (!payrollEmployeeName.trim()) {
+      setError(language === "sv" ? "Namn pa anstalld saknas." : "Employee name is missing.");
+      return;
+    }
+
+    if (!payrollPeriod) {
+      setError(language === "sv" ? "Loneperiod saknas." : "Payroll period is missing.");
+      return;
+    }
+
+    if (calculation.gross <= 0) {
+      setError(language === "sv" ? "Bruttolon maste vara storre an 0." : "Gross salary must be greater than 0.");
+      return;
+    }
+
+    const draft = {
+      id: Date.now(),
+      employeeName: payrollEmployeeName.trim(),
+      personalNumber: payrollEmployeePersonalNumber.trim(),
+      period: payrollPeriod,
+      grossSalary: calculation.gross,
+      taxRate: Number(payrollTaxRate || 0),
+      employerRate: Number(payrollEmployerRate || 0),
+      salaryAccount: payrollSalaryAccount || "7010",
+      status: "draft",
+      createdAt: new Date().toISOString()
+    };
+
+    setPayrollDrafts((current) => [draft, ...current]);
+    setPayrollEmployeeName("");
+    setPayrollEmployeePersonalNumber("");
+    setPayrollGrossSalary("");
+    setPayrollMessage(language === "sv" ? "Loneutkast sparat." : "Payroll draft saved.");
+  }
+
+  function deletePayrollDraft(draftId) {
+    setPayrollDrafts((current) => current.filter((draft) => draft.id !== draftId));
+  }
+
+  async function bookPayrollDraft(draft) {
+    setError("");
+    const calculation = payrollDraftCalculation(draft);
+    const voucherDate = `${draft.period || new Date().toISOString().slice(0, 7)}-25`;
+
+    if (isAccountingDateLocked(voucherDate)) {
+      setError(lockedAccountingMessage(voucherDate));
+      return;
+    }
+
+    const lines = [
+      { accountNumber: draft.salaryAccount || "7010", debit: calculation.gross, credit: 0 },
+      { accountNumber: "7510", debit: calculation.employerFee, credit: 0 },
+      { accountNumber: "2710", debit: 0, credit: calculation.withheldTax },
+      { accountNumber: "2731", debit: 0, credit: calculation.employerFee },
+      { accountNumber: "1930", debit: 0, credit: calculation.netPay }
+    ].filter((line) => line.debit > 0 || line.credit > 0);
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        voucherDate,
+        description: `Lon ${draft.employeeName} ${draft.period}`,
+        lines
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora loneutkast." : "Could not book payroll draft."));
+      return;
+    }
+
+    const voucherNumber = data?.[0]?.voucherNumber || "";
+    setPayrollDrafts((current) => current.map((item) => (
+      item.id === draft.id ? { ...item, status: "booked", voucherNumber } : item
+    )));
+    setPayrollMessage(language === "sv"
+      ? `Lonen bokfordes${voucherNumber ? ` som ${voucherNumber}` : ""}.`
+      : `Payroll was booked${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
+    loadJournalEntries();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  function downloadPayrollCsv() {
+    setError("");
+    const rows = [
+      ["Lon / Payroll"],
+      ["Preliminar skatt %", payrollTaxRate],
+      ["Arbetsgivaravgift %", payrollEmployerRate],
+      [],
+      ["Period", "Anstalld", "Personnummer", "Brutto", "Preliminar skatt", "Nettolon", "Arbetsgivaravgift", "Total kostnad", "Status", "Verifikat"]
+    ];
+
+    payrollDrafts.forEach((draft) => {
+      const calculation = payrollDraftCalculation(draft);
+      rows.push([
+        draft.period,
+        draft.employeeName,
+        draft.personalNumber || "",
+        calculation.gross,
+        calculation.withheldTax,
+        calculation.netPay,
+        calculation.employerFee,
+        calculation.totalCost,
+        draft.status,
+        draft.voucherNumber || ""
+      ]);
+    });
+
+    downloadLocalCsv("loner.csv", rows);
+  }
+
   function downloadDataQualityCsv() {
     setError("");
     const rows = [
@@ -4643,6 +4827,9 @@ function App() {
         vatToPay: vatReport?.vatToPay || 0,
         selectedPeriodVatToPay: vatPeriodToPay,
         totalOutstanding,
+        payrollDrafts: payrollDrafts.length,
+        payrollBooked: payrollDraftTotals.booked,
+        payrollTotalCost: payrollDraftTotals.totalCost,
         auditEvents: auditTrailRows.length,
         dataQualityIssues: dataQualityIssues.length,
         dataQualityCritical: dataQualityCriticalCount,
@@ -4654,6 +4841,12 @@ function App() {
       expenses,
       accounts,
       journalEntries,
+      payroll: {
+        drafts: payrollDrafts,
+        taxRate: payrollTaxRate,
+        employerRate: payrollEmployerRate,
+        salaryAccount: payrollSalaryAccount
+      },
       reports: {
         profitAndLoss,
         balanceReport,
@@ -5465,6 +5658,17 @@ function App() {
   const budgetAfterReserveTotal = budgetRows.reduce((sum, row) => sum + row.afterReserve, 0);
   const budgetRiskMonths = budgetRows.filter((row) => row.status === "risk").length;
   const budgetWatchMonths = budgetRows.filter((row) => row.status === "watch").length;
+  const payrollCurrentCalculation = currentPayrollCalculation();
+  const payrollDraftTotals = payrollDrafts.reduce((totals, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    totals.gross += calculation.gross;
+    totals.tax += calculation.withheldTax;
+    totals.net += calculation.netPay;
+    totals.employerFees += calculation.employerFee;
+    totals.totalCost += calculation.totalCost;
+    if (draft.status === "booked") totals.booked += 1;
+    return totals;
+  }, { gross: 0, tax: 0, net: 0, employerFees: 0, totalCost: 0, booked: 0 });
 
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
@@ -5538,6 +5742,12 @@ function App() {
         : `${answerIntro} For budget: go to Budget & goals. Set revenue target, expense limit and reserve percentage. AliBooks compares each month against plan and shows whether you are on track, should watch, or have risk. The latest period shows ${budgetCurrentRow?.revenue || 0} SEK revenue, ${budgetCurrentRow?.expenses || 0} SEK expenses and ${budgetCurrentRow?.afterReserve || 0} SEK after reserve.`, "budget");
     }
 
+    if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lÃ¶n") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For lon: ga till Lon. Dar kan du skapa loneutkast med bruttolon, preliminar skatt och arbetsgivaravgift. Nar utkastet bokfors skapas ett flerradigt verifikat for lon, personalskatt, nettoutbetalning och arbetsgivaravgift. Kontrollera alltid exakta skatter innan riktig utbetalning.`
+        : `${answerIntro} For payroll: go to Payroll. Create a payroll draft with gross salary, preliminary tax and employer contribution. When booked, AliBooks creates a multi-line voucher for salary, tax withholding, net pay and employer contribution. Always verify exact taxes before real payment.`, "payroll");
+    }
+
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. I Rapporter finns aven Skatteplanen med preliminara kontrollpunkter for moms, skattekonto, deklaration och arkivering. Vald period visar ${vatPeriodToPay} SEK och skatteplanen har ${taxPlanWarnings} varningar. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
@@ -5592,6 +5802,9 @@ function App() {
       budgetRevenueTarget: budgetMonthlyRevenueTarget,
       budgetExpenseLimit: budgetMonthlyExpenseLimit,
       budgetAfterReserve: budgetCurrentRow?.afterReserve || 0,
+      payrollDrafts: payrollDrafts.length,
+      payrollBooked: payrollDraftTotals.booked,
+      payrollTotalCost: payrollDraftTotals.totalCost,
       sieExportStatus: sieExportStatusText,
       sieExportPeriod: sieExportPeriodLabel,
       sieExportVouchers: filteredJournalGroups.length,
@@ -5669,6 +5882,7 @@ function App() {
       activities: t.activities,
       cashflow: t.cashflow,
       budget: t.budget,
+      payroll: t.payroll,
       reports: t.reports,
       vat: t.vatReport,
       payments: t.payments,
@@ -5716,6 +5930,9 @@ function App() {
       budget: language === "sv"
         ? ["Ligger jag pa budget?", "Vad betyder reserv?", "Hur justerar jag mina mal?"]
         : ["Am I on budget?", "What does reserve mean?", "How do I adjust my goals?"],
+      payroll: language === "sv"
+        ? ["Hur skapar jag loneutkast?", "Hur bokfors lon?", "Vad betyder arbetsgivaravgift?"]
+        : ["How do I create payroll draft?", "How is payroll booked?", "What is employer contribution?"],
       uploaded: language === "sv"
         ? ["Hur laddar jag upp underlag?", "Vilka kvitton maste sparas?", "Hur kopplas underlag till kostnad?"]
         : ["How do I upload receipts?", "Which receipts must be kept?", "How are receipts linked to expenses?"],
@@ -7178,6 +7395,7 @@ function App() {
     if (activeView === "activities") return t.activities;
     if (activeView === "cashflow") return t.cashflow;
     if (activeView === "budget") return t.budget;
+    if (activeView === "payroll") return t.payroll;
     if (activeView === "payments") return t.payments;
     if (activeView === "uploaded") return t.uploaded;
     if (activeView === "bookkeeping") return t.bookkeeping;
@@ -7249,6 +7467,7 @@ function App() {
           {navButton("activities", t.activities)}
           {navButton("cashflow", t.cashflow)}
           {navButton("budget", t.budget)}
+          {navButton("payroll", t.payroll)}
           {navButton("payments", t.payments)}
           {navButton("uploaded", t.uploaded)}
           {navButton("bookkeeping", t.bookkeeping)}
@@ -8830,6 +9049,183 @@ function App() {
                 );
               })}
             </div>
+          </section>
+        )}
+
+        {activeView === "payroll" && (
+          <section className="orders-section payroll-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.payroll}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "Skapa loneutkast, rakna nettolon och bokfor lonen som ett flerradigt verifikat. Kontrollera alltid skattetabell och arbetsgivaravgifter innan riktig utbetalning."
+                    : "Create payroll drafts, calculate net pay and book payroll as a multi-line voucher. Always verify tax table and employer contributions before real payment."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className={payrollDraftTotals.booked === payrollDrafts.length && payrollDrafts.length > 0 ? "status success-status" : "status warning-status"}>
+                  {payrollDraftTotals.booked}/{payrollDrafts.length} {language === "sv" ? "bokforda" : "booked"}
+                </span>
+                <button type="button" className="secondary-button" onClick={downloadPayrollCsv} disabled={payrollDrafts.length === 0}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="payroll-warning-panel">
+              <strong>{language === "sv" ? "Viktigt innan riktig lon" : "Important before real payroll"}</strong>
+              <p>
+                {language === "sv"
+                  ? "Detta ar ett arbetsverktyg. Preliminar skatt och arbetsgivaravgift ar redigerbara och maste kontrolleras mot aktuell skattetabell, avtal och Skatteverkets uppgifter."
+                  : "This is a working tool. Preliminary tax and employer contribution are editable and must be checked against the current tax table, agreement and tax authority information."}
+              </p>
+            </div>
+
+            <div className="payroll-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Brutto totalt" : "Total gross"}</span>
+                <strong>{payrollDraftTotals.gross} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Preliminar skatt" : "Preliminary tax"}</span>
+                <strong>{payrollDraftTotals.tax} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Nettolon" : "Net pay"}</span>
+                <strong>{payrollDraftTotals.net} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Arbetsgivaravgift" : "Employer contribution"}</span>
+                <strong>{payrollDraftTotals.employerFees} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Total lonekostnad" : "Total payroll cost"}</span>
+                <strong>{payrollDraftTotals.totalCost} SEK</strong>
+              </article>
+            </div>
+
+            <form className="form payroll-form" onSubmit={handleSavePayrollDraft}>
+              <label>
+                {language === "sv" ? "Anstalld" : "Employee"}
+                <input
+                  value={payrollEmployeeName}
+                  onChange={(event) => setPayrollEmployeeName(event.target.value)}
+                  placeholder={language === "sv" ? "Namn pa anstalld" : "Employee name"}
+                />
+              </label>
+              <label>
+                {t.personalNumber}
+                <input
+                  value={payrollEmployeePersonalNumber}
+                  onChange={(event) => setPayrollEmployeePersonalNumber(event.target.value)}
+                  placeholder="YYYYMMDD-XXXX"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Period" : "Period"}
+                <input type="month" value={payrollPeriod} onChange={(event) => setPayrollPeriod(event.target.value)} />
+              </label>
+              <label>
+                {language === "sv" ? "Bruttolon" : "Gross salary"}
+                <input
+                  type="number"
+                  min="0"
+                  value={payrollGrossSalary}
+                  onChange={(event) => setPayrollGrossSalary(event.target.value)}
+                  placeholder="30000"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Preliminar skatt %" : "Preliminary tax %"}
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  step="0.01"
+                  value={payrollTaxRate}
+                  onChange={(event) => setPayrollTaxRate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Arbetsgivaravgift %" : "Employer contribution %"}
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  step="0.01"
+                  value={payrollEmployerRate}
+                  onChange={(event) => setPayrollEmployerRate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Lonekonto" : "Salary account"}
+                <select value={payrollSalaryAccount} onChange={(event) => setPayrollSalaryAccount(event.target.value)}>
+                  <option value="7010">7010 Lon till anstallda</option>
+                  <option value="7210">7210 Lon till tjansteman</option>
+                </select>
+              </label>
+              <div className="payroll-preview-card">
+                <span>{language === "sv" ? "Forhandsrakning" : "Preview"}</span>
+                <strong>{payrollCurrentCalculation.netPay} SEK {language === "sv" ? "netto" : "net"}</strong>
+                <p>{language === "sv" ? "Skatt" : "Tax"}: {payrollCurrentCalculation.withheldTax} SEK</p>
+                <p>{language === "sv" ? "Arbetsgivaravgift" : "Employer contribution"}: {payrollCurrentCalculation.employerFee} SEK</p>
+                <p>{language === "sv" ? "Total kostnad" : "Total cost"}: {payrollCurrentCalculation.totalCost} SEK</p>
+              </div>
+              <button type="submit" disabled={!token}>{language === "sv" ? "Spara loneutkast" : "Save payroll draft"}</button>
+            </form>
+
+            {payrollMessage && <p className="message success">{payrollMessage}</p>}
+
+            <div className="payroll-booking-panel">
+              <h3>{language === "sv" ? "Bokforingsforslag" : "Bookkeeping proposal"}</h3>
+              <div className="payroll-booking-grid">
+                <span>{payrollSalaryAccount}</span><span>Debet</span><strong>{payrollCurrentCalculation.gross} SEK</strong>
+                <span>7510</span><span>Debet</span><strong>{payrollCurrentCalculation.employerFee} SEK</strong>
+                <span>2710</span><span>Kredit</span><strong>{payrollCurrentCalculation.withheldTax} SEK</strong>
+                <span>2731</span><span>Kredit</span><strong>{payrollCurrentCalculation.employerFee} SEK</strong>
+                <span>1930</span><span>Kredit</span><strong>{payrollCurrentCalculation.netPay} SEK</strong>
+              </div>
+            </div>
+
+            {payrollDrafts.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga loneutkast annu." : "No payroll drafts yet."}</p>
+            ) : (
+              <div className="payroll-draft-list">
+                {payrollDrafts.map((draft) => {
+                  const calculation = payrollDraftCalculation(draft);
+
+                  return (
+                    <article className={draft.status === "booked" ? "payroll-draft-card booked" : "payroll-draft-card"} key={draft.id}>
+                      <div>
+                        <strong>{draft.employeeName}</strong>
+                        <span>{draft.period} - {draft.personalNumber || "-"}</span>
+                        <span>{language === "sv" ? "Brutto" : "Gross"}: {calculation.gross} SEK</span>
+                        <span>{language === "sv" ? "Netto" : "Net"}: {calculation.netPay} SEK</span>
+                        <span>{language === "sv" ? "Total kostnad" : "Total cost"}: {calculation.totalCost} SEK</span>
+                        {draft.voucherNumber && <span>{t.voucher}: {draft.voucherNumber}</span>}
+                      </div>
+                      <div className="payroll-card-actions">
+                        <span className={draft.status === "booked" ? "status success-status" : "status warning-status"}>
+                          {draft.status === "booked" ? (language === "sv" ? "Bokford" : "Booked") : (language === "sv" ? "Utkast" : "Draft")}
+                        </span>
+                        <button
+                          type="button"
+                          className="primary-small-button"
+                          onClick={() => bookPayrollDraft(draft)}
+                          disabled={!token || draft.status === "booked"}
+                        >
+                          {language === "sv" ? "Bokfor lon" : "Book payroll"}
+                        </button>
+                        <button type="button" className="danger-button soft" onClick={() => deletePayrollDraft(draft.id)}>
+                          {language === "sv" ? "Ta bort" : "Remove"}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
