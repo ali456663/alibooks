@@ -2247,7 +2247,7 @@ button:focus-visible,
 
 .payroll-summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin: 16px 0;
 }
@@ -2255,6 +2255,8 @@ button:focus-visible,
 .payroll-summary-grid article,
 .payroll-preview-card,
 .payroll-booking-panel,
+.payroll-employee-panel,
+.payroll-employee-card,
 .payroll-draft-card {
   padding: 16px;
   border: 1px solid var(--color-border);
@@ -2292,6 +2294,33 @@ button:focus-visible,
 
 .payroll-booking-panel {
   margin: 16px 0;
+}
+
+.payroll-employee-panel {
+  margin: 16px 0;
+  background: #f9fbff;
+}
+
+.payroll-employee-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payroll-employee-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  background: #ffffff;
+}
+
+.payroll-employee-card div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-employee-card span {
+  color: #5d6259;
 }
 
 .payroll-booking-panel h3 {
@@ -4979,6 +5008,7 @@ button:focus-visible,
   .budget-row,
   .payroll-summary-grid,
   .payroll-form,
+  .payroll-employee-card,
   .payroll-draft-card,
   .monthly-close-hero,
   .monthly-close-summary-grid,
