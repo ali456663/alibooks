@@ -3348,6 +3348,115 @@ function App() {
     downloadLocalCsv(`ledger-${bookkeepingAccountSearch}.csv`, rows);
   }
 
+  function sieString(value) {
+    return `"${String(value || "")
+      .replaceAll("\\", "/")
+      .replaceAll("\"", "'")
+      .replace(/\r?\n/g, " ")
+      .trim()}"`;
+  }
+
+  function sieDate(value) {
+    const raw = String(value || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return raw.replaceAll("-", "");
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return dateInputString(parsed).replaceAll("-", "");
+    }
+
+    return todayInput.replaceAll("-", "");
+  }
+
+  function sieAmount(value) {
+    return Number(value || 0).toFixed(2);
+  }
+
+  function downloadSieExport() {
+    setError("");
+
+    if (filteredJournalGroups.length === 0) {
+      setError(language === "sv" ? "Det finns inga verifikationer att exportera." : "There are no vouchers to export.");
+      return;
+    }
+
+    if (filteredJournalDifference !== 0) {
+      setError(language === "sv"
+        ? "SIE-export stoppad: valda verifikationer balanserar inte debet och kredit."
+        : "SIE export stopped: selected vouchers do not balance debit and credit.");
+      return;
+    }
+
+    const sortedGroupsForSie = [...filteredJournalGroups]
+      .sort((first, second) => String(first.voucherDate || first.createdAt || "").localeCompare(String(second.voucherDate || second.createdAt || "")));
+    const voucherDates = sortedGroupsForSie
+      .map((group) => String(group.voucherDate || group.createdAt || "").slice(0, 10))
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      .sort();
+    const periodStart = bookkeepingDateFrom || voucherDates[0] || `${todayInput.slice(0, 4)}-01-01`;
+    const periodEnd = bookkeepingDateTo || voucherDates[voucherDates.length - 1] || `${todayInput.slice(0, 4)}-12-31`;
+    const accountMap = new Map();
+    const organizationNumber = settings?.organizationNumber || settings?.orgNumber || "";
+
+    accounts.forEach((account) => {
+      if (account.number) {
+        accountMap.set(String(account.number), account.name || "");
+      }
+    });
+
+    sortedGroupsForSie.forEach((group) => {
+      group.rows.forEach((entry) => {
+        if (entry.accountNumber && !accountMap.has(String(entry.accountNumber))) {
+          accountMap.set(String(entry.accountNumber), entry.accountName || "");
+        }
+      });
+    });
+
+    const lines = [
+      "#FLAGGA 0",
+      `#PROGRAM ${sieString("AliBooks")} ${sieString("0.1")}`,
+      "#SIETYP 4",
+      "#FORMAT PC8",
+      `#GEN ${sieDate(todayInput)}`,
+      `#FNAMN ${sieString(settings?.companyName || "AliBooks")}`,
+      `#RAR 0 ${sieDate(periodStart)} ${sieDate(periodEnd)}`,
+      ""
+    ];
+
+    if (organizationNumber) {
+      lines.splice(6, 0, `#ORGNR ${sieString(organizationNumber)}`);
+    }
+
+    Array.from(accountMap.entries())
+      .sort(([first], [second]) => first.localeCompare(second, "sv-SE", { numeric: true }))
+      .forEach(([number, name]) => {
+        lines.push(`#KONTO ${number} ${sieString(name || number)}`);
+      });
+
+    lines.push("");
+
+    sortedGroupsForSie.forEach((group) => {
+      const voucherDate = sieDate(group.voucherDate || group.createdAt);
+      const voucherText = group.correctionOfVoucherNumber
+        ? `${group.description || group.voucherNumber || ""} (rattelse av ${group.correctionOfVoucherNumber})`
+        : group.description || group.voucherNumber || "";
+
+      lines.push(`#VER ${sieString("A")} ${sieString(group.voucherNumber || "Utan verifikat")} ${voucherDate} ${sieString(voucherText)}`);
+      lines.push("{");
+      group.rows.forEach((entry) => {
+        const amount = (entry.debit || 0) - (entry.credit || 0);
+        lines.push(`  #TRANS ${entry.accountNumber || "0000"} {} ${sieAmount(amount)} ${sieString(entry.description || group.description || "")}`);
+      });
+      lines.push("}");
+      lines.push("");
+    });
+
+    const safePeriod = `${periodStart || "start"}_${periodEnd || "slut"}`.replaceAll("-", "");
+    downloadLocalText(`alibooks-sie-${safePeriod}.se`, lines.join("\r\n"), "text/plain;charset=cp437");
+  }
+
   async function downloadCsv(path, filename, fallbackMessage) {
     const response = await fetch(`${apiUrl}${path}`, {
       headers: authHeaders()
@@ -3376,6 +3485,18 @@ function App() {
       return `"${text.replaceAll("\"", "\"\"")}"`;
     }).join(";")).join("\r\n");
     const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadLocalText(filename, text, type = "text/plain;charset=utf-8") {
+    const blob = new Blob([text], { type });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -4636,6 +4757,12 @@ function App() {
         : `${answerIntro} For receipts: go to Uploaded or Expenses. Upload the receipt/invoice file, enter date, description, total, VAT and category. The file is linked to the expense, and the app creates bookkeeping automatically for the expense. Keep receipts and invoices, normally for at least 7 years.`, "uploaded");
     }
 
+    if (normalizedQuestion.includes("sie") || normalizedQuestion.includes("bokforingsfil") || normalizedQuestion.includes("importfil")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For SIE-export: ga till Rapporter eller Bokforing och klicka Exportera SIE. Exporten anvander samma urval som Bokforing: period, filter och sokning. Valda verifikationer maste balansera, annars stoppar AliBooks exporten. Just nu ar status: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} verifikationer och differens ${filteredJournalDifference} SEK.`
+        : `${answerIntro} For SIE export: go to Reports or Bookkeeping and click Export SIE. The export uses the same selection as Bookkeeping: period, filter and search. Selected vouchers must balance, otherwise AliBooks stops the export. Current status: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} vouchers and difference ${filteredJournalDifference} SEK.`, "reports");
+    }
+
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
@@ -4706,6 +4833,10 @@ function App() {
       budgetRevenueTarget: budgetMonthlyRevenueTarget,
       budgetExpenseLimit: budgetMonthlyExpenseLimit,
       budgetAfterReserve: budgetCurrentRow?.afterReserve || 0,
+      sieExportStatus: sieExportStatusText,
+      sieExportPeriod: sieExportPeriodLabel,
+      sieExportVouchers: filteredJournalGroups.length,
+      sieExportDifference: filteredJournalDifference,
       bankImportRows: bankImportRows.length
     });
   }
@@ -5067,6 +5198,18 @@ function App() {
 
     return summary;
   }, {})).sort((first, second) => String(first.accountNumber).localeCompare(String(second.accountNumber)));
+  const sieExportAccountCount = new Set(filteredJournalGroups.flatMap((group) => group.rows.map((entry) => entry.accountNumber).filter(Boolean))).size;
+  const sieExportVoucherDates = filteredJournalGroups
+    .map((group) => String(group.voucherDate || group.createdAt || "").slice(0, 10))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+  const sieExportPeriodLabel = `${bookkeepingDateFrom || sieExportVoucherDates[0] || "-"} - ${bookkeepingDateTo || sieExportVoucherDates[sieExportVoucherDates.length - 1] || "-"}`;
+  const sieExportCanDownload = filteredJournalGroups.length > 0 && filteredJournalDifference === 0;
+  const sieExportStatusText = filteredJournalGroups.length === 0
+    ? (language === "sv" ? "Inga verifikationer i urvalet" : "No vouchers in selection")
+    : filteredJournalDifference === 0
+      ? (language === "sv" ? "Redo for SIE-export" : "Ready for SIE export")
+      : (language === "sv" ? "Obalanserat urval" : "Unbalanced selection");
   const bookkeepingAccountSearch = /^\d{4}$/.test(bookkeepingSearch.trim()) ? bookkeepingSearch.trim() : "";
   const activeBookkeepingAccount = bookkeepingAccountSearch
     ? filteredJournalAccountSummary.find((account) => account.accountNumber === bookkeepingAccountSearch)
@@ -9286,6 +9429,9 @@ function App() {
               <button type="button" className="secondary-button" onClick={downloadJournalCsv}>
                 {t.exportCsv}
               </button>
+              <button type="button" className="secondary-button" onClick={downloadSieExport} disabled={!sieExportCanDownload}>
+                {language === "sv" ? "Exportera SIE" : "Export SIE"}
+              </button>
             </div>
           </div>
 
@@ -9871,6 +10017,49 @@ function App() {
               <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
               <strong>{expensesMissingReceipt.length}</strong>
             </article>
+          </div>
+
+          <div className={sieExportCanDownload ? "sie-export-panel ready" : "sie-export-panel warning"}>
+            <div>
+              <span>{language === "sv" ? "SIE-export" : "SIE export"}</span>
+              <strong>{sieExportStatusText}</strong>
+              <p>
+                {language === "sv"
+                  ? "Exportera filtrerade verifikationer och kontoplan som en preliminar SIE4-fil for test, import eller vidare kontroll hos redovisningskonsult."
+                  : "Export filtered vouchers and chart of accounts as a preliminary SIE4 file for testing, import or further review with an accountant."}
+              </p>
+              <small>
+                {language === "sv"
+                  ? "Tips: valj period i Bokforing eller Momsrapport innan export om du bara vill exportera en viss period."
+                  : "Tip: choose a period in Bookkeeping or VAT report before exporting if you only want a selected period."}
+              </small>
+            </div>
+            <div className="sie-export-stats">
+              <article>
+                <span>{language === "sv" ? "Period" : "Period"}</span>
+                <strong>{sieExportPeriodLabel}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Verifikationer" : "Vouchers"}</span>
+                <strong>{filteredJournalGroups.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Konton" : "Accounts"}</span>
+                <strong>{sieExportAccountCount}</strong>
+              </article>
+              <article className={filteredJournalDifference === 0 ? "ok" : "warning"}>
+                <span>{language === "sv" ? "Differens" : "Difference"}</span>
+                <strong>{filteredJournalDifference} SEK</strong>
+              </article>
+            </div>
+            <div className="button-row">
+              <button type="button" className="secondary-button" onClick={() => setActiveView("bookkeeping")}>
+                {language === "sv" ? "Justera urval" : "Adjust selection"}
+              </button>
+              <button type="button" className="primary-small-button" onClick={downloadSieExport} disabled={!sieExportCanDownload}>
+                {language === "sv" ? "Ladda ner SIE" : "Download SIE"}
+              </button>
+            </div>
           </div>
 
           <div className="close-checklist-grid">

@@ -2426,6 +2426,71 @@ button:focus-visible,
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.sie-export-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid #d7e0ff;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.sie-export-panel.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.sie-export-panel > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.sie-export-panel span,
+.sie-export-panel small {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.sie-export-panel strong {
+  font-size: 20px;
+}
+
+.sie-export-panel p {
+  margin: 0;
+  color: #34302a;
+  line-height: 1.5;
+}
+
+.sie-export-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sie-export-stats article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sie-export-stats article.ok {
+  border-color: #b8dec6;
+  background: #f0fbf4;
+}
+
+.sie-export-stats article.warning {
+  border-color: #f3d293;
+  background: #fffaf0;
+}
+
 .close-checklist-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4118,6 +4183,8 @@ button:focus-visible,
   .backup-summary-grid,
   .close-center-hero,
   .close-checklist-grid,
+  .sie-export-panel,
+  .sie-export-stats,
   .action-center-summary,
   .action-center-row,
   .activity-summary-grid,
