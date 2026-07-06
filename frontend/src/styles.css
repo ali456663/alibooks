@@ -1523,6 +1523,76 @@ button:focus-visible,
   margin: 0;
 }
 
+.bank-rules-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d7e0ff;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.bank-rules-heading {
+  margin: 0;
+}
+
+.bank-rules-panel h4,
+.bank-rules-panel p {
+  margin: 0;
+}
+
+.bank-rule-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) 160px 120px minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.bank-rule-form label {
+  display: grid;
+  gap: 5px;
+  color: #1f2937;
+  font-weight: 900;
+}
+
+.bank-rule-form input,
+.bank-rule-form select {
+  width: 100%;
+}
+
+.bank-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bank-rule-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e3e8f7;
+  border-left: 5px solid var(--color-primary);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bank-rule-card.disabled {
+  opacity: 0.62;
+  border-left-color: #bac5cf;
+  background: #f7f8f5;
+}
+
+.bank-rule-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.bank-rule-card span {
+  color: #5d6259;
+  font-weight: 700;
+}
+
 .file-upload-button {
   display: inline-flex;
   width: fit-content;
@@ -4309,6 +4379,15 @@ button:focus-visible,
 
   .stripe-payout-history article {
     display: grid;
+  }
+
+  .bank-rule-form,
+  .bank-rule-card {
+    grid-template-columns: 1fr;
+  }
+
+  .bank-rule-card .button-row {
+    justify-content: flex-start;
   }
 
   .stripe-payout-history article div:last-child {

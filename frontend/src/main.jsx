@@ -955,6 +955,13 @@ const paymentOverviewFilterKeys = ["open", "overdue", "dueSoon", "partiallyPaid"
 const bookkeepingFilterKeys = ["all", "original", "corrections", "corrected"];
 const activityFilterKeys = ["all", "invoice", "payment", "expense", "voucher", "reminder", "bank", "stripe", "period"];
 const expenseCategoryKeys = ["5420", "5410", "5800", "6570", "4010"];
+const defaultBankImportRules = [
+  { id: "rule-bank-fee", keyword: "bankavgift avgift fee", category: "6570", vatRate: 0, description: "Bankavgift", enabled: true },
+  { id: "rule-software", keyword: "software programvara adobe google microsoft openai github vercel", category: "5420", vatRate: 25, description: "Programvara", enabled: true },
+  { id: "rule-travel", keyword: "resa taxi uber flyg train tag hotell hotel", category: "5800", vatRate: 6, description: "Resekostnad", enabled: true },
+  { id: "rule-equipment", keyword: "ikea elgiganten netonnet dator utrustning inventarie", category: "5410", vatRate: 25, description: "Forbrukningsinventarie", enabled: true },
+  { id: "rule-purchase", keyword: "inkop purchase supplier leverantor", category: "4010", vatRate: 25, description: "Inkop", enabled: true }
+];
 const localPreferenceKeys = [
   "alibooks-language",
   "alibooks-active-view",
@@ -981,6 +988,7 @@ const localPreferenceKeys = [
   "alibooks-bookkeeping-search",
   "alibooks-bookkeeping-date-from",
   "alibooks-bookkeeping-date-to",
+  "alibooks-bank-import-rules",
   "alibooks-selected-customer-id",
   "alibooks-selected-service-id",
   "alibooks-invoice-quantity",
@@ -1144,6 +1152,18 @@ function App() {
   const [bankImportExpenseDescriptions, setBankImportExpenseDescriptions] = useState({});
   const [lastCreatedBankImportExpense, setLastCreatedBankImportExpense] = useState(null);
   const [skippedBankImportRows, setSkippedBankImportRows] = useState([]);
+  const [bankImportRules, setBankImportRules] = useState(() => {
+    try {
+      const savedRules = JSON.parse(localStorage.getItem("alibooks-bank-import-rules") || "null");
+      return Array.isArray(savedRules) && savedRules.length > 0 ? savedRules : defaultBankImportRules;
+    } catch {
+      return defaultBankImportRules;
+    }
+  });
+  const [bankRuleKeyword, setBankRuleKeyword] = useState("");
+  const [bankRuleCategory, setBankRuleCategory] = useState("5420");
+  const [bankRuleVatRate, setBankRuleVatRate] = useState(25);
+  const [bankRuleDescription, setBankRuleDescription] = useState("");
   const [bankReconciliationHistory, setBankReconciliationHistory] = useState([]);
   const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
@@ -1225,6 +1245,10 @@ function App() {
     localStorage.setItem("alibooks-bookkeeping-date-from", bookkeepingDateFrom);
     localStorage.setItem("alibooks-bookkeeping-date-to", bookkeepingDateTo);
   }, [bookkeepingFilter, bookkeepingSearch, bookkeepingDateFrom, bookkeepingDateTo]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-bank-import-rules", JSON.stringify(bankImportRules));
+  }, [bankImportRules]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-ai-assistant-messages", JSON.stringify(aiAssistantMessages.slice(-8)));
@@ -2662,6 +2686,11 @@ function App() {
   }
 
   function suggestExpenseCategoryFromBankRow(row) {
+    const matchedRule = bankImportExpenseRule(row);
+    if (matchedRule) {
+      return matchedRule.category || "4010";
+    }
+
     const text = `${row.description || ""} ${row.reference || ""}`.toLowerCase();
 
     if (text.includes("bank") || text.includes("avgift") || text.includes("fee")) {
@@ -2683,6 +2712,22 @@ function App() {
     return "4010";
   }
 
+  function bankImportExpenseRule(row) {
+    if ((row.amount || 0) >= 0) {
+      return null;
+    }
+
+    const rowText = normalizeBankImportMatchText(`${row.description || ""} ${row.reference || ""}`);
+    return bankImportRules.find((rule) => {
+      if (rule.enabled === false) return false;
+      const keywords = normalizeBankImportMatchText(rule.keyword || "")
+        .split(/\s+/)
+        .map((keyword) => keyword.trim())
+        .filter(Boolean);
+      return keywords.some((keyword) => rowText.includes(keyword));
+    }) || null;
+  }
+
   function bankImportExpenseCategory(row) {
     return bankImportExpenseCategories[row.id] || suggestExpenseCategoryFromBankRow(row);
   }
@@ -2693,11 +2738,16 @@ function App() {
 
   function bankImportExpenseVatRate(row, category = bankImportExpenseCategory(row)) {
     const savedRate = bankImportExpenseVatRates[row.id];
-    return savedRate === undefined ? defaultBankImportVatRate(category) : Number(savedRate);
+    if (savedRate !== undefined) {
+      return Number(savedRate);
+    }
+    const matchedRule = bankImportExpenseRule(row);
+    return matchedRule ? Number(matchedRule.vatRate || 0) : defaultBankImportVatRate(category);
   }
 
   function bankImportExpenseDescription(row) {
-    return (bankImportExpenseDescriptions[row.id] || row.description || row.reference || "Bank CSV").trim();
+    const matchedRule = bankImportExpenseRule(row);
+    return (bankImportExpenseDescriptions[row.id] || matchedRule?.description || row.description || row.reference || "Bank CSV").trim();
   }
 
   function bankImportExpenseAmounts(row, category = bankImportExpenseCategory(row), vatRate = bankImportExpenseVatRate(row, category)) {
@@ -2872,6 +2922,46 @@ function App() {
       // The row is restored in the UI; the persisted history will catch up after backend restart.
     }
     setBankImportMessage(language === "sv" ? "Bankrad aterstalldes." : "Bank row restored.");
+  }
+
+  function addBankImportRule(event) {
+    event.preventDefault();
+    const keyword = bankRuleKeyword.trim();
+
+    if (!keyword) {
+      setBankImportMessage(language === "sv" ? "Skriv minst ett nyckelord for bankregeln." : "Enter at least one keyword for the bank rule.");
+      return;
+    }
+
+    setBankImportRules((current) => [
+      {
+        id: `rule-${Date.now()}`,
+        keyword,
+        category: bankRuleCategory,
+        vatRate: Number(bankRuleVatRate),
+        description: bankRuleDescription.trim() || keyword,
+        enabled: true
+      },
+      ...current
+    ]);
+    setBankRuleKeyword("");
+    setBankRuleDescription("");
+    setBankImportMessage(language === "sv" ? "Bankregel skapad." : "Bank rule created.");
+  }
+
+  function toggleBankImportRule(ruleId) {
+    setBankImportRules((current) => current.map((rule) => (
+      rule.id === ruleId ? { ...rule, enabled: rule.enabled === false } : rule
+    )));
+  }
+
+  function removeBankImportRule(ruleId) {
+    setBankImportRules((current) => current.filter((rule) => rule.id !== ruleId));
+  }
+
+  function resetBankImportRules() {
+    setBankImportRules(defaultBankImportRules);
+    setBankImportMessage(language === "sv" ? "Standardregler aterstallda." : "Default rules restored.");
   }
 
   async function registerBankImportPayment(row, invoiceItem) {
@@ -4298,6 +4388,7 @@ function App() {
   const activeContracts = contracts.filter((contract) => contract.active);
   const dueContracts = activeContracts.filter((contract) => contract.nextInvoiceDate <= new Date().toISOString().slice(0, 10));
   const bankImportMatchedCount = bankImportRows.filter((row) => findBankImportMatch(row)).length;
+  const bankImportRuleMatchedCount = bankImportRows.filter((row) => !findBankImportMatch(row) && Boolean(bankImportExpenseRule(row))).length;
   const bankImportTotalAmount = bankImportRows.reduce((sum, row) => sum + (row.amount || 0), 0);
   const bankImportIncomingAmount = bankImportRows.filter((row) => (row.amount || 0) > 0).reduce((sum, row) => sum + (row.amount || 0), 0);
   const bankImportOutgoingAmount = bankImportRows.filter((row) => (row.amount || 0) < 0).reduce((sum, row) => sum + Math.abs(row.amount || 0), 0);
@@ -4795,8 +4886,8 @@ function App() {
 
     if (normalizedQuestion.includes("bank") || normalizedQuestion.includes("csv") || normalizedQuestion.includes("betal") || normalizedQuestion.includes("payment")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For bank och betalningar: ga till Betalningar. Du kan registrera betalning manuellt, delbetala, anvanda Stripe eller importera bank-CSV. Bankimporten kan matcha mot OCR, fakturanummer, kundnamn eller belopp och sedan registrera betalningen. Importpanelen har ${bankImportRows.length} importerade rader just nu.`
-        : `${answerIntro} For bank and payments: go to Payments. You can register payment manually, partial-pay, use Stripe or import bank CSV. The bank import can match by OCR, invoice number, customer name or amount and then register the payment. The import panel currently has ${bankImportRows.length} imported rows.`, "payments");
+        ? `${answerIntro} For bank och betalningar: ga till Betalningar. Du kan registrera betalning manuellt, delbetala, anvanda Stripe eller importera bank-CSV. Bankimporten kan matcha mot OCR, fakturanummer, kundnamn eller belopp och sedan registrera betalningen. Automatiska bankregler kan dessutom foresla kostnadskonto, moms och bokforingstext for utbetalningar. Importpanelen har ${bankImportRows.length} importerade rader just nu.`
+        : `${answerIntro} For bank and payments: go to Payments. You can register payment manually, partial-pay, use Stripe or import bank CSV. The bank import can match by OCR, invoice number, customer name or amount and then register the payment. Automatic bank rules can also suggest expense account, VAT and bookkeeping description for outgoing rows. The import panel currently has ${bankImportRows.length} imported rows.`, "payments");
     }
 
     if (normalizedQuestion.includes("installning") || normalizedQuestion.includes("smtp") || normalizedQuestion.includes("stripe") || normalizedQuestion.includes("settings")) {
@@ -4837,7 +4928,9 @@ function App() {
       sieExportPeriod: sieExportPeriodLabel,
       sieExportVouchers: filteredJournalGroups.length,
       sieExportDifference: filteredJournalDifference,
-      bankImportRows: bankImportRows.length
+      bankImportRows: bankImportRows.length,
+      bankImportRules: bankImportRules.length,
+      bankImportRuleMatches: bankImportRuleMatchedCount
     });
   }
 
@@ -8385,6 +8478,92 @@ function App() {
                 </button>
               )}
             </div>
+            <div className="bank-rules-panel">
+              <div className="section-heading bank-rules-heading">
+                <div>
+                  <h4>{language === "sv" ? "Automatiska bankregler" : "Automatic bank rules"}</h4>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Reglerna laser texten i bankraden och foreslar kostnadskonto, moms och bokforingstext."
+                      : "Rules read the bank row text and suggest expense account, VAT and bookkeeping text."}
+                  </p>
+                </div>
+                <div className="button-row">
+                  <span className="status">
+                    {bankImportRules.filter((rule) => rule.enabled !== false).length}/{bankImportRules.length} {language === "sv" ? "aktiva" : "active"}
+                  </span>
+                  <button type="button" className="secondary-button" onClick={resetBankImportRules}>
+                    {language === "sv" ? "Aterstall regler" : "Reset rules"}
+                  </button>
+                </div>
+              </div>
+              <form className="bank-rule-form" onSubmit={addBankImportRule}>
+                <label>
+                  {language === "sv" ? "Nyckelord" : "Keywords"}
+                  <input
+                    type="text"
+                    value={bankRuleKeyword}
+                    onChange={(event) => setBankRuleKeyword(event.target.value)}
+                    placeholder={language === "sv" ? "stripe gym bankavgift" : "stripe gym bank fee"}
+                  />
+                </label>
+                <label>
+                  {language === "sv" ? "Konto" : "Account"}
+                  <select value={bankRuleCategory} onChange={(event) => setBankRuleCategory(event.target.value)}>
+                    <option value="5420">5420 Programvaror</option>
+                    <option value="5410">5410 Forbrukningsinventarier</option>
+                    <option value="5800">5800 Resekostnader</option>
+                    <option value="6570">6570 Bankkostnader</option>
+                    <option value="4010">4010 Inkop</option>
+                  </select>
+                </label>
+                <label>
+                  {language === "sv" ? "Moms" : "VAT"}
+                  <select value={bankRuleVatRate} onChange={(event) => setBankRuleVatRate(Number(event.target.value))}>
+                    <option value={25}>25%</option>
+                    <option value={12}>12%</option>
+                    <option value={6}>6%</option>
+                    <option value={0}>0%</option>
+                  </select>
+                </label>
+                <label>
+                  {language === "sv" ? "Bokforingstext" : "Bookkeeping text"}
+                  <input
+                    type="text"
+                    value={bankRuleDescription}
+                    onChange={(event) => setBankRuleDescription(event.target.value)}
+                    placeholder={language === "sv" ? "T.ex. Stripe-avgift" : "E.g. Stripe fee"}
+                  />
+                </label>
+                <button type="submit" className="primary-small-button">
+                  {language === "sv" ? "Lagg till regel" : "Add rule"}
+                </button>
+              </form>
+              <div className="bank-rule-list">
+                {bankImportRules.map((rule) => (
+                  <article className={rule.enabled === false ? "bank-rule-card disabled" : "bank-rule-card"} key={rule.id}>
+                    <div>
+                      <strong>{rule.keyword}</strong>
+                      <span>{rule.description || "-"}</span>
+                    </div>
+                    <div>
+                      <span>{rule.category} - {expenseCategoryLabel(rule.category)}</span>
+                      <span>{rule.vatRate}% {language === "sv" ? "moms" : "VAT"}</span>
+                    </div>
+                    <div className="button-row">
+                      <button type="button" className="secondary-button" onClick={() => toggleBankImportRule(rule.id)}>
+                        {rule.enabled === false
+                          ? (language === "sv" ? "Aktivera" : "Enable")
+                          : (language === "sv" ? "Stang av" : "Disable")}
+                      </button>
+                      <button type="button" className="danger-button" onClick={() => removeBankImportRule(rule.id)}>
+                        {language === "sv" ? "Ta bort" : "Delete"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
             {bankImportMessage && <strong className="status">{bankImportMessage}</strong>}
             {skippedBankImportRows.length > 0 && (
               <div className="bank-import-skipped-panel">
@@ -8427,6 +8606,10 @@ function App() {
                   <article>
                     <span>{language === "sv" ? "Matchade fakturor" : "Matched invoices"}</span>
                     <strong>{bankImportMatchedCount}</strong>
+                  </article>
+                  <article>
+                    <span>{language === "sv" ? "Regeltraffar" : "Rule matches"}</span>
+                    <strong>{bankImportRuleMatchedCount}</strong>
                   </article>
                   <article>
                     <span>{language === "sv" ? "Utan matchning" : "Unmatched"}</span>
@@ -8487,6 +8670,7 @@ function App() {
                     const selectedVatRate = bankImportExpenseVatRate(row, selectedExpenseCategory);
                     const suggestedExpenseAmounts = bankImportExpenseAmounts(row, selectedExpenseCategory, selectedVatRate);
                     const existingExpenseMatch = findExistingExpenseForBankRow(row);
+                    const matchedExpenseRule = bankImportExpenseRule(row);
 
                     return (
                       <article className={match ? "bank-import-row matched" : "bank-import-row"} key={row.id}>
@@ -8533,6 +8717,11 @@ function App() {
                               <span className="warning-text">{language === "sv" ? "Ingen fakturamatchning" : "No invoice match"}</span>
                               {(row.amount || 0) < 0 && (
                                 <>
+                                  {matchedExpenseRule && (
+                                    <span className="status success-status">
+                                      {language === "sv" ? "Regel" : "Rule"}: {matchedExpenseRule.keyword} - {matchedExpenseRule.category}, {matchedExpenseRule.vatRate}% {language === "sv" ? "moms" : "VAT"}
+                                    </span>
+                                  )}
                                   <label className="bank-import-category-select">
                                     <span>{language === "sv" ? "Kostnadskategori" : "Expense category"}</span>
                                     <select
