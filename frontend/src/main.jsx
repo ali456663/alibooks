@@ -811,6 +811,25 @@ function addDaysInputString(value, days) {
   return dateInputString(date);
 }
 
+function addMonthsInputString(value, months, dayOfMonth = null) {
+  const date = value ? new Date(`${value}T12:00:00`) : new Date();
+  date.setMonth(date.getMonth() + months);
+
+  if (dayOfMonth) {
+    date.setDate(dayOfMonth);
+  }
+
+  return dateInputString(date);
+}
+
+function daysUntilInputDate(value, todayValue) {
+  if (!value) return null;
+
+  const target = new Date(`${value}T12:00:00`);
+  const today = new Date(`${todayValue}T12:00:00`);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+}
+
 function currentMonthRange() {
   const now = new Date();
   return {
@@ -3826,6 +3845,37 @@ function App() {
     downloadLocalCsv("close-checklist.csv", rows);
   }
 
+  function downloadTaxPlanCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks skatteplan"],
+      ["Period", archivePeriodLabel],
+      ["Skapad", todayInput],
+      ["OBS", "Preliminara planeringsdatum. Kontrollera alltid exakta datum hos Skatteverket."],
+      [],
+      ["Moment", "Status", "Datum", "Dagar kvar", "Detalj"]
+    ];
+
+    taxPlanItems.forEach((item) => {
+      rows.push([
+        item.title,
+        item.displayStatus,
+        item.deadline || "-",
+        item.daysUntil === null ? "-" : item.daysUntil,
+        item.detail
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Varningar", taxPlanWarnings],
+      ["Kommande inom 30 dagar", taxPlanDueSoonCount],
+      ["Passerade datum", taxPlanOverdueCount]
+    );
+
+    downloadLocalCsv("tax-plan.csv", rows);
+  }
+
   function downloadArchiveManifestCsv() {
     setError("");
     const rows = [
@@ -4921,8 +4971,8 @@ function App() {
 
     if (normalizedQuestion.includes("rapport") || normalizedQuestion.includes("resultat") || normalizedQuestion.includes("balans") || normalizedQuestion.includes("export")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Nar allt ar kontrollerat kan du anvanda Periodavslut for att lasa vald period. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
-        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. When everything is reviewed, use Period close to lock the selected period. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
+        ? `${answerIntro} For rapporter: ga till Rapporter och borja med boksluts- och kontrollcentret. Dar ser du om verifikat balanserar, om underlag saknas, kundfordringar, forfallna fakturor, moms och periodlasning. Skatteplanen visar preliminara steg for moms, skattekonto, deklaration och arkivering. Datahalsa visar dubbletter, saknade kunduppgifter, saknade underlag och obalanserade verifikat. Under Arkivpaket kan du samla export och ladda ner en komplett JSON-backup. Just nu visar appen resultat ${profitNet} SEK, moms att betala ${vatReport?.vatToPay || 0} SEK och ${monthlyReportRows.length} manader i manadsrapporten.`
+        : `${answerIntro} For reports: go to Reports and start with the closing and control center. It checks voucher balance, missing receipts, receivables, overdue invoices, VAT and period lock. The Tax plan shows preliminary steps for VAT, tax account, declaration and archiving. Data quality shows duplicates, missing customer details, missing receipts and unbalanced vouchers. Under Archive package you can gather exports and download a complete JSON backup. The app currently shows profit ${profitNet} SEK, VAT to pay ${vatReport?.vatToPay || 0} SEK and ${monthlyReportRows.length} months in the monthly report.`, "reports");
     }
 
     if (normalizedQuestion.includes("handelse") || normalizedQuestion.includes("hant") || normalizedQuestion.includes("timeline") || normalizedQuestion.includes("event")) {
@@ -4945,8 +4995,8 @@ function App() {
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. Appen summerar 2611 utgaende moms minus 2641 ingaende moms. Vald period visar ${vatPeriodToPay} SEK och hela appen visar ${vatReport?.vatToPay || 0} SEK. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
-        : `${answerIntro} For VAT: go to VAT report. There you have the total VAT report and VAT reconciliation for the selected period. The app summarizes account 2611 output VAT minus account 2641 input VAT. The selected period shows ${vatPeriodToPay} SEK and the full app shows ${vatReport?.vatToPay || 0} SEK. Always verify period and exact dates with the tax authority before filing.`, "vat");
+        ? `${answerIntro} For moms: ga till Momsrapport. Dar finns total momsrapport och momsavstamning for vald period. I Rapporter finns aven Skatteplanen med preliminara kontrollpunkter for moms, skattekonto, deklaration och arkivering. Vald period visar ${vatPeriodToPay} SEK och skatteplanen har ${taxPlanWarnings} varningar. Kontrollera alltid period och exakta datum hos Skatteverket innan du deklarerar.`
+        : `${answerIntro} For VAT: go to VAT report. There you have the total VAT report and VAT reconciliation for the selected period. Reports also has the Tax plan with preliminary checkpoints for VAT, tax account, declaration and archiving. The selected period shows ${vatPeriodToPay} SEK and the tax plan has ${taxPlanWarnings} warnings. Always verify period and exact dates with the tax authority before filing.`, "vat");
     }
 
     if (normalizedQuestion.includes("bank") || normalizedQuestion.includes("csv") || normalizedQuestion.includes("betal") || normalizedQuestion.includes("payment")) {
@@ -4999,7 +5049,12 @@ function App() {
       bankImportInvoiceReady: bankImportInvoiceReadyCount,
       bankImportExpenseReady: bankImportExpenseReadyCount,
       bankImportNeedsReview: bankImportNeedsReviewCount,
-      bankImportAlreadyBooked: bankImportAlreadyBookedCount
+      bankImportAlreadyBooked: bankImportAlreadyBookedCount,
+      taxPlanWarnings,
+      taxPlanDueSoon: taxPlanDueSoonCount,
+      taxPlanOverdue: taxPlanOverdueCount,
+      taxPlanVatDeadline,
+      taxPlanDeclarationDeadline
     });
   }
 
@@ -5540,6 +5595,17 @@ function App() {
       action: downloadVatReconciliationCsv
     },
     {
+      key: "tax-plan",
+      status: "info",
+      title: language === "sv" ? "Skatteplan" : "Tax plan",
+      count: "CSV",
+      description: language === "sv"
+        ? "Planeringslista for moms, skattekonto, deklaration och arkivering. Datum ska kontrolleras hos Skatteverket."
+        : "Planning list for VAT, tax account, declaration and archiving. Dates must be verified with the tax authority.",
+      actionLabel: t.exportCsv,
+      action: downloadTaxPlanCsv
+    },
+    {
       key: "reports",
       status: profitAndLoss && balanceReport ? "ok" : "info",
       title: language === "sv" ? "Resultat och balans" : "Profit and balance",
@@ -5575,6 +5641,100 @@ function App() {
   ];
   const archivePackageWarnings = archivePackageItems.filter((item) => item.status === "warning").length;
   const archivePackageReadyCount = archivePackageItems.filter((item) => item.status === "ok").length;
+  const taxPlanBaseYear = Number((vatPeriodTo || todayInput).slice(0, 4)) || new Date().getFullYear();
+  const taxPlanVatDeadline = vatPeriodTo ? addMonthsInputString(vatPeriodTo, 2, 12) : "";
+  const taxPlanDeclarationDeadline = `${taxPlanBaseYear + 1}-05-04`;
+  const taxPlanItems = [
+    {
+      key: "bookkeeping",
+      status: unbalancedJournalGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Bokfor perioden" : "Book the period",
+      deadline: vatPeriodTo || todayInput,
+      detail: unbalancedJournalGroups.length === 0
+        ? (language === "sv" ? "Alla verifikat balanserar." : "All vouchers balance.")
+        : `${unbalancedJournalGroups.length} ${language === "sv" ? "verifikat behover kontroll" : "vouchers need review"}`,
+      actionLabel: language === "sv" ? "Oppna bokforing" : "Open bookkeeping",
+      action: () => setActiveView("bookkeeping")
+    },
+    {
+      key: "receipts",
+      status: expensesMissingReceipt.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Sakra underlag" : "Secure receipts",
+      deadline: vatPeriodTo || todayInput,
+      detail: expensesMissingReceipt.length === 0
+        ? (language === "sv" ? "Alla kostnader har underlag." : "All expenses have receipts.")
+        : `${expensesMissingReceipt.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      actionLabel: language === "sv" ? "Oppna underlag" : "Open receipts",
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+      }
+    },
+    {
+      key: "vat-return",
+      status: vatPeriodHasData ? "ok" : "warning",
+      title: language === "sv" ? "Momsdeklaration" : "VAT return",
+      deadline: taxPlanVatDeadline,
+      detail: vatPeriodHasData
+        ? `${language === "sv" ? "Preliminar moms" : "Preliminary VAT"}: ${vatPeriodToPay} SEK`
+        : (language === "sv" ? "Ingen momsdata i vald period." : "No VAT data in selected period."),
+      actionLabel: language === "sv" ? "Oppna moms" : "Open VAT",
+      action: () => setActiveView("vat")
+    },
+    {
+      key: "tax-account",
+      status: vatPeriodToPay > 0 ? "warning" : "ok",
+      title: language === "sv" ? "Planera skattekonto" : "Plan tax account",
+      deadline: taxPlanVatDeadline,
+      detail: vatPeriodToPay > 0
+        ? `${language === "sv" ? "Planera betalning" : "Plan payment"}: ${vatPeriodToPay} SEK`
+        : (language === "sv" ? "Ingen preliminar moms att betala i vald period." : "No preliminary VAT to pay in selected period."),
+      actionLabel: language === "sv" ? "Oppna likviditet" : "Open cashflow",
+      action: () => setActiveView("cashflow")
+    },
+    {
+      key: "income-declaration",
+      status: "info",
+      title: language === "sv" ? "Inkomstdeklaration" : "Income declaration",
+      deadline: taxPlanDeclarationDeadline,
+      detail: language === "sv"
+        ? "Preliminar planeringsrad. Kontrollera exakt datum och bilagor hos Skatteverket."
+        : "Preliminary planning row. Verify exact date and attachments with the tax authority.",
+      actionLabel: language === "sv" ? "Oppna rapporter" : "Open reports",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "archive",
+      status: archivePackageWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Arkivera perioden" : "Archive the period",
+      deadline: vatPeriodTo ? addDaysInputString(vatPeriodTo, 7) : todayInput,
+      detail: archivePackageWarnings === 0
+        ? (language === "sv" ? "Arkivpaketet ser redo ut." : "Archive package looks ready.")
+        : `${archivePackageWarnings} ${language === "sv" ? "arkivvarningar kvar" : "archive warnings remaining"}`,
+      actionLabel: language === "sv" ? "Oppna arkivpaket" : "Open archive package",
+      action: () => setActiveView("reports")
+    }
+  ].map((item) => {
+    const daysUntil = daysUntilInputDate(item.deadline, todayInput);
+    const timeStatus = daysUntil === null
+      ? "none"
+      : daysUntil < 0
+        ? "overdue"
+        : daysUntil <= 30
+          ? "soon"
+          : "later";
+    const displayStatus = item.status === "warning" && timeStatus === "overdue" ? "critical" : item.status;
+
+    return {
+      ...item,
+      daysUntil,
+      timeStatus,
+      displayStatus
+    };
+  });
+  const taxPlanWarnings = taxPlanItems.filter((item) => item.displayStatus === "warning" || item.displayStatus === "critical").length;
+  const taxPlanDueSoonCount = taxPlanItems.filter((item) => item.timeStatus === "soon").length;
+  const taxPlanOverdueCount = taxPlanItems.filter((item) => item.timeStatus === "overdue").length;
   const selectedPeriodIsLocked = Boolean(
     accountingLockedThroughDate
       && vatPeriodTo
@@ -10332,6 +10492,70 @@ function App() {
               <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
               <strong>{expensesMissingReceipt.length}</strong>
             </article>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Skatteplan" : "Tax plan"}</h2>
+            <div className="button-row">
+              <span className={taxPlanWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {taxPlanWarnings === 0
+                  ? (language === "sv" ? "Inga varningar" : "No warnings")
+                  : `${taxPlanWarnings} ${language === "sv" ? "varningar" : "warnings"}`}
+              </span>
+              <span className={taxPlanOverdueCount > 0 ? "status warning-status" : "status"}>
+                {taxPlanOverdueCount} {language === "sv" ? "passerade" : "overdue"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadTaxPlanCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="tax-plan-panel">
+            <div className="tax-plan-intro">
+              <strong>{language === "sv" ? "Planera moms, deklaration och arkivering" : "Plan VAT, declaration and archiving"}</strong>
+              <p>
+                {language === "sv"
+                  ? "Detta ar en arbetsplan baserad pa vald period och din data i AliBooks. Datum ar preliminara och ska alltid kontrolleras hos Skatteverket/Mina sidor innan du skickar in eller betalar."
+                  : "This is a working plan based on the selected period and your AliBooks data. Dates are preliminary and must always be verified with the tax authority before filing or paying."}
+              </p>
+              <small>
+                {language === "sv"
+                  ? `Vald period: ${archivePeriodLabel}. Kommande inom 30 dagar: ${taxPlanDueSoonCount}.`
+                  : `Selected period: ${archivePeriodLabel}. Upcoming within 30 days: ${taxPlanDueSoonCount}.`}
+              </small>
+            </div>
+            <div className="tax-plan-list">
+              {taxPlanItems.map((item) => (
+                <article className={`tax-plan-card ${item.displayStatus}`} key={item.key}>
+                  <div>
+                    <span>{item.displayStatus === "ok"
+                      ? "OK"
+                      : item.displayStatus === "critical"
+                        ? (language === "sv" ? "Sen" : "Overdue")
+                        : item.displayStatus === "warning"
+                          ? (language === "sv" ? "Kontrollera" : "Check")
+                          : "Info"}
+                    </span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </div>
+                  <div>
+                    <strong>{item.deadline ? formatDateOnly(item.deadline) : "-"}</strong>
+                    <small>
+                      {item.daysUntil === null
+                        ? "-"
+                        : item.daysUntil < 0
+                          ? `${Math.abs(item.daysUntil)} ${language === "sv" ? "dagar sedan" : "days ago"}`
+                          : `${item.daysUntil} ${language === "sv" ? "dagar kvar" : "days left"}`}
+                    </small>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={item.action}>
+                    {item.actionLabel}
+                  </button>
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className={sieExportCanDownload ? "sie-export-panel ready" : "sie-export-panel warning"}>
