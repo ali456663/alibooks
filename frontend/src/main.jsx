@@ -3731,7 +3731,11 @@ function App() {
       const difference = Math.round(currentVoucher.sum * 100) / 100;
       vouchers.push({
         ...currentVoucher,
-        difference
+        difference,
+        simpleManualImport: currentVoucher.transactionsList.length === 2
+          && Math.abs(difference) <= 0.01
+          && currentVoucher.transactionsList.some((line) => line.debit > 0)
+          && currentVoucher.transactionsList.some((line) => line.credit > 0)
       });
       currentVoucher = null;
     }
@@ -3742,9 +3746,14 @@ function App() {
       if (line.startsWith("#VER ")) {
         closeVoucher();
         const dateMatch = line.match(/\s(\d{8})(?:\s|$)/);
+        const quotedValues = [...line.matchAll(/"([^"]*)"/g)].map((match) => match[1]);
         currentVoucher = {
+          key: `${vouchers.length + 1}-${dateMatch?.[1] || "nodate"}`,
           date: normalizeSieDate(dateMatch?.[1] || ""),
+          number: quotedValues[1] || String(vouchers.length + 1),
+          description: quotedValues[2] || quotedValues[quotedValues.length - 1] || "SIE-verifikat",
           transactions: 0,
+          transactionsList: [],
           sum: 0
         };
         return;
@@ -3756,15 +3765,28 @@ function App() {
 
         if (!currentVoucher) {
           currentVoucher = {
+            key: `${vouchers.length + 1}-nodate`,
             date: "",
+            number: String(vouchers.length + 1),
+            description: "SIE-verifikat",
             transactions: 0,
+            transactionsList: [],
             sum: 0
           };
         }
 
+        const amount = parseSieAmount(match[2]);
+        const quotedValues = [...line.matchAll(/"([^"]*)"/g)].map((quoteMatch) => quoteMatch[1]);
         accounts.add(match[1]);
         currentVoucher.transactions += 1;
-        currentVoucher.sum += parseSieAmount(match[2]);
+        currentVoucher.sum += amount;
+        currentVoucher.transactionsList.push({
+          account: match[1],
+          debit: amount > 0 ? Math.round(amount) : 0,
+          credit: amount < 0 ? Math.round(Math.abs(amount)) : 0,
+          amount,
+          description: quotedValues[quotedValues.length - 1] || ""
+        });
       }
     });
 
@@ -3785,7 +3807,11 @@ function App() {
       unbalancedVouchers,
       totalDifference: Math.round(totalDifference * 100) / 100,
       firstDate: dates[0] || "",
-      lastDate: dates[dates.length - 1] || ""
+      lastDate: dates[dates.length - 1] || "",
+      previewVouchers: vouchers.slice(0, 25).map((voucher, index) => ({
+        ...voucher,
+        key: voucher.key || `${index + 1}-${voucher.date || "nodate"}`
+      }))
     };
   }
 
@@ -3892,6 +3918,107 @@ function App() {
     return ["PDF", "Bild", "Image"].includes(row.kind) && Boolean(bokioImportFiles[row.id]);
   }
 
+  function knownAccount(accountNumber) {
+    return accounts.some((account) => account.number === accountNumber);
+  }
+
+  function sieVoucherImportStatus(voucher) {
+    if (!voucher?.simpleManualImport) {
+      return {
+        ok: false,
+        reason: language === "sv" ? "Kraver flerradig SIE-import." : "Requires multi-line SIE import."
+      };
+    }
+
+    const debitLine = voucher.transactionsList.find((line) => line.debit > 0);
+    const creditLine = voucher.transactionsList.find((line) => line.credit > 0);
+
+    if (!debitLine || !creditLine || debitLine.debit !== creditLine.credit) {
+      return {
+        ok: false,
+        reason: language === "sv" ? "Debet och kredit matchar inte." : "Debit and credit do not match."
+      };
+    }
+
+    if (!knownAccount(debitLine.account) || !knownAccount(creditLine.account)) {
+      return {
+        ok: false,
+        reason: language === "sv" ? "Konto saknas i AliBooks kontoplan." : "Account is missing in AliBooks chart of accounts."
+      };
+    }
+
+    if (isAccountingDateLocked(voucher.date)) {
+      return {
+        ok: false,
+        reason: lockedAccountingMessage(voucher.date)
+      };
+    }
+
+    return { ok: true, debitLine, creditLine, amount: debitLine.debit };
+  }
+
+  function updateBokioImportVoucher(rowId, voucherKey, patch) {
+    setBokioImportQueue((current) => current.map((row) => {
+      if (row.id !== rowId || !row.analysis?.previewVouchers) return row;
+
+      return {
+        ...row,
+        analysis: {
+          ...row.analysis,
+          previewVouchers: row.analysis.previewVouchers.map((voucher) => (
+            voucher.key === voucherKey ? { ...voucher, ...patch } : voucher
+          ))
+        }
+      };
+    }));
+  }
+
+  async function createManualVoucherFromSie(row, voucher) {
+    setError("");
+
+    const importStatus = sieVoucherImportStatus(voucher);
+
+    if (!importStatus.ok) {
+      setError(importStatus.reason);
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        voucherDate: voucher.date || new Date().toISOString().slice(0, 10),
+        description: `Bokio SIE ${row.fileName}: ${voucher.description || voucher.number || ""}`.trim(),
+        debitAccountNumber: importStatus.debitLine.account,
+        creditAccountNumber: importStatus.creditLine.account,
+        amount: importStatus.amount
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skapa verifikat fran SIE." : "Could not create voucher from SIE."));
+      return;
+    }
+
+    const voucherNumber = data?.[0]?.voucherNumber || "";
+    updateBokioImportVoucher(row.id, voucher.key, {
+      importedVoucherNumber: voucherNumber || (language === "sv" ? "Importerad" : "Imported")
+    });
+    setBokioImportMessage(language === "sv"
+      ? `SIE-verifikat importerades${voucherNumber ? ` som ${voucherNumber}` : ""}.`
+      : `SIE voucher imported${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
+    loadJournalEntries();
+    loadVatReport();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
   async function createExpenseFromBokioImport(row) {
     setError("");
 
@@ -3988,6 +4115,26 @@ function App() {
     ];
 
     downloadLocalCsv("bokio-import-checklista.csv", rows);
+  }
+
+  function downloadBokioSiePreviewCsv(row) {
+    const vouchers = row.analysis?.previewVouchers || [];
+    const rows = [
+      ["Fil", "Verifikat", "Datum", "Beskrivning", "Konto", "Debet", "Kredit", "Radtext", "Status"],
+      ...vouchers.flatMap((voucher) => voucher.transactionsList.map((line) => [
+        row.fileName,
+        voucher.number || voucher.key,
+        voucher.date || "",
+        voucher.description || "",
+        line.account,
+        line.debit || 0,
+        line.credit || 0,
+        line.description || "",
+        voucher.importedVoucherNumber || ""
+      ]))
+    ];
+
+    downloadLocalCsv(`sie-preview-${row.fileName.replace(/[^A-Za-z0-9._-]/g, "_")}.csv`, rows);
   }
 
   function downloadLocalJson(filename, data) {
@@ -10326,6 +10473,44 @@ function App() {
                               : `${row.analysis.unbalancedVouchers} ${language === "sv" ? "verifikat balanserar inte" : "vouchers are unbalanced"}`}
                           </span>
                           {row.analysis.sampleAccounts && <span>{language === "sv" ? "Konton" : "Accounts"}: {row.analysis.sampleAccounts}</span>}
+                          <button type="button" className="secondary-button compact-button" onClick={() => downloadBokioSiePreviewCsv(row)}>
+                            {language === "sv" ? "Exportera SIE-forhandsvisning" : "Export SIE preview"}
+                          </button>
+                          {row.analysis.previewVouchers?.length > 0 && (
+                            <div className="sie-preview-list">
+                              {row.analysis.previewVouchers.slice(0, 6).map((voucher) => {
+                                const importStatus = sieVoucherImportStatus(voucher);
+
+                                return (
+                                  <div className="sie-preview-voucher" key={voucher.key}>
+                                    <div>
+                                      <strong>{voucher.number || voucher.key} - {voucher.date || "-"}</strong>
+                                      <span>{voucher.description || "SIE-verifikat"}</span>
+                                      <span>
+                                        {voucher.transactionsList.map((line) => (
+                                          `${line.account} D${line.debit || 0}/K${line.credit || 0}`
+                                        )).join(" | ")}
+                                      </span>
+                                      {!importStatus.ok && <span className="muted-line">{importStatus.reason}</span>}
+                                      {voucher.importedVoucherNumber && (
+                                        <span className="success-line">
+                                          {language === "sv" ? "Importerad som" : "Imported as"} {voucher.importedVoucherNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="primary-small-button"
+                                      onClick={() => createManualVoucherFromSie(row, voucher)}
+                                      disabled={!token || !importStatus.ok || Boolean(voucher.importedVoucherNumber)}
+                                    >
+                                      {language === "sv" ? "Importera verifikat" : "Import voucher"}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                       {row.analysis?.kind === "CSV" && !row.analysis.error && (

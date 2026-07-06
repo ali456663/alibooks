@@ -4298,6 +4298,40 @@ button:focus-visible,
   font-weight: 800;
 }
 
+.compact-button {
+  margin-top: 8px;
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.sie-preview-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sie-preview-voucher {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sie-preview-voucher div {
+  display: grid;
+  gap: 3px;
+}
+
+.success-line {
+  color: var(--color-success-text);
+  font-weight: 800;
+}
+
 .receipt-panel {
   padding: 18px;
   border: 1px solid var(--color-border);
@@ -4839,6 +4873,7 @@ button:focus-visible,
   .bokio-import-intro,
   .bokio-import-summary,
   .bokio-import-row,
+  .sie-preview-voucher,
   .period-close-panel,
   .audit-trail-summary,
   .audit-trail-row {
