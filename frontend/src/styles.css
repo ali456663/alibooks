@@ -1621,6 +1621,55 @@ button:focus-visible,
   margin: 0;
 }
 
+.bank-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.bank-workflow-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-workflow-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(21, 94, 232, 0.1);
+}
+
+.bank-workflow-card.ready {
+  border-left: 5px solid #2f855a;
+}
+
+.bank-workflow-card.review {
+  border-left: 5px solid #f2a900;
+}
+
+.bank-workflow-card.done {
+  border-left: 5px solid #718096;
+}
+
+.bank-workflow-card.neutral {
+  border-left: 5px solid var(--color-primary);
+}
+
+.bank-workflow-card span,
+.bank-workflow-card small {
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.bank-workflow-card strong {
+  font-size: 26px;
+}
+
 .bank-import-filter-bar {
   margin: 0;
 }
@@ -1888,6 +1937,18 @@ button:focus-visible,
   border-left: 5px solid #2f855a;
 }
 
+.bank-import-row.ready {
+  border-left: 5px solid #2f855a;
+}
+
+.bank-import-row.review {
+  border-left: 5px solid #f2a900;
+}
+
+.bank-import-row.done {
+  border-left: 5px solid #718096;
+}
+
 .bank-import-row div {
   display: grid;
   gap: 4px;
@@ -1900,6 +1961,31 @@ button:focus-visible,
 
 .bank-import-row span {
   color: #5d6259;
+}
+
+.bank-workflow-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.bank-workflow-pill.ready {
+  background: #eaf8ef;
+  color: #155c49;
+}
+
+.bank-workflow-pill.review {
+  background: #fff8df;
+  color: #7a5600;
+}
+
+.bank-workflow-pill.done {
+  background: #eef2f7;
+  color: #4a5568;
 }
 
 .bank-import-category-select {

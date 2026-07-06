@@ -2750,6 +2750,59 @@ function App() {
     return (bankImportExpenseDescriptions[row.id] || matchedRule?.description || row.description || row.reference || "Bank CSV").trim();
   }
 
+  function bankImportWorkflow(row) {
+    const match = findBankImportMatch(row);
+
+    if (match) {
+      return {
+        key: "invoiceReady",
+        tone: "ready",
+        title: language === "sv" ? "Faktura redo" : "Invoice ready",
+        nextAction: language === "sv" ? `Registrera betalning for ${invoiceNumber(match)}` : `Register payment for ${invoiceNumber(match)}`
+      };
+    }
+
+    if ((row.amount || 0) < 0) {
+      const existingExpenseMatch = findExistingExpenseForBankRow(row);
+
+      if (existingExpenseMatch) {
+        return {
+          key: "alreadyBooked",
+          tone: "done",
+          title: language === "sv" ? "Redan bokford" : "Already booked",
+          nextAction: existingExpenseMatch.description || (language === "sv" ? "Kostnaden finns redan" : "Expense already exists")
+        };
+      }
+
+      const matchedRule = bankImportExpenseRule(row);
+
+      if (matchedRule) {
+        return {
+          key: "expenseReady",
+          tone: "ready",
+          title: language === "sv" ? "Kostnad redo" : "Expense ready",
+          nextAction: language === "sv"
+            ? `${matchedRule.category}, ${matchedRule.vatRate}% moms foreslagen`
+            : `${matchedRule.category}, ${matchedRule.vatRate}% VAT suggested`
+        };
+      }
+
+      return {
+        key: "expenseReview",
+        tone: "review",
+        title: language === "sv" ? "Behover kontroll" : "Needs review",
+        nextAction: language === "sv" ? "Valj konto och moms innan bokforing" : "Choose account and VAT before booking"
+      };
+    }
+
+    return {
+      key: "incomingReview",
+      tone: "review",
+      title: language === "sv" ? "Inbetalning utan match" : "Incoming without match",
+      nextAction: language === "sv" ? "Kontrollera kund, OCR eller belopp" : "Check customer, OCR or amount"
+    };
+  }
+
   function bankImportExpenseAmounts(row, category = bankImportExpenseCategory(row), vatRate = bankImportExpenseVatRate(row, category)) {
     const total = Math.abs(row.amount || 0);
 
@@ -4389,6 +4442,10 @@ function App() {
   const dueContracts = activeContracts.filter((contract) => contract.nextInvoiceDate <= new Date().toISOString().slice(0, 10));
   const bankImportMatchedCount = bankImportRows.filter((row) => findBankImportMatch(row)).length;
   const bankImportRuleMatchedCount = bankImportRows.filter((row) => !findBankImportMatch(row) && Boolean(bankImportExpenseRule(row))).length;
+  const bankImportInvoiceReadyCount = bankImportRows.filter((row) => bankImportWorkflow(row).key === "invoiceReady").length;
+  const bankImportExpenseReadyCount = bankImportRows.filter((row) => bankImportWorkflow(row).key === "expenseReady").length;
+  const bankImportNeedsReviewCount = bankImportRows.filter((row) => ["expenseReview", "incomingReview"].includes(bankImportWorkflow(row).key)).length;
+  const bankImportAlreadyBookedCount = bankImportRows.filter((row) => bankImportWorkflow(row).key === "alreadyBooked").length;
   const bankImportTotalAmount = bankImportRows.reduce((sum, row) => sum + (row.amount || 0), 0);
   const bankImportIncomingAmount = bankImportRows.filter((row) => (row.amount || 0) > 0).reduce((sum, row) => sum + (row.amount || 0), 0);
   const bankImportOutgoingAmount = bankImportRows.filter((row) => (row.amount || 0) < 0).reduce((sum, row) => sum + Math.abs(row.amount || 0), 0);
@@ -4413,13 +4470,19 @@ function App() {
   const filteredBankImportRows = bankImportRows.filter((row) => {
     const match = findBankImportMatch(row);
     const hasMatch = Boolean(match);
+    const workflow = bankImportWorkflow(row);
 
     if (bankImportFilter === "matched") return hasMatch;
     if (bankImportFilter === "unmatched") return !hasMatch;
+    if (bankImportFilter === "ready") return ["invoiceReady", "expenseReady"].includes(workflow.key);
+    if (bankImportFilter === "review") return ["expenseReview", "incomingReview"].includes(workflow.key);
+    if (bankImportFilter === "expenses") return (row.amount || 0) < 0;
+    if (bankImportFilter === "booked") return workflow.key === "alreadyBooked";
     return true;
   }).filter((row) => {
     const query = bankImportSearch.toLowerCase().trim();
     const match = findBankImportMatch(row);
+    const workflow = bankImportWorkflow(row);
 
     if (!query) return true;
 
@@ -4430,7 +4493,9 @@ function App() {
       row.amount,
       match ? invoiceNumber(match) : "",
       match?.customerName,
-      match?.ocrNumber
+      match?.ocrNumber,
+      workflow.title,
+      workflow.nextAction
     ].some((value) => String(value || "").toLowerCase().includes(query));
   });
   const agingInvoices = unpaidInvoices.filter((item) => invoiceRemainingAmount(item) > 0);
@@ -4930,7 +4995,11 @@ function App() {
       sieExportDifference: filteredJournalDifference,
       bankImportRows: bankImportRows.length,
       bankImportRules: bankImportRules.length,
-      bankImportRuleMatches: bankImportRuleMatchedCount
+      bankImportRuleMatches: bankImportRuleMatchedCount,
+      bankImportInvoiceReady: bankImportInvoiceReadyCount,
+      bankImportExpenseReady: bankImportExpenseReadyCount,
+      bankImportNeedsReview: bankImportNeedsReviewCount,
+      bankImportAlreadyBooked: bankImportAlreadyBookedCount
     });
   }
 
@@ -8628,6 +8697,32 @@ function App() {
                     <strong>{bankImportTotalAmount} SEK</strong>
                   </article>
                 </div>
+                <div className="bank-workflow-grid">
+                  <button type="button" className="bank-workflow-card ready" onClick={() => setBankImportFilter("ready")}>
+                    <span>{language === "sv" ? "Redo att boka" : "Ready to book"}</span>
+                    <strong>{bankImportInvoiceReadyCount + bankImportExpenseReadyCount}</strong>
+                    <small>
+                      {language === "sv"
+                        ? `${bankImportInvoiceReadyCount} faktura, ${bankImportExpenseReadyCount} kostnad`
+                        : `${bankImportInvoiceReadyCount} invoice, ${bankImportExpenseReadyCount} expense`}
+                    </small>
+                  </button>
+                  <button type="button" className="bank-workflow-card review" onClick={() => setBankImportFilter("review")}>
+                    <span>{language === "sv" ? "Behover kontroll" : "Needs review"}</span>
+                    <strong>{bankImportNeedsReviewCount}</strong>
+                    <small>{language === "sv" ? "Saknar saker matchning eller regel" : "Missing safe match or rule"}</small>
+                  </button>
+                  <button type="button" className="bank-workflow-card done" onClick={() => setBankImportFilter("booked")}>
+                    <span>{language === "sv" ? "Redan bokfort" : "Already booked"}</span>
+                    <strong>{bankImportAlreadyBookedCount}</strong>
+                    <small>{language === "sv" ? "Liknar befintlig kostnad" : "Looks like an existing expense"}</small>
+                  </button>
+                  <button type="button" className="bank-workflow-card neutral" onClick={() => setBankImportFilter("expenses")}>
+                    <span>{language === "sv" ? "Utbetalningar" : "Outgoing rows"}</span>
+                    <strong>{bankImportRows.filter((row) => (row.amount || 0) < 0).length}</strong>
+                    <small>{language === "sv" ? "Kan bli kostnader" : "Can become expenses"}</small>
+                  </button>
+                </div>
                 <div className="filter-bar bank-import-filter-bar">
                   <button
                     type="button"
@@ -8650,6 +8745,34 @@ function App() {
                   >
                     {language === "sv" ? "Utan matchning" : "Unmatched"}
                   </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "ready" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("ready")}
+                  >
+                    {language === "sv" ? "Redo" : "Ready"}
+                  </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "review" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("review")}
+                  >
+                    {language === "sv" ? "Kontroll" : "Review"}
+                  </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "expenses" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("expenses")}
+                  >
+                    {language === "sv" ? "Kostnader" : "Expenses"}
+                  </button>
+                  <button
+                    type="button"
+                    className={bankImportFilter === "booked" ? "filter-button active" : "filter-button"}
+                    onClick={() => setBankImportFilter("booked")}
+                  >
+                    {language === "sv" ? "Redan bokfort" : "Already booked"}
+                  </button>
                   <span className="status">
                     {filteredBankImportRows.length} {language === "sv" ? "visas" : "shown"}
                   </span>
@@ -8671,13 +8794,16 @@ function App() {
                     const suggestedExpenseAmounts = bankImportExpenseAmounts(row, selectedExpenseCategory, selectedVatRate);
                     const existingExpenseMatch = findExistingExpenseForBankRow(row);
                     const matchedExpenseRule = bankImportExpenseRule(row);
+                    const workflow = bankImportWorkflow(row);
 
                     return (
-                      <article className={match ? "bank-import-row matched" : "bank-import-row"} key={row.id}>
+                      <article className={`bank-import-row ${match ? "matched" : ""} ${workflow.tone}`} key={row.id}>
                         <div>
                           <strong>{row.date || "-"}</strong>
+                          <span className={`bank-workflow-pill ${workflow.tone}`}>{workflow.title}</span>
                           <span>{row.description || "-"}</span>
                           <span>{language === "sv" ? "Referens" : "Reference"}: {row.reference || "-"}</span>
+                          <span>{workflow.nextAction}</span>
                         </div>
                         <div>
                           <strong>{row.amount} SEK</strong>
