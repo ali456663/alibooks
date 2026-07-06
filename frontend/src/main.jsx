@@ -1049,6 +1049,7 @@ function App() {
       return [];
     }
   });
+  const [bokioImportFiles, setBokioImportFiles] = useState({});
   const [bokioImportMessage, setBokioImportMessage] = useState("");
   const [automaticReminderMessage, setAutomaticReminderMessage] = useState("");
   const [automaticReminderResult, setAutomaticReminderResult] = useState(null);
@@ -2111,6 +2112,9 @@ function App() {
     setSelectedServiceId(services[0]?.id ? String(services[0].id) : "");
     setInvoiceQuantity("1");
     setExpenseCategory("5420");
+    setBokioImportQueue([]);
+    setBokioImportFiles({});
+    setBokioImportMessage("");
     setSettingsMessage(language === "sv" ? "Lokala val har aterstallts." : "Local preferences reset.");
   }
 
@@ -3722,9 +3726,18 @@ function App() {
       lastModified: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : "",
       importedAt,
       status: "review",
+      expenseDate: file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      description: `Bokio: ${file.name.replace(/\.[^/.]+$/, "").replaceAll("_", " ")}`,
+      netAmount: "",
+      vatAmount: "",
+      category: "5420",
       note: ""
     }));
 
+    setBokioImportFiles((current) => files.reduce((nextFiles, file, index) => ({
+      ...nextFiles,
+      [newRows[index].id]: file
+    }), { ...current }));
     setBokioImportQueue((current) => [...newRows, ...current]);
     setBokioImportMessage(language === "sv"
       ? `${newRows.length} fil(er) lades i importkon. Granska innan du bokfor.`
@@ -3740,18 +3753,101 @@ function App() {
 
   function removeBokioImportRow(rowId) {
     setBokioImportQueue((current) => current.filter((row) => row.id !== rowId));
+    setBokioImportFiles((current) => {
+      const nextFiles = { ...current };
+      delete nextFiles[rowId];
+      return nextFiles;
+    });
   }
 
   function clearReviewedBokioImports() {
+    const importedIds = new Set(bokioImportQueue.filter((row) => row.status === "imported").map((row) => row.id));
     setBokioImportQueue((current) => current.filter((row) => row.status !== "imported"));
+    setBokioImportFiles((current) => Object.fromEntries(
+      Object.entries(current).filter(([rowId]) => !importedIds.has(rowId))
+    ));
     setBokioImportMessage(language === "sv"
       ? "Importerade rader doljs fran importkon."
       : "Imported rows are hidden from the import queue.");
   }
 
+  function bokioImportCanAttachReceipt(row) {
+    return ["PDF", "Bild", "Image"].includes(row.kind) && Boolean(bokioImportFiles[row.id]);
+  }
+
+  async function createExpenseFromBokioImport(row) {
+    setError("");
+
+    const netAmount = Number(row.netAmount || 0);
+    const vatAmount = Number(row.vatAmount || 0);
+    const expenseDateValue = row.expenseDate || new Date().toISOString().slice(0, 10);
+
+    if (isAccountingDateLocked(expenseDateValue)) {
+      setError(lockedAccountingMessage(expenseDateValue));
+      return;
+    }
+
+    if (!row.description || !row.description.trim()) {
+      setError(language === "sv" ? "Beskrivning saknas pa Bokio-raden." : "Description is missing on the Bokio row.");
+      return;
+    }
+
+    if (netAmount <= 0) {
+      setError(language === "sv" ? "Fyll i exkl. moms innan du skapar kostnaden." : "Enter net amount before creating the expense.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/expenses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        expenseDate: expenseDateValue,
+        description: row.description,
+        netAmount,
+        vatAmount: Math.max(vatAmount, 0),
+        category: row.category || "5420",
+        paidFrom: "1930"
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skapa kostnad fran Bokio-import." : "Could not create expense from Bokio import."));
+      return;
+    }
+
+    let savedExpense = data;
+    const receiptFile = bokioImportFiles[row.id];
+
+    if (receiptFile && bokioImportCanAttachReceipt(row)) {
+      const uploadedExpense = await uploadExpenseReceipt(data.id, receiptFile);
+      savedExpense = uploadedExpense || data;
+    }
+
+    setExpenses((current) => [...current, savedExpense]);
+    updateBokioImportRow(row.id, {
+      status: "imported",
+      importedExpenseId: savedExpense.id,
+      note: row.note || (language === "sv" ? `Kostnad skapad: ${savedExpense.id}` : `Expense created: ${savedExpense.id}`)
+    });
+    setBokioImportMessage(language === "sv"
+      ? `Kostnad skapad fran ${row.fileName}.`
+      : `Expense created from ${row.fileName}.`);
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
   function downloadBokioImportQueueCsv() {
     const rows = [
-      ["Filnamn", "Typ", "Storlek", "Filens datum", "Tillagd", "Status", "Anteckning"],
+      ["Filnamn", "Typ", "Storlek", "Filens datum", "Tillagd", "Status", "Datum", "Beskrivning", "Netto", "Moms", "Kategori", "Kostnad ID", "Anteckning"],
       ...bokioImportQueue.map((row) => [
         row.fileName,
         row.kind,
@@ -3759,6 +3855,12 @@ function App() {
         row.lastModified || "",
         String(row.importedAt || "").slice(0, 10),
         row.status,
+        row.expenseDate || "",
+        row.description || "",
+        row.netAmount || "",
+        row.vatAmount || "",
+        row.category || "",
+        row.importedExpenseId || "",
         row.note || ""
       ])
     ];
@@ -10000,8 +10102,8 @@ function App() {
                 <h3>{language === "sv" ? "Importera gamla underlag" : "Import old documents"}</h3>
                 <p>
                   {language === "sv"
-                    ? "Lagg PDF, bilder, CSV, SIE eller ZIP fran Bokio i en granskningsko. AliBooks bokfor inte automatiskt forran du har kontrollerat filerna."
-                    : "Add PDF, images, CSV, SIE or ZIP files from Bokio to a review queue. AliBooks does not bookkeep automatically until you have checked the files."}
+                    ? "Lagg PDF, bilder, CSV, SIE eller ZIP fran Bokio i en granskningsko. Fyll belopp och moms, skapa sedan en riktig kostnad nar raden ar kontrollerad."
+                    : "Add PDF, images, CSV, SIE or ZIP files from Bokio to a review queue. Enter amount and VAT, then create a real expense when the row is checked."}
                 </p>
               </div>
               <div className="bokio-import-actions">
@@ -10064,12 +10166,20 @@ function App() {
               <div className="bokio-import-list">
                 {bokioImportQueue.map((row) => (
                   <div className={`bokio-import-row ${row.status}`} key={row.id}>
-                    <div>
+                    <div className="bokio-import-file-cell">
                       <strong>{row.fileName}</strong>
                       <span>
                         {row.kind} - {bokioImportFileSize(row.size)}
                         {row.lastModified ? ` - ${language === "sv" ? "fildatum" : "file date"} ${row.lastModified}` : ""}
                       </span>
+                      <span>
+                        {bokioImportFiles[row.id]
+                          ? (language === "sv" ? "Filen finns redo for kvitto-uppladdning." : "File is ready for receipt upload.")
+                          : (language === "sv" ? "Filen maste valjas igen om den ska laddas upp som kvitto." : "Choose the file again if it should be uploaded as receipt.")}
+                      </span>
+                      {row.importedExpenseId && (
+                        <span>{language === "sv" ? "Kostnad ID" : "Expense ID"}: {row.importedExpenseId}</span>
+                      )}
                     </div>
                     <label>
                       {language === "sv" ? "Status" : "Status"}
@@ -10083,6 +10193,55 @@ function App() {
                       </select>
                     </label>
                     <label>
+                      {t.date}
+                      <input
+                        type="date"
+                        value={row.expenseDate || ""}
+                        onChange={(event) => updateBokioImportRow(row.id, { expenseDate: event.target.value })}
+                      />
+                    </label>
+                    <label className="wide">
+                      {t.description}
+                      <input
+                        value={row.description || ""}
+                        onChange={(event) => updateBokioImportRow(row.id, { description: event.target.value })}
+                        placeholder={language === "sv" ? "Beskrivning for kostnaden" : "Expense description"}
+                      />
+                    </label>
+                    <label>
+                      {t.net}
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.netAmount || ""}
+                        onChange={(event) => updateBokioImportRow(row.id, { netAmount: event.target.value })}
+                        placeholder="1000"
+                      />
+                    </label>
+                    <label>
+                      {t.vat}
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.vatAmount || ""}
+                        onChange={(event) => updateBokioImportRow(row.id, { vatAmount: event.target.value })}
+                        placeholder="250"
+                      />
+                    </label>
+                    <label>
+                      {t.category}
+                      <select
+                        value={row.category || "5420"}
+                        onChange={(event) => updateBokioImportRow(row.id, { category: event.target.value })}
+                      >
+                        <option value="5420">5420 Programvaror</option>
+                        <option value="5410">5410 Forbrukningsinventarier</option>
+                        <option value="5800">5800 Resekostnader</option>
+                        <option value="6570">6570 Bankkostnader</option>
+                        <option value="4010">4010 Inkop</option>
+                      </select>
+                    </label>
+                    <label>
                       {language === "sv" ? "Anteckning" : "Note"}
                       <input
                         value={row.note || ""}
@@ -10090,9 +10249,19 @@ function App() {
                         placeholder={language === "sv" ? "Ex: koppla till inkop, faktura eller ar 2025" : "Ex: link to expense, invoice or year 2025"}
                       />
                     </label>
-                    <button type="button" className="danger-button soft" onClick={() => removeBokioImportRow(row.id)}>
-                      {language === "sv" ? "Ta bort" : "Remove"}
-                    </button>
+                    <div className="bokio-import-row-actions">
+                      <button
+                        type="button"
+                        className="primary-small-button"
+                        onClick={() => createExpenseFromBokioImport(row)}
+                        disabled={!token || row.status === "imported"}
+                      >
+                        {language === "sv" ? "Skapa kostnad" : "Create expense"}
+                      </button>
+                      <button type="button" className="danger-button soft" onClick={() => removeBokioImportRow(row.id)}>
+                        {language === "sv" ? "Ta bort" : "Remove"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

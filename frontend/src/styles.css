@@ -4214,7 +4214,7 @@ button:focus-visible,
 
 .bokio-import-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(150px, 180px) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(130px, 1fr)) auto;
   gap: 12px;
   align-items: end;
   padding: 12px;
@@ -4238,6 +4238,11 @@ button:focus-visible,
   gap: 4px;
 }
 
+.bokio-import-row .wide {
+  grid-column: span 2;
+  min-width: 220px;
+}
+
 .bokio-import-row span {
   color: #5d6259;
   font-size: 14px;
@@ -4251,6 +4256,17 @@ button:focus-visible,
 
 .danger-button.soft {
   background: #fff0f0;
+}
+
+.bokio-import-row .bokio-import-file-cell {
+  align-self: center;
+}
+
+.bokio-import-row .bokio-import-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .receipt-panel {
