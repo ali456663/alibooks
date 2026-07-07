@@ -2297,6 +2297,15 @@ button:focus-visible,
   box-shadow: var(--shadow-small);
 }
 
+.payroll-tax-panel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #d9d3ff;
+  border-radius: 8px;
+  background: #fbfaff;
+  box-shadow: var(--shadow-small);
+}
+
 .compact-label {
   display: grid;
   gap: 4px;
@@ -2369,6 +2378,41 @@ button:focus-visible,
 }
 
 .payroll-payment-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.payroll-tax-summary,
+.payroll-tax-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.payroll-tax-flow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.payroll-tax-summary article,
+.payroll-tax-flow article {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d9d3ff;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.payroll-tax-summary span,
+.payroll-tax-flow p {
+  margin: 0;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.payroll-tax-summary strong {
   display: block;
   margin-top: 6px;
   font-size: 18px;
@@ -5054,6 +5098,8 @@ button:focus-visible,
   .payroll-summary-grid,
   .payroll-report-summary,
   .payroll-payment-summary,
+  .payroll-tax-summary,
+  .payroll-tax-flow,
   .payroll-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5150,6 +5196,8 @@ button:focus-visible,
   .payroll-report-row,
   .payroll-payment-summary,
   .payroll-payment-card,
+  .payroll-tax-summary,
+  .payroll-tax-flow,
   .payroll-form,
   .payroll-employee-card,
   .payroll-draft-card,

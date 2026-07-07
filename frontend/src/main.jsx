@@ -1020,6 +1020,8 @@ const localPreferenceKeys = [
   "alibooks-payroll-selected-employee-id",
   "alibooks-payroll-report-month",
   "alibooks-payroll-payment-statuses",
+  "alibooks-payroll-tax-payment-date",
+  "alibooks-payroll-tax-settlements",
   "alibooks-payroll-tax-rate",
   "alibooks-payroll-employer-rate",
   "alibooks-payroll-salary-account",
@@ -1180,6 +1182,15 @@ function App() {
   const [payrollEmployeeAddress, setPayrollEmployeeAddress] = useState("");
   const [payrollSelectedEmployeeId, setPayrollSelectedEmployeeId] = useState(() => localStorage.getItem("alibooks-payroll-selected-employee-id") || "new");
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
+  const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
+  const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
+    try {
+      const savedSettlements = JSON.parse(localStorage.getItem("alibooks-payroll-tax-settlements") || "{}");
+      return savedSettlements && typeof savedSettlements === "object" ? savedSettlements : {};
+    } catch {
+      return {};
+    }
+  });
   const [payrollPaymentStatuses, setPayrollPaymentStatuses] = useState(() => {
     try {
       const savedStatuses = JSON.parse(localStorage.getItem("alibooks-payroll-payment-statuses") || "{}");
@@ -1333,10 +1344,12 @@ function App() {
     localStorage.setItem("alibooks-payroll-selected-employee-id", payrollSelectedEmployeeId);
     localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
+    localStorage.setItem("alibooks-payroll-tax-payment-date", payrollTaxPaymentDate);
+    localStorage.setItem("alibooks-payroll-tax-settlements", JSON.stringify(payrollTaxSettlements));
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
@@ -2184,6 +2197,8 @@ function App() {
     setPayrollEmployeeAddress("");
     setPayrollReportMonth(new Date().toISOString().slice(0, 7));
     setPayrollPaymentStatuses({});
+    setPayrollTaxPaymentDate(new Date().toISOString().slice(0, 10));
+    setPayrollTaxSettlements({});
     setPayrollTaxRate("30");
     setPayrollEmployerRate("31.42");
     setPayrollSalaryAccount("7010");
@@ -5071,6 +5086,122 @@ function App() {
     downloadLocalCsv(`lonebetalningar-${payrollReportMonth || "period"}.csv`, rows);
   }
 
+  function updatePayrollTaxSettlement(field, value) {
+    setPayrollTaxSettlements((current) => ({
+      ...current,
+      [payrollReportMonth]: {
+        ...(current[payrollReportMonth] || {}),
+        [field]: value,
+        updatedAt: new Date().toISOString()
+      }
+    }));
+  }
+
+  async function bookPayrollTaxAccountTransfer() {
+    setError("");
+    const amount = payrollPaymentTotals.taxToReserve + payrollPaymentTotals.employerFeesToReserve;
+
+    if (amount <= 0) {
+      setError(language === "sv" ? "Det finns ingen skatt eller arbetsgivaravgift att bokfora for vald period." : "There is no tax or employer contribution to book for selected period.");
+      return;
+    }
+
+    if (!payrollTaxPaymentDate) {
+      setError(language === "sv" ? "Valj betalningsdatum for skattekonto." : "Choose tax account payment date.");
+      return;
+    }
+
+    if (isAccountingDateLocked(payrollTaxPaymentDate)) {
+      setError(lockedAccountingMessage(payrollTaxPaymentDate));
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        voucherDate: payrollTaxPaymentDate,
+        description: `Inbetalning skattekonto ${payrollReportMonth}`,
+        lines: [
+          { accountNumber: "1630", debit: amount, credit: 0 },
+          { accountNumber: "1930", debit: 0, credit: amount }
+        ]
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora inbetalning till skattekonto." : "Could not book tax account payment."));
+      return;
+    }
+
+    const voucherNumber = data?.[0]?.voucherNumber || "";
+    updatePayrollTaxSettlement("taxAccountTransferVoucher", voucherNumber || "booked");
+    setPayrollMessage(language === "sv"
+      ? `Inbetalning till skattekonto bokfordes${voucherNumber ? ` som ${voucherNumber}` : ""}.`
+      : `Tax account payment was booked${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
+    loadJournalEntries();
+    loadBalanceReport();
+  }
+
+  async function bookPayrollTaxSettlement() {
+    setError("");
+    const tax = payrollPaymentTotals.taxToReserve;
+    const employerFees = payrollPaymentTotals.employerFeesToReserve;
+    const amount = tax + employerFees;
+
+    if (amount <= 0) {
+      setError(language === "sv" ? "Det finns ingen skatt eller arbetsgivaravgift att avrakna for vald period." : "There is no tax or employer contribution to settle for selected period.");
+      return;
+    }
+
+    if (!payrollTaxPaymentDate) {
+      setError(language === "sv" ? "Valj datum for avrakningen." : "Choose settlement date.");
+      return;
+    }
+
+    if (isAccountingDateLocked(payrollTaxPaymentDate)) {
+      setError(lockedAccountingMessage(payrollTaxPaymentDate));
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        voucherDate: payrollTaxPaymentDate,
+        description: `Avrakning arbetsgivardeklaration ${payrollReportMonth}`,
+        lines: [
+          { accountNumber: "2710", debit: tax, credit: 0 },
+          { accountNumber: "2731", debit: employerFees, credit: 0 },
+          { accountNumber: "1630", debit: 0, credit: amount }
+        ].filter((line) => line.debit > 0 || line.credit > 0)
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora avrakning mot skattekonto." : "Could not book tax account settlement."));
+      return;
+    }
+
+    const voucherNumber = data?.[0]?.voucherNumber || "";
+    updatePayrollTaxSettlement("taxSettlementVoucher", voucherNumber || "booked");
+    setPayrollMessage(language === "sv"
+      ? `Avrakning mot skattekonto bokfordes${voucherNumber ? ` som ${voucherNumber}` : ""}.`
+      : `Tax account settlement was booked${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
+    loadJournalEntries();
+    loadBalanceReport();
+  }
+
   function openPayrollMonthlyReport() {
     const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
@@ -5282,6 +5413,7 @@ function App() {
         payrollBooked: payrollDraftTotals.booked,
         payrollTotalCost: payrollDraftTotals.totalCost,
         payrollPaymentStatuses: Object.keys(payrollPaymentStatuses).length,
+        payrollTaxSettlements: Object.keys(payrollTaxSettlements).length,
         auditEvents: auditTrailRows.length,
         dataQualityIssues: dataQualityIssues.length,
         dataQualityCritical: dataQualityCriticalCount,
@@ -5298,6 +5430,8 @@ function App() {
         employees: payrollEmployees,
         reportMonth: payrollReportMonth,
         paymentStatuses: payrollPaymentStatuses,
+        taxPaymentDate: payrollTaxPaymentDate,
+        taxSettlements: payrollTaxSettlements,
         taxRate: payrollTaxRate,
         employerRate: payrollEmployerRate,
         salaryAccount: payrollSalaryAccount
@@ -6224,6 +6358,8 @@ function App() {
     reservedCount: 0
   });
   payrollPaymentTotals.netRemaining = Math.max(0, payrollPaymentTotals.netToPay - payrollPaymentTotals.netPaid);
+  const payrollTaxSettlementForMonth = payrollTaxSettlements[payrollReportMonth] || {};
+  const payrollTaxTotalToHandle = payrollPaymentTotals.taxToReserve + payrollPaymentTotals.employerFeesToReserve;
 
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
@@ -6299,8 +6435,8 @@ function App() {
 
     if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lÃ¶n") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar och bokfora lonen som ett flerradigt verifikat. Kontrollera alltid exakta skatter innan riktig utbetalning.`
-        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments and book payroll as a multi-line voucher. Always verify exact taxes before real payment.`, "payroll");
+        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar, bokfora lonen och hantera skattekonto/arbetsgivardeklaration. Kontrollera alltid exakta skatter innan riktig utbetalning.`
+        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments, book payroll and handle tax account/employer declaration settlement. Always verify exact taxes before real payment.`, "payroll");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -6362,6 +6498,7 @@ function App() {
       payrollBooked: payrollDraftTotals.booked,
       payrollTotalCost: payrollDraftTotals.totalCost,
       payrollPaymentStatuses: Object.keys(payrollPaymentStatuses).length,
+      payrollTaxSettlements: Object.keys(payrollTaxSettlements).length,
       sieExportStatus: sieExportStatusText,
       sieExportPeriod: sieExportPeriodLabel,
       sieExportVouchers: filteredJournalGroups.length,
@@ -9820,6 +9957,71 @@ function App() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="payroll-tax-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Skattekonto och arbetsgivardeklaration" : "Tax account and employer declaration"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Bokfor inbetalning till skattekonto och avrakning av personalskatt/arbetsgivaravgifter for vald period."
+                      : "Book payment to the tax account and settlement of employee tax/employer contributions for selected period."}
+                  </p>
+                </div>
+                <label className="compact-label">
+                  {language === "sv" ? "Bokforingsdatum" : "Booking date"}
+                  <input type="date" value={payrollTaxPaymentDate} onChange={(event) => setPayrollTaxPaymentDate(event.target.value)} />
+                </label>
+              </div>
+
+              <div className="payroll-tax-summary">
+                <article>
+                  <span>{language === "sv" ? "Personalskatt 2710" : "Employee tax 2710"}</span>
+                  <strong>{payrollPaymentTotals.taxToReserve} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Arbetsgivaravgift 2731" : "Employer fees 2731"}</span>
+                  <strong>{payrollPaymentTotals.employerFeesToReserve} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Totalt till skattekonto" : "Total to tax account"}</span>
+                  <strong>{payrollTaxTotalToHandle} SEK</strong>
+                </article>
+              </div>
+
+              <div className="payroll-tax-flow">
+                <article>
+                  <strong>{language === "sv" ? "1. Inbetalning till skattekonto" : "1. Payment to tax account"}</strong>
+                  <p>{language === "sv" ? "Bokfor: 1630 debet och 1930 kredit." : "Book: 1630 debit and 1930 credit."}</p>
+                  {payrollTaxSettlementForMonth.taxAccountTransferVoucher && (
+                    <span className="status success-status">{t.voucher}: {payrollTaxSettlementForMonth.taxAccountTransferVoucher}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="primary-small-button"
+                    onClick={bookPayrollTaxAccountTransfer}
+                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxAccountTransferVoucher)}
+                  >
+                    {language === "sv" ? "Bokfor inbetalning" : "Book payment"}
+                  </button>
+                </article>
+                <article>
+                  <strong>{language === "sv" ? "2. Avrakning arbetsgivardeklaration" : "2. Employer declaration settlement"}</strong>
+                  <p>{language === "sv" ? "Bokfor: 2710/2731 debet och 1630 kredit." : "Book: 2710/2731 debit and 1630 credit."}</p>
+                  {payrollTaxSettlementForMonth.taxSettlementVoucher && (
+                    <span className="status success-status">{t.voucher}: {payrollTaxSettlementForMonth.taxSettlementVoucher}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="primary-small-button"
+                    onClick={bookPayrollTaxSettlement}
+                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxSettlementVoucher)}
+                  >
+                    {language === "sv" ? "Bokfor avrakning" : "Book settlement"}
+                  </button>
+                </article>
+              </div>
             </div>
 
             <form className="form payroll-form" onSubmit={handleSavePayrollDraft}>

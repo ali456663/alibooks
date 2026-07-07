@@ -15,6 +15,7 @@ public class AccountSeeder implements CommandLineRunner {
   @Override
   public void run(String... args) {
     upsert("1930", "Foretagskonto", "BOTH");
+    upsert("1630", "Skattekonto", "BOTH");
     upsert("1580", "Fordran hos Stripe", "BOTH");
     upsert("1510", "Kundfordringar", "BOTH");
     upsert("2611", "Utgaende moms", "BOTH");
