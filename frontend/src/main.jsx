@@ -1021,6 +1021,7 @@ const localPreferenceKeys = [
   "alibooks-payroll-report-month",
   "alibooks-payroll-payment-statuses",
   "alibooks-payroll-payment-batches",
+  "alibooks-payroll-payslip-statuses",
   "alibooks-payroll-tax-payment-date",
   "alibooks-payroll-tax-settlements",
   "alibooks-payroll-auto-sync-enabled",
@@ -1218,6 +1219,14 @@ function App() {
       return [];
     }
   });
+  const [payrollPayslipStatuses, setPayrollPayslipStatuses] = useState(() => {
+    try {
+      const savedStatuses = JSON.parse(localStorage.getItem("alibooks-payroll-payslip-statuses") || "{}");
+      return savedStatuses && typeof savedStatuses === "object" ? savedStatuses : {};
+    } catch {
+      return {};
+    }
+  });
   const [payrollPeriod, setPayrollPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [payrollGrossSalary, setPayrollGrossSalary] = useState("");
   const [payrollTaxRate, setPayrollTaxRate] = useState(() => localStorage.getItem("alibooks-payroll-tax-rate") || "30");
@@ -1365,6 +1374,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-salary-payment-date", payrollSalaryPaymentDate);
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
     localStorage.setItem("alibooks-payroll-payment-batches", JSON.stringify(payrollPaymentBatches));
+    localStorage.setItem("alibooks-payroll-payslip-statuses", JSON.stringify(payrollPayslipStatuses));
     localStorage.setItem("alibooks-payroll-tax-payment-date", payrollTaxPaymentDate);
     localStorage.setItem("alibooks-payroll-tax-settlements", JSON.stringify(payrollTaxSettlements));
     localStorage.setItem("alibooks-payroll-auto-sync-enabled", payrollAutoSyncEnabled ? "true" : "false");
@@ -1372,7 +1382,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollPaymentBatches, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollPaymentBatches, payrollPayslipStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     if (!token) {
@@ -1410,6 +1420,7 @@ function App() {
     payrollSalaryPaymentDate,
     payrollPaymentStatuses,
     payrollPaymentBatches,
+    payrollPayslipStatuses,
     payrollTaxPaymentDate,
     payrollTaxSettlements,
     payrollTaxRate,
@@ -2266,6 +2277,8 @@ function App() {
     setPayrollEmployeeAddress("");
     setPayrollReportMonth(new Date().toISOString().slice(0, 7));
     setPayrollPaymentStatuses({});
+    setPayrollPaymentBatches([]);
+    setPayrollPayslipStatuses({});
     setPayrollTaxPaymentDate(new Date().toISOString().slice(0, 10));
     setPayrollTaxSettlements({});
     setPayrollAutoSyncEnabled(true);
@@ -4952,6 +4965,11 @@ function App() {
       delete next[draftId];
       return next;
     });
+    setPayrollPayslipStatuses((current) => {
+      const next = { ...current };
+      delete next[draftId];
+      return next;
+    });
   }
 
   function updatePayrollPaymentStatus(draftId, field, value) {
@@ -5201,6 +5219,128 @@ function App() {
 </body>
 </html>`);
     payrollWindow.document.close();
+  }
+
+  function payrollPayslipRecipientEmail(draft) {
+    const employee = payrollEmployees.find((item) => String(item.id) === String(draft.employeeId));
+    return draft.email || employee?.email || "";
+  }
+
+  function payrollPayslipEmailSubject(draft) {
+    const companyName = settings?.companyName || "Muscle&Focus";
+    return language === "sv"
+      ? `Lonebesked ${draft.period} - ${companyName}`
+      : `Payslip ${draft.period} - ${companyName}`;
+  }
+
+  function payrollPayslipEmailText(draft) {
+    const calculation = payrollDraftCalculation(draft);
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+
+    if (language === "sv") {
+      return [
+        `Hej ${draft.employeeName},`,
+        "",
+        `Ditt lonebesked for ${formatMonthLabel(draft.period, language)} ar klart.`,
+        "",
+        `Bruttolon: ${calculation.gross} SEK`,
+        `Preliminar skatt: ${calculation.withheldTax} SEK`,
+        `Nettolon att betala: ${calculation.netPay} SEK`,
+        `Utbetalningsdatum: ${formatDateOnly(payrollSalaryPaymentDate) || "-"}`,
+        "",
+        "Lonebeskedet finns som PDF/utskrift i AliBooks.",
+        "",
+        `Vanliga halsningar`,
+        companyName,
+        companyEmail
+      ].join("\n");
+    }
+
+    return [
+      `Hi ${draft.employeeName},`,
+      "",
+      `Your payslip for ${formatMonthLabel(draft.period, language)} is ready.`,
+      "",
+      `Gross salary: ${calculation.gross} SEK`,
+      `Preliminary tax: ${calculation.withheldTax} SEK`,
+      `Net pay: ${calculation.netPay} SEK`,
+      `Payment date: ${formatDateOnly(payrollSalaryPaymentDate) || "-"}`,
+      "",
+      "The payslip is available as PDF/printout in AliBooks.",
+      "",
+      "Best regards",
+      companyName,
+      companyEmail
+    ].join("\n");
+  }
+
+  function markPayrollPayslipSent(draft, method = "manual") {
+    const recipientEmail = payrollPayslipRecipientEmail(draft);
+    setPayrollPayslipStatuses((current) => ({
+      ...current,
+      [draft.id]: {
+        sent: true,
+        sentAt: new Date().toISOString(),
+        method,
+        recipientEmail
+      }
+    }));
+  }
+
+  function openPayrollPayslipEmail(draft) {
+    setError("");
+    const recipientEmail = payrollPayslipRecipientEmail(draft);
+
+    if (!recipientEmail) {
+      setError(language === "sv" ? "Den anstallde saknar e-postadress." : "The employee has no email address.");
+      return;
+    }
+
+    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(payrollPayslipEmailSubject(draft))}&body=${encodeURIComponent(payrollPayslipEmailText(draft))}`;
+    window.location.href = mailtoUrl;
+    markPayrollPayslipSent(draft, "email");
+    setPayrollMessage(language === "sv" ? "E-postutkast for lonebesked oppnades och markerades som skickat." : "Payslip email draft opened and marked as sent.");
+  }
+
+  async function copyPayrollPayslipEmail(draft) {
+    setError("");
+    const text = payrollPayslipEmailText(draft);
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(language === "sv" ? "Kopiera lonebesked:" : "Copy payslip message:", text);
+    }
+
+    markPayrollPayslipSent(draft, "copied");
+    setPayrollMessage(language === "sv" ? "Lonebeskedets e-posttext kopierades och markerades som skickad." : "Payslip email text copied and marked as sent.");
+  }
+
+  function markPayrollPayslipMonthSent() {
+    const now = new Date().toISOString();
+    const updates = {};
+
+    payrollPayslipRows.forEach((row) => {
+      if (row.recipientEmail && !row.payslipSent) {
+        updates[row.id] = {
+          sent: true,
+          sentAt: now,
+          method: "month",
+          recipientEmail: row.recipientEmail
+        };
+      }
+    });
+
+    if (Object.keys(updates).length === 0) {
+      setError(language === "sv" ? "Inga lonebesked med e-postadress finns for vald period." : "No payslips with email address exist for selected period.");
+      return;
+    }
+
+    setPayrollPayslipStatuses((current) => ({ ...current, ...updates }));
+    setPayrollMessage(language === "sv"
+      ? `${Object.keys(updates).length} lonebesked markerades som skickade.`
+      : `${Object.keys(updates).length} payslips were marked as sent.`);
   }
 
   function downloadPayrollReportCsv() {
@@ -5485,6 +5625,7 @@ function App() {
       drafts: payrollDrafts,
       paymentStatuses: payrollPaymentStatuses,
       paymentBatches: payrollPaymentBatches,
+      payslipStatuses: payrollPayslipStatuses,
       taxSettlements: payrollTaxSettlements,
       reportMonth: payrollReportMonth,
       salaryPaymentDate: payrollSalaryPaymentDate,
@@ -5502,6 +5643,7 @@ function App() {
     setPayrollDrafts(Array.isArray(snapshot.drafts) ? snapshot.drafts : []);
     setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
     setPayrollPaymentBatches(Array.isArray(snapshot.paymentBatches) ? snapshot.paymentBatches : []);
+    setPayrollPayslipStatuses(snapshot.payslipStatuses && typeof snapshot.payslipStatuses === "object" ? snapshot.payslipStatuses : {});
     setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
     setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
     setPayrollSalaryPaymentDate(snapshot.salaryPaymentDate || new Date().toISOString().slice(0, 10));
@@ -6950,6 +7092,26 @@ function App() {
   const payrollPaymentBatchesForMonth = payrollPaymentBatches
     .filter((batch) => batch.period === payrollReportMonth)
     .sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+  const payrollPayslipRows = payrollReportDrafts.map((draft) => {
+    const employee = payrollEmployees.find((item) => String(item.id) === String(draft.employeeId));
+    const status = payrollPayslipStatuses[draft.id] || {};
+    const recipientEmail = draft.email || employee?.email || "";
+
+    return {
+      ...draft,
+      recipientEmail,
+      payslipSent: status.sent === true,
+      payslipSentAt: status.sentAt || "",
+      payslipMethod: status.method || ""
+    };
+  }).sort((first, second) => String(first.employeeName || "").localeCompare(String(second.employeeName || "")));
+  const payrollPayslipTotals = payrollPayslipRows.reduce((totals, row) => {
+    totals.count += 1;
+    if (row.payslipSent) totals.sent += 1;
+    if (!row.payslipSent) totals.unsent += 1;
+    if (!row.recipientEmail) totals.missingEmail += 1;
+    return totals;
+  }, { count: 0, sent: 0, unsent: 0, missingEmail: 0 });
   const payrollTaxSettlementForMonth = payrollTaxSettlements[payrollReportMonth] || {};
   const payrollTaxTotalToHandle = payrollPaymentTotals.taxToReserve + payrollPaymentTotals.employerFeesToReserve;
 
@@ -10646,6 +10808,72 @@ function App() {
               )}
             </div>
 
+            <div className="payroll-payslip-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Lonebesked" : "Payslips"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Skicka, kopiera eller markera lonebesked som skickade for vald period. Riktig SMTP kan kopplas pa senare."
+                      : "Send, copy or mark payslips as sent for the selected period. Real SMTP can be connected later."}
+                  </p>
+                </div>
+                <button type="button" className="secondary-button" onClick={markPayrollPayslipMonthSent} disabled={payrollPayslipRows.length === 0}>
+                  {language === "sv" ? "Markera alla skickade" : "Mark all sent"}
+                </button>
+              </div>
+
+              <div className="payroll-payslip-summary">
+                <article>
+                  <span>{language === "sv" ? "Lonebesked" : "Payslips"}</span>
+                  <strong>{payrollPayslipTotals.count}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Skickade" : "Sent"}</span>
+                  <strong>{payrollPayslipTotals.sent}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Ej skickade" : "Not sent"}</span>
+                  <strong>{payrollPayslipTotals.unsent}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Saknar e-post" : "Missing email"}</span>
+                  <strong>{payrollPayslipTotals.missingEmail}</strong>
+                </article>
+              </div>
+
+              {payrollPayslipRows.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga lonebesked for vald period." : "No payslips for selected period."}</p>
+              ) : (
+                <div className="payroll-payslip-list">
+                  {payrollPayslipRows.map((row) => (
+                    <article className="payroll-payslip-card" key={row.id}>
+                      <div>
+                        <strong>{row.employeeName}</strong>
+                        <span>{row.recipientEmail || (language === "sv" ? "Saknar e-post" : "Missing email")}</span>
+                        <span>{language === "sv" ? "Period" : "Period"}: {row.period}</span>
+                        {row.payslipSentAt && <span>{language === "sv" ? "Skickad" : "Sent"}: {formatDateTime(row.payslipSentAt)}</span>}
+                      </div>
+                      <div className="payroll-card-actions">
+                        <span className={row.payslipSent ? "status success-status" : "status warning-status"}>
+                          {row.payslipSent ? (language === "sv" ? "Skickad" : "Sent") : (language === "sv" ? "Ej skickad" : "Not sent")}
+                        </span>
+                        <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(row)} disabled={!row.recipientEmail}>
+                          {language === "sv" ? "E-post" : "Email"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => copyPayrollPayslipEmail(row)}>
+                          {language === "sv" ? "Kopiera" : "Copy"}
+                        </button>
+                        <button type="button" className="primary-small-button" onClick={() => markPayrollPayslipSent(row)}>
+                          {language === "sv" ? "Markera skickad" : "Mark sent"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="payroll-tax-panel">
               <div className="section-heading compact-heading">
                 <div>
@@ -10900,20 +11128,27 @@ function App() {
               <div className="payroll-draft-list">
                 {payrollDrafts.map((draft) => {
                   const calculation = payrollDraftCalculation(draft);
+                  const payslipStatus = payrollPayslipStatuses[draft.id] || {};
+                  const payslipRecipientEmail = payrollPayslipRecipientEmail(draft);
 
                   return (
                     <article className={draft.status === "booked" ? "payroll-draft-card booked" : "payroll-draft-card"} key={draft.id}>
                       <div>
                         <strong>{draft.employeeName}</strong>
                         <span>{draft.period} - {draft.personalNumber || "-"}</span>
+                        <span>{language === "sv" ? "E-post" : "Email"}: {payslipRecipientEmail || "-"}</span>
                         <span>{language === "sv" ? "Brutto" : "Gross"}: {calculation.gross} SEK</span>
                         <span>{language === "sv" ? "Netto" : "Net"}: {calculation.netPay} SEK</span>
                         <span>{language === "sv" ? "Total kostnad" : "Total cost"}: {calculation.totalCost} SEK</span>
+                        {payslipStatus.sentAt && <span>{language === "sv" ? "Lonebesked skickat" : "Payslip sent"}: {formatDateTime(payslipStatus.sentAt)}</span>}
                         {draft.voucherNumber && <span>{t.voucher}: {draft.voucherNumber}</span>}
                       </div>
                       <div className="payroll-card-actions">
                         <span className={draft.status === "booked" ? "status success-status" : "status warning-status"}>
                           {draft.status === "booked" ? (language === "sv" ? "Bokford" : "Booked") : (language === "sv" ? "Utkast" : "Draft")}
+                        </span>
+                        <span className={payslipStatus.sent ? "status success-status" : "status warning-status"}>
+                          {payslipStatus.sent ? (language === "sv" ? "Lonebesked skickat" : "Payslip sent") : (language === "sv" ? "Lonebesked ej skickat" : "Payslip not sent")}
                         </span>
                         <button
                           type="button"
@@ -10925,6 +11160,12 @@ function App() {
                         </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollStatement(draft)}>
                           {language === "sv" ? "Lonebesked" : "Payslip"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(draft)} disabled={!payslipRecipientEmail}>
+                          {language === "sv" ? "E-post" : "Email"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => copyPayrollPayslipEmail(draft)}>
+                          {language === "sv" ? "Kopiera e-post" : "Copy email"}
                         </button>
                         <button type="button" className="danger-button soft" onClick={() => deletePayrollDraft(draft.id)}>
                           {language === "sv" ? "Ta bort" : "Remove"}

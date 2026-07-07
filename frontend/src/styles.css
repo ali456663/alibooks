@@ -2353,6 +2353,15 @@ button:focus-visible,
   box-shadow: var(--shadow-small);
 }
 
+.payroll-payslip-panel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #cfe2ff;
+  border-radius: 8px;
+  background: #f8fbff;
+  box-shadow: var(--shadow-small);
+}
+
 .payroll-tax-panel {
   margin: 16px 0;
   padding: 16px;
@@ -2419,21 +2428,37 @@ button:focus-visible,
   margin: 14px 0;
 }
 
+.payroll-payslip-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
 .payroll-payment-summary article,
-.payroll-payment-card {
+.payroll-payment-card,
+.payroll-payslip-summary article,
+.payroll-payslip-card {
   padding: 12px;
   border: 1px solid #d8eadf;
   border-radius: 8px;
   background: #ffffff;
 }
 
-.payroll-payment-summary span {
+.payroll-payslip-summary article,
+.payroll-payslip-card {
+  border-color: #cfe2ff;
+}
+
+.payroll-payment-summary span,
+.payroll-payslip-summary span {
   display: block;
   color: #5d6259;
   font-weight: 800;
 }
 
-.payroll-payment-summary strong {
+.payroll-payment-summary strong,
+.payroll-payslip-summary strong {
   display: block;
   margin-top: 6px;
   font-size: 18px;
@@ -2496,6 +2521,11 @@ button:focus-visible,
   gap: 10px;
 }
 
+.payroll-payslip-list {
+  display: grid;
+  gap: 10px;
+}
+
 .payroll-batch-panel {
   display: grid;
   gap: 10px;
@@ -2534,12 +2564,25 @@ button:focus-visible,
   align-items: center;
 }
 
+.payroll-payslip-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .payroll-payment-card div:first-child {
   display: grid;
   gap: 4px;
 }
 
-.payroll-payment-card span {
+.payroll-payslip-card div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-payment-card span,
+.payroll-payslip-card span {
   color: #5d6259;
 }
 
@@ -5202,6 +5245,7 @@ button:focus-visible,
   .payroll-summary-grid,
   .payroll-report-summary,
   .payroll-payment-summary,
+  .payroll-payslip-summary,
   .payroll-tax-summary,
   .payroll-tax-flow,
   .payroll-form {
@@ -5304,6 +5348,8 @@ button:focus-visible,
   .payroll-report-row,
   .payroll-payment-summary,
   .payroll-payment-card,
+  .payroll-payslip-summary,
+  .payroll-payslip-card,
   .payroll-batch-card,
   .payroll-tax-summary,
   .payroll-tax-flow,
