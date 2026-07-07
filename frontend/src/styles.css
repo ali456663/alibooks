@@ -2451,6 +2451,23 @@ button:focus-visible,
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.payroll-declaration-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid #d8ccff;
+  border-radius: 8px;
+  background: #fbf9ff;
+}
+
+.payroll-declaration-panel p {
+  margin: 6px 0 0;
+  color: #516174;
+}
+
 .payroll-tax-summary article,
 .payroll-tax-flow article {
   display: grid;
@@ -5258,6 +5275,7 @@ button:focus-visible,
   .payroll-payment-card,
   .payroll-tax-summary,
   .payroll-tax-flow,
+  .payroll-declaration-panel,
   .payroll-form,
   .payroll-employee-card,
   .payroll-draft-card,
