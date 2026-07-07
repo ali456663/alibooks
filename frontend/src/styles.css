@@ -2496,6 +2496,37 @@ button:focus-visible,
   gap: 10px;
 }
 
+.payroll-batch-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.payroll-batch-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payroll-batch-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #cfe5d8;
+  border-radius: 8px;
+  background: #fbfffd;
+}
+
+.payroll-batch-card div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-batch-card span {
+  color: #516174;
+}
+
 .payroll-payment-card {
   display: grid;
   grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(190px, 1fr) auto;
@@ -5273,6 +5304,7 @@ button:focus-visible,
   .payroll-report-row,
   .payroll-payment-summary,
   .payroll-payment-card,
+  .payroll-batch-card,
   .payroll-tax-summary,
   .payroll-tax-flow,
   .payroll-declaration-panel,

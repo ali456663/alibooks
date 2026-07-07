@@ -1020,6 +1020,7 @@ const localPreferenceKeys = [
   "alibooks-payroll-selected-employee-id",
   "alibooks-payroll-report-month",
   "alibooks-payroll-payment-statuses",
+  "alibooks-payroll-payment-batches",
   "alibooks-payroll-tax-payment-date",
   "alibooks-payroll-tax-settlements",
   "alibooks-payroll-auto-sync-enabled",
@@ -1209,6 +1210,14 @@ function App() {
       return {};
     }
   });
+  const [payrollPaymentBatches, setPayrollPaymentBatches] = useState(() => {
+    try {
+      const savedBatches = JSON.parse(localStorage.getItem("alibooks-payroll-payment-batches") || "[]");
+      return Array.isArray(savedBatches) ? savedBatches : [];
+    } catch {
+      return [];
+    }
+  });
   const [payrollPeriod, setPayrollPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [payrollGrossSalary, setPayrollGrossSalary] = useState("");
   const [payrollTaxRate, setPayrollTaxRate] = useState(() => localStorage.getItem("alibooks-payroll-tax-rate") || "30");
@@ -1355,6 +1364,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
     localStorage.setItem("alibooks-payroll-salary-payment-date", payrollSalaryPaymentDate);
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
+    localStorage.setItem("alibooks-payroll-payment-batches", JSON.stringify(payrollPaymentBatches));
     localStorage.setItem("alibooks-payroll-tax-payment-date", payrollTaxPaymentDate);
     localStorage.setItem("alibooks-payroll-tax-settlements", JSON.stringify(payrollTaxSettlements));
     localStorage.setItem("alibooks-payroll-auto-sync-enabled", payrollAutoSyncEnabled ? "true" : "false");
@@ -1362,7 +1372,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollPaymentBatches, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     if (!token) {
@@ -1399,6 +1409,7 @@ function App() {
     payrollReportMonth,
     payrollSalaryPaymentDate,
     payrollPaymentStatuses,
+    payrollPaymentBatches,
     payrollTaxPaymentDate,
     payrollTaxSettlements,
     payrollTaxRate,
@@ -5291,7 +5302,63 @@ function App() {
       ]);
     });
 
+    const batch = {
+      id: Date.now(),
+      period: payrollReportMonth || "",
+      paymentDate: payrollSalaryPaymentDate,
+      createdAt: new Date().toISOString(),
+      totalAmount: payrollPaymentTotals.netToPay,
+      count: payrollPaymentRows.length,
+      missingBankAccounts: payrollPaymentTotals.missingBankAccounts,
+      rows: payrollPaymentRows.map((row) => ({
+        draftId: row.id,
+        employeeName: row.employeeName,
+        personalNumber: row.personalNumber || "",
+        clearingNumber: row.clearingNumber || "",
+        bankAccount: row.bankAccount || "",
+        amount: row.netPay,
+        reference: `Lon ${row.period} ${row.employeeName}`
+      }))
+    };
+
+    setPayrollPaymentBatches((current) => [batch, ...current].slice(0, 20));
     downloadLocalCsv(`lone-bankunderlag-${payrollReportMonth || "period"}.csv`, rows);
+    setPayrollMessage(language === "sv"
+      ? `Bankfil skapad for ${batch.count} loner, totalt ${batch.totalAmount} SEK.`
+      : `Bank file created for ${batch.count} payroll payments, total ${batch.totalAmount} SEK.`);
+  }
+
+  function markPayrollPaymentBatchPaid(batch) {
+    setError("");
+
+    if (!batch?.rows?.length) {
+      setError(language === "sv" ? "Batchen saknar betalningsrader." : "The batch has no payment rows.");
+      return;
+    }
+
+    setPayrollPaymentStatuses((current) => {
+      const next = { ...current };
+      batch.rows.forEach((row) => {
+        next[row.draftId] = {
+          ...(next[row.draftId] || {}),
+          netPaid: true,
+          netPaidAt: batch.paymentDate,
+          paymentBatchId: batch.id,
+          paymentReference: `Bankfil ${batch.period}`,
+          updatedAt: new Date().toISOString()
+        };
+      });
+      return next;
+    });
+
+    setPayrollPaymentBatches((current) => current.map((item) => (
+      item.id === batch.id
+        ? { ...item, status: "paid", markedPaidAt: new Date().toISOString() }
+        : item
+    )));
+    setPayrollMessage(language === "sv"
+      ? `Batch ${formatDateOnly(batch.paymentDate)} markerades som betald.`
+      : `Batch ${formatDateOnly(batch.paymentDate)} was marked as paid.`);
   }
 
   function updatePayrollTaxSettlement(field, value) {
@@ -5417,6 +5484,7 @@ function App() {
       employees: payrollEmployees,
       drafts: payrollDrafts,
       paymentStatuses: payrollPaymentStatuses,
+      paymentBatches: payrollPaymentBatches,
       taxSettlements: payrollTaxSettlements,
       reportMonth: payrollReportMonth,
       salaryPaymentDate: payrollSalaryPaymentDate,
@@ -5433,6 +5501,7 @@ function App() {
     setPayrollEmployees(Array.isArray(snapshot.employees) ? snapshot.employees : []);
     setPayrollDrafts(Array.isArray(snapshot.drafts) ? snapshot.drafts : []);
     setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
+    setPayrollPaymentBatches(Array.isArray(snapshot.paymentBatches) ? snapshot.paymentBatches : []);
     setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
     setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
     setPayrollSalaryPaymentDate(snapshot.salaryPaymentDate || new Date().toISOString().slice(0, 10));
@@ -6878,6 +6947,9 @@ function App() {
     missingBankAccounts: 0
   });
   payrollPaymentTotals.netRemaining = Math.max(0, payrollPaymentTotals.netToPay - payrollPaymentTotals.netPaid);
+  const payrollPaymentBatchesForMonth = payrollPaymentBatches
+    .filter((batch) => batch.period === payrollReportMonth)
+    .sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
   const payrollTaxSettlementForMonth = payrollTaxSettlements[payrollReportMonth] || {};
   const payrollTaxTotalToHandle = payrollPaymentTotals.taxToReserve + payrollPaymentTotals.employerFeesToReserve;
 
@@ -10537,6 +10609,39 @@ function App() {
                       </span>
                     </article>
                   ))}
+                </div>
+              )}
+
+              {payrollPaymentBatchesForMonth.length > 0 && (
+                <div className="payroll-batch-panel">
+                  <div className="section-heading compact-heading">
+                    <h3>{language === "sv" ? "Bankfilshistorik" : "Bank file history"}</h3>
+                    <span className="status">{payrollPaymentBatchesForMonth.length}</span>
+                  </div>
+                  <div className="payroll-batch-list">
+                    {payrollPaymentBatchesForMonth.map((batch) => (
+                      <article className="payroll-batch-card" key={batch.id}>
+                        <div>
+                          <strong>{formatDateOnly(batch.paymentDate)} - {batch.totalAmount} SEK</strong>
+                          <span>{batch.count} {language === "sv" ? "loner" : "payments"} - {language === "sv" ? "skapad" : "created"} {formatDateTime(batch.createdAt)}</span>
+                          <span>{language === "sv" ? "Saknar bankkonto" : "Missing bank account"}: {batch.missingBankAccounts || 0}</span>
+                        </div>
+                        <div className="payroll-card-actions">
+                          <span className={batch.status === "paid" ? "status success-status" : "status warning-status"}>
+                            {batch.status === "paid" ? (language === "sv" ? "Betald" : "Paid") : (language === "sv" ? "Exporterad" : "Exported")}
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => markPayrollPaymentBatchPaid(batch)}
+                            disabled={batch.status === "paid"}
+                          >
+                            {language === "sv" ? "Markera betald" : "Mark paid"}
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
