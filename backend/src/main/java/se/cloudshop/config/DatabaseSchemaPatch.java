@@ -77,6 +77,9 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS status varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS match_label varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS booked_at timestamp");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS payroll_snapshots (id bigint PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE payroll_snapshots ADD COLUMN IF NOT EXISTS content text");
+    jdbcTemplate.execute("ALTER TABLE payroll_snapshots ADD COLUMN IF NOT EXISTS updated_at timestamp");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS personal_number varchar(255)");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS address varchar(255)");
     jdbcTemplate.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone varchar(255)");

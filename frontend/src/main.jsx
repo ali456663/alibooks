@@ -5202,6 +5202,91 @@ function App() {
     loadBalanceReport();
   }
 
+  function payrollSnapshotPayload() {
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      employees: payrollEmployees,
+      drafts: payrollDrafts,
+      paymentStatuses: payrollPaymentStatuses,
+      taxSettlements: payrollTaxSettlements,
+      reportMonth: payrollReportMonth,
+      taxPaymentDate: payrollTaxPaymentDate,
+      taxRate: payrollTaxRate,
+      employerRate: payrollEmployerRate,
+      salaryAccount: payrollSalaryAccount
+    };
+  }
+
+  async function savePayrollSnapshotToDatabase() {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/payroll/snapshot`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        content: JSON.stringify(payrollSnapshotPayload())
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte spara lon i databasen." : "Could not save payroll to database."));
+      return;
+    }
+
+    setPayrollMessage(language === "sv"
+      ? `Lon sparad i databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
+      : `Payroll saved to database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+  }
+
+  async function loadPayrollSnapshotFromDatabase() {
+    setError("");
+
+    const response = await fetch(`${apiUrl}/payroll/snapshot`, {
+      headers: authHeaders()
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda lon fran databasen." : "Could not load payroll from database."));
+      return;
+    }
+
+    if (!data?.content) {
+      setPayrollMessage(language === "sv" ? "Ingen lon sparad i databasen annu." : "No payroll saved in database yet.");
+      return;
+    }
+
+    let snapshot;
+    try {
+      snapshot = JSON.parse(data.content);
+    } catch {
+      setError(language === "sv" ? "Sparad lonedata kunde inte lasas." : "Saved payroll data could not be read.");
+      return;
+    }
+
+    setPayrollEmployees(Array.isArray(snapshot.employees) ? snapshot.employees : []);
+    setPayrollDrafts(Array.isArray(snapshot.drafts) ? snapshot.drafts : []);
+    setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
+    setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
+    setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
+    setPayrollTaxPaymentDate(snapshot.taxPaymentDate || new Date().toISOString().slice(0, 10));
+    setPayrollTaxRate(String(snapshot.taxRate || "30"));
+    setPayrollEmployerRate(String(snapshot.employerRate || "31.42"));
+    setPayrollSalaryAccount(snapshot.salaryAccount || "7010");
+    setPayrollSelectedEmployeeId("new");
+    fillPayrollEmployeeForm(null);
+    setPayrollMessage(language === "sv"
+      ? `Lon laddad fran databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
+      : `Payroll loaded from database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+  }
+
   function openPayrollMonthlyReport() {
     const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
@@ -5428,6 +5513,7 @@ function App() {
       payroll: {
         drafts: payrollDrafts,
         employees: payrollEmployees,
+        databaseSnapshotPayload: payrollSnapshotPayload(),
         reportMonth: payrollReportMonth,
         paymentStatuses: payrollPaymentStatuses,
         taxPaymentDate: payrollTaxPaymentDate,
@@ -6435,8 +6521,8 @@ function App() {
 
     if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lÃ¶n") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar, bokfora lonen och hantera skattekonto/arbetsgivardeklaration. Kontrollera alltid exakta skatter innan riktig utbetalning.`
-        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments, book payroll and handle tax account/employer declaration settlement. Always verify exact taxes before real payment.`, "payroll");
+        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar, bokfora lonen, hantera skattekonto och spara/ladda lonedatan i databasen. Kontrollera alltid exakta skatter innan riktig utbetalning.`
+        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments, book payroll, handle tax account settlement and save/load payroll data in the database. Always verify exact taxes before real payment.`, "payroll");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -9763,6 +9849,12 @@ function App() {
                 </span>
                 <button type="button" className="secondary-button" onClick={downloadPayrollCsv} disabled={payrollDrafts.length === 0}>
                   {t.exportCsv}
+                </button>
+                <button type="button" className="secondary-button" onClick={loadPayrollSnapshotFromDatabase} disabled={!token}>
+                  {language === "sv" ? "Ladda DB" : "Load DB"}
+                </button>
+                <button type="button" className="primary-small-button" onClick={savePayrollSnapshotToDatabase} disabled={!token}>
+                  {language === "sv" ? "Spara DB" : "Save DB"}
                 </button>
               </div>
             </div>
