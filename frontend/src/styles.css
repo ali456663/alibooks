@@ -2279,6 +2279,73 @@ button:focus-visible,
   font-size: 22px;
 }
 
+.payroll-report-panel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #c9d8ff;
+  border-radius: 8px;
+  background: #f7faff;
+  box-shadow: var(--shadow-small);
+}
+
+.compact-label {
+  display: grid;
+  gap: 4px;
+  font-weight: 800;
+}
+
+.compact-label select,
+.compact-label input {
+  min-width: 160px;
+}
+
+.payroll-report-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.payroll-report-summary article {
+  padding: 12px;
+  border: 1px solid #dce5f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.payroll-report-summary span {
+  display: block;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.payroll-report-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.payroll-report-table {
+  display: grid;
+  gap: 8px;
+}
+
+.payroll-report-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) repeat(4, minmax(90px, 1fr)) minmax(110px, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #e4e9f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.payroll-report-header {
+  background: #eef4ff;
+  font-weight: 800;
+}
+
 .payroll-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4915,6 +4982,7 @@ button:focus-visible,
   .invoice-summary-cards,
   .expense-summary-grid,
   .payroll-summary-grid,
+  .payroll-report-summary,
   .payroll-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5007,6 +5075,8 @@ button:focus-visible,
   .budget-hero,
   .budget-row,
   .payroll-summary-grid,
+  .payroll-report-summary,
+  .payroll-report-row,
   .payroll-form,
   .payroll-employee-card,
   .payroll-draft-card,

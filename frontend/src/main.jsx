@@ -1018,6 +1018,7 @@ const localPreferenceKeys = [
   "alibooks-payroll-drafts",
   "alibooks-payroll-employees",
   "alibooks-payroll-selected-employee-id",
+  "alibooks-payroll-report-month",
   "alibooks-payroll-tax-rate",
   "alibooks-payroll-employer-rate",
   "alibooks-payroll-salary-account",
@@ -1177,6 +1178,7 @@ function App() {
   const [payrollEmployeeEmail, setPayrollEmployeeEmail] = useState("");
   const [payrollEmployeeAddress, setPayrollEmployeeAddress] = useState("");
   const [payrollSelectedEmployeeId, setPayrollSelectedEmployeeId] = useState(() => localStorage.getItem("alibooks-payroll-selected-employee-id") || "new");
+  const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
   const [payrollPeriod, setPayrollPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [payrollGrossSalary, setPayrollGrossSalary] = useState("");
   const [payrollTaxRate, setPayrollTaxRate] = useState(() => localStorage.getItem("alibooks-payroll-tax-rate") || "30");
@@ -1320,10 +1322,11 @@ function App() {
     localStorage.setItem("alibooks-payroll-drafts", JSON.stringify(payrollDrafts));
     localStorage.setItem("alibooks-payroll-employees", JSON.stringify(payrollEmployees));
     localStorage.setItem("alibooks-payroll-selected-employee-id", payrollSelectedEmployeeId);
+    localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
@@ -2169,6 +2172,7 @@ function App() {
     setPayrollEmployeePersonalNumber("");
     setPayrollEmployeeEmail("");
     setPayrollEmployeeAddress("");
+    setPayrollReportMonth(new Date().toISOString().slice(0, 7));
     setPayrollTaxRate("30");
     setPayrollEmployerRate("31.42");
     setPayrollSalaryAccount("7010");
@@ -4975,6 +4979,143 @@ function App() {
     payrollWindow.document.close();
   }
 
+  function downloadPayrollReportCsv() {
+    setError("");
+    const rows = [
+      ["Loneunderlag / Payroll monthly report"],
+      ["Period", payrollReportMonth || "-"],
+      ["Bruttolon", payrollReportTotals.gross],
+      ["Preliminar skatt", payrollReportTotals.tax],
+      ["Nettolon", payrollReportTotals.net],
+      ["Arbetsgivaravgift", payrollReportTotals.employerFees],
+      ["Total lonekostnad", payrollReportTotals.totalCost],
+      ["Bokforda", payrollReportTotals.booked],
+      ["Ej bokforda", payrollReportTotals.unbooked],
+      [],
+      ["Anstalld", "Personnummer", "E-post", "Brutto", "Preliminar skatt", "Nettolon", "Arbetsgivaravgift", "Total kostnad", "Status", "Verifikat"]
+    ];
+
+    payrollReportRows.forEach((row) => {
+      rows.push([
+        row.employeeName,
+        row.personalNumber || "",
+        row.email || "",
+        row.gross,
+        row.tax,
+        row.net,
+        row.employerFees,
+        row.totalCost,
+        row.statusLabel,
+        row.vouchers.join(", ")
+      ]);
+    });
+
+    downloadLocalCsv(`loneunderlag-${payrollReportMonth || "period"}.csv`, rows);
+  }
+
+  function openPayrollMonthlyReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade loneunderlaget." : "The browser blocked the payroll report window.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Loneunderlag" : "Payroll report";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const rowsHtml = payrollReportRows.length > 0
+      ? payrollReportRows.map((row) => `<tr>
+          <td>${escapeHtml(row.employeeName)}</td>
+          <td>${escapeHtml(row.personalNumber || "-")}</td>
+          <td>${row.gross} SEK</td>
+          <td>${row.tax} SEK</td>
+          <td>${row.net} SEK</td>
+          <td>${row.employerFees} SEK</td>
+          <td>${row.totalCost} SEK</td>
+          <td>${escapeHtml(row.statusLabel)}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="8">${language === "sv" ? "Inga loner for perioden." : "No payroll for this period."}</td></tr>`;
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(payrollReportMonth || "-")}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 980px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 11px 8px; text-align: left; }
+    th:nth-child(n+3), td:nth-child(n+3) { text-align: right; }
+    th:last-child, td:last-child { text-align: left; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Period" : "Period"}:</strong> ${escapeHtml(payrollReportMonth || "-")}</p>
+        <p><strong>${language === "sv" ? "Loner" : "Payroll rows"}:</strong> ${payrollReportTotals.count}</p>
+        <p><strong>${language === "sv" ? "Bokforda" : "Booked"}:</strong> ${payrollReportTotals.booked}/${payrollReportTotals.count}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Bruttolon" : "Gross salary"}</span><strong>${payrollReportTotals.gross} SEK</strong></div>
+      <div><span>${language === "sv" ? "Preliminar skatt" : "Preliminary tax"}</span><strong>${payrollReportTotals.tax} SEK</strong></div>
+      <div><span>${language === "sv" ? "Nettolon" : "Net pay"}</span><strong>${payrollReportTotals.net} SEK</strong></div>
+      <div><span>${language === "sv" ? "Arbetsgivaravgift" : "Employer contribution"}</span><strong>${payrollReportTotals.employerFees} SEK</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Per anstalld" : "Per employee"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Anstalld" : "Employee"}</th>
+          <th>${language === "sv" ? "Personnummer" : "Personal number"}</th>
+          <th>${language === "sv" ? "Brutto" : "Gross"}</th>
+          <th>${language === "sv" ? "Skatt" : "Tax"}</th>
+          <th>${language === "sv" ? "Netto" : "Net"}</th>
+          <th>${language === "sv" ? "Avgift" : "Contribution"}</th>
+          <th>${language === "sv" ? "Total" : "Total"}</th>
+          <th>${language === "sv" ? "Status" : "Status"}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    <p class="muted">${language === "sv"
+      ? "Detta ar ett kontrollunderlag. Kontrollera alltid exakta uppgifter hos Skatteverket innan inlamning eller betalning."
+      : "This is a control report. Always verify exact details with the tax authority before filing or payment."}</p>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadPayrollCsv() {
     setError("");
     const rows = [
@@ -5096,6 +5237,7 @@ function App() {
       payroll: {
         drafts: payrollDrafts,
         employees: payrollEmployees,
+        reportMonth: payrollReportMonth,
         taxRate: payrollTaxRate,
         employerRate: payrollEmployerRate,
         salaryAccount: payrollSalaryAccount
@@ -5922,6 +6064,61 @@ function App() {
     if (draft.status === "booked") totals.booked += 1;
     return totals;
   }, { gross: 0, tax: 0, net: 0, employerFees: 0, totalCost: 0, booked: 0 });
+  const payrollPeriods = Array.from(new Set([
+    payrollReportMonth,
+    ...payrollDrafts.map((draft) => draft.period).filter(Boolean)
+  ])).filter(Boolean).sort((first, second) => second.localeCompare(first));
+  const payrollReportDrafts = payrollDrafts.filter((draft) => draft.period === payrollReportMonth);
+  const payrollReportTotals = payrollReportDrafts.reduce((totals, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    totals.gross += calculation.gross;
+    totals.tax += calculation.withheldTax;
+    totals.net += calculation.netPay;
+    totals.employerFees += calculation.employerFee;
+    totals.totalCost += calculation.totalCost;
+    totals.count += 1;
+    if (draft.status === "booked") {
+      totals.booked += 1;
+    } else {
+      totals.unbooked += 1;
+    }
+    return totals;
+  }, { gross: 0, tax: 0, net: 0, employerFees: 0, totalCost: 0, count: 0, booked: 0, unbooked: 0 });
+  const payrollReportRows = Object.values(payrollReportDrafts.reduce((rows, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    const key = draft.employeeId || draft.personalNumber || draft.employeeName || draft.id;
+    const current = rows[key] || {
+      employeeName: draft.employeeName,
+      personalNumber: draft.personalNumber || "",
+      email: draft.email || "",
+      gross: 0,
+      tax: 0,
+      net: 0,
+      employerFees: 0,
+      totalCost: 0,
+      count: 0,
+      booked: 0,
+      vouchers: []
+    };
+
+    current.gross += calculation.gross;
+    current.tax += calculation.withheldTax;
+    current.net += calculation.netPay;
+    current.employerFees += calculation.employerFee;
+    current.totalCost += calculation.totalCost;
+    current.count += 1;
+    if (draft.status === "booked") current.booked += 1;
+    if (draft.voucherNumber) current.vouchers.push(draft.voucherNumber);
+    rows[key] = current;
+    return rows;
+  }, {})).map((row) => ({
+    ...row,
+    statusLabel: row.booked === row.count
+      ? (language === "sv" ? "Bokford" : "Booked")
+      : row.booked > 0
+        ? (language === "sv" ? "Delvis bokford" : "Partly booked")
+        : (language === "sv" ? "Ej bokford" : "Not booked")
+  })).sort((first, second) => first.employeeName.localeCompare(second.employeeName));
 
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
@@ -9361,6 +9558,87 @@ function App() {
                 <span>{language === "sv" ? "Anstallda" : "Employees"}</span>
                 <strong>{payrollEmployees.length}</strong>
               </article>
+            </div>
+
+            <div className="payroll-report-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Manadens loneunderlag" : "Monthly payroll report"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Kontrollera bruttolon, preliminar skatt, nettoutbetalning och arbetsgivaravgift innan du betalar eller rapporterar."
+                      : "Review gross salary, preliminary tax, net payments and employer contribution before payment or reporting."}
+                  </p>
+                </div>
+                <div className="button-row">
+                  <label className="compact-label">
+                    {language === "sv" ? "Period" : "Period"}
+                    <select value={payrollReportMonth} onChange={(event) => setPayrollReportMonth(event.target.value)}>
+                      {payrollPeriods.map((period) => (
+                        <option value={period} key={period}>{formatMonthLabel(period, language)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="button" className="secondary-button" onClick={downloadPayrollReportCsv} disabled={payrollReportDrafts.length === 0}>
+                    {t.exportCsv}
+                  </button>
+                  <button type="button" className="primary-small-button" onClick={openPayrollMonthlyReport}>
+                    {language === "sv" ? "Underlag PDF" : "Report PDF"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="payroll-report-summary">
+                <article>
+                  <span>{language === "sv" ? "Loner" : "Payroll rows"}</span>
+                  <strong>{payrollReportTotals.count}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Brutto" : "Gross"}</span>
+                  <strong>{payrollReportTotals.gross} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Skatt" : "Tax"}</span>
+                  <strong>{payrollReportTotals.tax} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Att betala netto" : "Net to pay"}</span>
+                  <strong>{payrollReportTotals.net} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Arbetsgivaravgift" : "Employer contribution"}</span>
+                  <strong>{payrollReportTotals.employerFees} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Ej bokforda" : "Not booked"}</span>
+                  <strong>{payrollReportTotals.unbooked}</strong>
+                </article>
+              </div>
+
+              {payrollReportRows.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga loneutkast for denna period." : "No payroll drafts for this period."}</p>
+              ) : (
+                <div className="payroll-report-table">
+                  <div className="payroll-report-row payroll-report-header">
+                    <span>{language === "sv" ? "Anstalld" : "Employee"}</span>
+                    <span>{language === "sv" ? "Brutto" : "Gross"}</span>
+                    <span>{language === "sv" ? "Skatt" : "Tax"}</span>
+                    <span>{language === "sv" ? "Netto" : "Net"}</span>
+                    <span>{language === "sv" ? "Avgift" : "Contribution"}</span>
+                    <span>{language === "sv" ? "Status" : "Status"}</span>
+                  </div>
+                  {payrollReportRows.map((row) => (
+                    <div className="payroll-report-row" key={`${row.employeeName}-${row.personalNumber}`}>
+                      <strong>{row.employeeName}</strong>
+                      <span>{row.gross} SEK</span>
+                      <span>{row.tax} SEK</span>
+                      <span>{row.net} SEK</span>
+                      <span>{row.employerFees} SEK</span>
+                      <span className={row.booked === row.count ? "status success-status" : "status warning-status"}>{row.statusLabel}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <form className="form payroll-form" onSubmit={handleSavePayrollDraft}>
