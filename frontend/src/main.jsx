@@ -1182,6 +1182,8 @@ function App() {
   const [payrollEmployeePersonalNumber, setPayrollEmployeePersonalNumber] = useState("");
   const [payrollEmployeeEmail, setPayrollEmployeeEmail] = useState("");
   const [payrollEmployeeAddress, setPayrollEmployeeAddress] = useState("");
+  const [payrollEmployeeClearingNumber, setPayrollEmployeeClearingNumber] = useState("");
+  const [payrollEmployeeBankAccount, setPayrollEmployeeBankAccount] = useState("");
   const [payrollSelectedEmployeeId, setPayrollSelectedEmployeeId] = useState(() => localStorage.getItem("alibooks-payroll-selected-employee-id") || "new");
   const [payrollAutoSyncEnabled, setPayrollAutoSyncEnabled] = useState(() => localStorage.getItem("alibooks-payroll-auto-sync-enabled") !== "false");
   const [payrollSnapshotReady, setPayrollSnapshotReady] = useState(false);
@@ -1189,6 +1191,7 @@ function App() {
   const [payrollLastSyncedAt, setPayrollLastSyncedAt] = useState(() => localStorage.getItem("alibooks-payroll-last-synced-at") || "");
   const [payrollSnapshotRevisions, setPayrollSnapshotRevisions] = useState([]);
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
+  const [payrollSalaryPaymentDate, setPayrollSalaryPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-salary-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
     try {
@@ -1350,6 +1353,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-employees", JSON.stringify(payrollEmployees));
     localStorage.setItem("alibooks-payroll-selected-employee-id", payrollSelectedEmployeeId);
     localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
+    localStorage.setItem("alibooks-payroll-salary-payment-date", payrollSalaryPaymentDate);
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
     localStorage.setItem("alibooks-payroll-tax-payment-date", payrollTaxPaymentDate);
     localStorage.setItem("alibooks-payroll-tax-settlements", JSON.stringify(payrollTaxSettlements));
@@ -1358,7 +1362,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     if (!token) {
@@ -1393,6 +1397,7 @@ function App() {
     payrollDrafts,
     payrollEmployees,
     payrollReportMonth,
+    payrollSalaryPaymentDate,
     payrollPaymentStatuses,
     payrollTaxPaymentDate,
     payrollTaxSettlements,
@@ -4767,6 +4772,8 @@ function App() {
     setPayrollEmployeePersonalNumber(employee?.personalNumber || "");
     setPayrollEmployeeEmail(employee?.email || "");
     setPayrollEmployeeAddress(employee?.address || "");
+    setPayrollEmployeeClearingNumber(employee?.clearingNumber || "");
+    setPayrollEmployeeBankAccount(employee?.bankAccount || "");
   }
 
   function handlePayrollEmployeeSelection(employeeId) {
@@ -4787,6 +4794,8 @@ function App() {
     const personalNumber = payrollEmployeePersonalNumber.trim();
     const email = payrollEmployeeEmail.trim();
     const address = payrollEmployeeAddress.trim();
+    const clearingNumber = payrollEmployeeClearingNumber.trim();
+    const bankAccount = payrollEmployeeBankAccount.trim();
 
     if (!name) {
       setError(language === "sv" ? "Namn pa anstalld saknas." : "Employee name is missing.");
@@ -4800,6 +4809,16 @@ function App() {
 
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError(language === "sv" ? "E-postadressen ser inte korrekt ut." : "Email address does not look correct.");
+      return null;
+    }
+
+    if (clearingNumber && !/^\d{4,5}$/.test(clearingNumber)) {
+      setError(language === "sv" ? "Clearingnummer ska vara 4-5 siffror." : "Clearing number should be 4-5 digits.");
+      return null;
+    }
+
+    if (bankAccount && !/^\d{5,12}$/.test(bankAccount.replaceAll(" ", ""))) {
+      setError(language === "sv" ? "Kontonummer ska vara 5-12 siffror." : "Bank account should be 5-12 digits.");
       return null;
     }
 
@@ -4822,6 +4841,8 @@ function App() {
         personalNumber,
         email,
         address,
+        clearingNumber,
+        bankAccount: bankAccount.replaceAll(" ", ""),
         updatedAt: new Date().toISOString()
       };
       setPayrollEmployees((current) => current.map((employee) => (
@@ -4834,6 +4855,8 @@ function App() {
         personalNumber,
         email,
         address,
+        clearingNumber,
+        bankAccount: bankAccount.replaceAll(" ", ""),
         createdAt: new Date().toISOString()
       };
       setPayrollEmployees((current) => [savedEmployee, ...current]);
@@ -4895,6 +4918,8 @@ function App() {
       personalNumber: employee.personalNumber,
       email: employee.email,
       address: employee.address,
+      clearingNumber: employee.clearingNumber,
+      bankAccount: employee.bankAccount,
       period: payrollPeriod,
       grossSalary: calculation.gross,
       taxRate: Number(payrollTaxRate || 0),
@@ -5213,13 +5238,15 @@ function App() {
       ["Avgifter att reservera", payrollPaymentTotals.employerFeesToReserve],
       ["Skatt/avgifter reserverade", payrollPaymentTotals.reservedCount],
       [],
-      ["Anstalld", "Personnummer", "Nettolon", "Preliminar skatt", "Arbetsgivaravgift", "Nettolon betald", "Skatt/avgift reserverad", "Status"]
+      ["Anstalld", "Personnummer", "Clearingnummer", "Kontonummer", "Nettolon", "Preliminar skatt", "Arbetsgivaravgift", "Nettolon betald", "Skatt/avgift reserverad", "Status"]
     ];
 
     payrollPaymentRows.forEach((row) => {
       rows.push([
         row.employeeName,
         row.personalNumber || "",
+        row.clearingNumber || "",
+        row.bankAccount || "",
         row.netPay,
         row.withheldTax,
         row.employerFee,
@@ -5230,6 +5257,41 @@ function App() {
     });
 
     downloadLocalCsv(`lonebetalningar-${payrollReportMonth || "period"}.csv`, rows);
+  }
+
+  function downloadPayrollBankPaymentCsv() {
+    setError("");
+
+    if (!payrollSalaryPaymentDate) {
+      setError(language === "sv" ? "Valj utbetalningsdatum for lon." : "Choose salary payment date.");
+      return;
+    }
+
+    const rows = [
+      ["Loneutbetalning bankunderlag / Payroll bank payment basis"],
+      ["Period", payrollReportMonth || "-"],
+      ["Utbetalningsdatum", payrollSalaryPaymentDate],
+      ["Nettolon att betala", payrollPaymentTotals.netToPay],
+      ["Saknar bankkonto", payrollPaymentTotals.missingBankAccounts],
+      [],
+      ["Betalningsdatum", "Mottagare", "Personnummer", "Clearingnummer", "Kontonummer", "Belopp", "Valuta", "Referens", "Status"]
+    ];
+
+    payrollPaymentRows.forEach((row) => {
+      rows.push([
+        payrollSalaryPaymentDate,
+        row.employeeName,
+        row.personalNumber || "",
+        row.clearingNumber || "",
+        row.bankAccount || "",
+        row.netPay,
+        "SEK",
+        `Lon ${row.period} ${row.employeeName}`,
+        row.clearingNumber && row.bankAccount ? "Klar" : "Saknar bankkonto"
+      ]);
+    });
+
+    downloadLocalCsv(`lone-bankunderlag-${payrollReportMonth || "period"}.csv`, rows);
   }
 
   function updatePayrollTaxSettlement(field, value) {
@@ -5357,6 +5419,7 @@ function App() {
       paymentStatuses: payrollPaymentStatuses,
       taxSettlements: payrollTaxSettlements,
       reportMonth: payrollReportMonth,
+      salaryPaymentDate: payrollSalaryPaymentDate,
       taxPaymentDate: payrollTaxPaymentDate,
       taxRate: payrollTaxRate,
       employerRate: payrollEmployerRate,
@@ -5372,6 +5435,7 @@ function App() {
     setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
     setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
     setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
+    setPayrollSalaryPaymentDate(snapshot.salaryPaymentDate || new Date().toISOString().slice(0, 10));
     setPayrollTaxPaymentDate(snapshot.taxPaymentDate || new Date().toISOString().slice(0, 10));
     setPayrollTaxRate(String(snapshot.taxRate || "30"));
     setPayrollEmployerRate(String(snapshot.employerRate || "31.42"));
@@ -6766,11 +6830,14 @@ function App() {
   const payrollPaymentRows = payrollReportDrafts.map((draft) => {
     const calculation = payrollDraftCalculation(draft);
     const status = payrollPaymentStatuses[draft.id] || {};
+    const employee = payrollEmployees.find((item) => String(item.id) === String(draft.employeeId));
     const netPaid = status.netPaid === true;
     const taxReserved = status.taxReserved === true;
 
     return {
       ...draft,
+      clearingNumber: draft.clearingNumber || employee?.clearingNumber || "",
+      bankAccount: draft.bankAccount || employee?.bankAccount || "",
       gross: calculation.gross,
       netPay: calculation.netPay,
       withheldTax: calculation.withheldTax,
@@ -6796,6 +6863,9 @@ function App() {
     if (row.taxReserved) {
       totals.reservedCount += 1;
     }
+    if (!row.clearingNumber || !row.bankAccount) {
+      totals.missingBankAccounts += 1;
+    }
     return totals;
   }, {
     netToPay: 0,
@@ -6804,7 +6874,8 @@ function App() {
     taxToReserve: 0,
     employerFeesToReserve: 0,
     paidCount: 0,
-    reservedCount: 0
+    reservedCount: 0,
+    missingBankAccounts: 0
   });
   payrollPaymentTotals.netRemaining = Math.max(0, payrollPaymentTotals.netToPay - payrollPaymentTotals.netPaid);
   const payrollTaxSettlementForMonth = payrollTaxSettlements[payrollReportMonth] || {};
@@ -10396,6 +10467,13 @@ function App() {
                 <button type="button" className="secondary-button" onClick={downloadPayrollPaymentCsv} disabled={payrollPaymentRows.length === 0}>
                   {t.exportCsv}
                 </button>
+                <label className="compact-label">
+                  {language === "sv" ? "Utbetalningsdatum" : "Payment date"}
+                  <input type="date" value={payrollSalaryPaymentDate} onChange={(event) => setPayrollSalaryPaymentDate(event.target.value)} />
+                </label>
+                <button type="button" className="primary-small-button" onClick={downloadPayrollBankPaymentCsv} disabled={payrollPaymentRows.length === 0}>
+                  {language === "sv" ? "Bankfil CSV" : "Bank file CSV"}
+                </button>
               </div>
 
               <div className="payroll-payment-summary">
@@ -10419,6 +10497,10 @@ function App() {
                   <span>{language === "sv" ? "Avgifter att reservera" : "Fees to reserve"}</span>
                   <strong>{payrollPaymentTotals.employerFeesToReserve} SEK</strong>
                 </article>
+                <article>
+                  <span>{language === "sv" ? "Saknar bankkonto" : "Missing bank account"}</span>
+                  <strong>{payrollPaymentTotals.missingBankAccounts}</strong>
+                </article>
               </div>
 
               {payrollPaymentRows.length === 0 ? (
@@ -10430,6 +10512,7 @@ function App() {
                       <div>
                         <strong>{row.employeeName}</strong>
                         <span>{row.personalNumber || "-"}</span>
+                        <span>{language === "sv" ? "Bank" : "Bank"}: {row.clearingNumber && row.bankAccount ? `${row.clearingNumber}-${row.bankAccount}` : "-"}</span>
                         <span>{language === "sv" ? "Nettolon" : "Net pay"}: {row.netPay} SEK</span>
                         <span>{language === "sv" ? "Skatt + avgifter" : "Tax + contributions"}: {row.withheldTax + row.employerFee} SEK</span>
                       </div>
@@ -10588,6 +10671,22 @@ function App() {
                 />
               </label>
               <label>
+                {language === "sv" ? "Clearingnummer" : "Clearing number"}
+                <input
+                  value={payrollEmployeeClearingNumber}
+                  onChange={(event) => setPayrollEmployeeClearingNumber(event.target.value)}
+                  placeholder="1234"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Kontonummer" : "Bank account"}
+                <input
+                  value={payrollEmployeeBankAccount}
+                  onChange={(event) => setPayrollEmployeeBankAccount(event.target.value)}
+                  placeholder="1234567890"
+                />
+              </label>
+              <label>
                 {language === "sv" ? "Period" : "Period"}
                 <input type="month" value={payrollPeriod} onChange={(event) => setPayrollPeriod(event.target.value)} />
               </label>
@@ -10659,6 +10758,7 @@ function App() {
                         <span>{employee.personalNumber || "-"}</span>
                         <span>{employee.email || "-"}</span>
                         <span>{employee.address || "-"}</span>
+                        <span>{language === "sv" ? "Bank" : "Bank"}: {employee.clearingNumber && employee.bankAccount ? `${employee.clearingNumber}-${employee.bankAccount}` : "-"}</span>
                       </div>
                       <div className="payroll-card-actions">
                         <button
