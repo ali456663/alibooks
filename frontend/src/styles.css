@@ -2288,6 +2288,15 @@ button:focus-visible,
   box-shadow: var(--shadow-small);
 }
 
+.payroll-payment-panel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #d8eadf;
+  border-radius: 8px;
+  background: #f7fcf9;
+  box-shadow: var(--shadow-small);
+}
+
 .compact-label {
   display: grid;
   gap: 4px;
@@ -2297,6 +2306,19 @@ button:focus-visible,
 .compact-label select,
 .compact-label input {
   min-width: 160px;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 800;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
 }
 
 .payroll-report-summary {
@@ -2323,6 +2345,54 @@ button:focus-visible,
   display: block;
   margin-top: 6px;
   font-size: 18px;
+}
+
+.payroll-payment-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.payroll-payment-summary article,
+.payroll-payment-card {
+  padding: 12px;
+  border: 1px solid #d8eadf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.payroll-payment-summary span {
+  display: block;
+  color: #5d6259;
+  font-weight: 800;
+}
+
+.payroll-payment-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.payroll-payment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payroll-payment-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(190px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.payroll-payment-card div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-payment-card span {
+  color: #5d6259;
 }
 
 .payroll-report-table {
@@ -4983,6 +5053,7 @@ button:focus-visible,
   .expense-summary-grid,
   .payroll-summary-grid,
   .payroll-report-summary,
+  .payroll-payment-summary,
   .payroll-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5077,6 +5148,8 @@ button:focus-visible,
   .payroll-summary-grid,
   .payroll-report-summary,
   .payroll-report-row,
+  .payroll-payment-summary,
+  .payroll-payment-card,
   .payroll-form,
   .payroll-employee-card,
   .payroll-draft-card,

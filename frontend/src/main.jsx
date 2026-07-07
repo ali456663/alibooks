@@ -1019,6 +1019,7 @@ const localPreferenceKeys = [
   "alibooks-payroll-employees",
   "alibooks-payroll-selected-employee-id",
   "alibooks-payroll-report-month",
+  "alibooks-payroll-payment-statuses",
   "alibooks-payroll-tax-rate",
   "alibooks-payroll-employer-rate",
   "alibooks-payroll-salary-account",
@@ -1179,6 +1180,14 @@ function App() {
   const [payrollEmployeeAddress, setPayrollEmployeeAddress] = useState("");
   const [payrollSelectedEmployeeId, setPayrollSelectedEmployeeId] = useState(() => localStorage.getItem("alibooks-payroll-selected-employee-id") || "new");
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
+  const [payrollPaymentStatuses, setPayrollPaymentStatuses] = useState(() => {
+    try {
+      const savedStatuses = JSON.parse(localStorage.getItem("alibooks-payroll-payment-statuses") || "{}");
+      return savedStatuses && typeof savedStatuses === "object" ? savedStatuses : {};
+    } catch {
+      return {};
+    }
+  });
   const [payrollPeriod, setPayrollPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [payrollGrossSalary, setPayrollGrossSalary] = useState("");
   const [payrollTaxRate, setPayrollTaxRate] = useState(() => localStorage.getItem("alibooks-payroll-tax-rate") || "30");
@@ -1323,10 +1332,11 @@ function App() {
     localStorage.setItem("alibooks-payroll-employees", JSON.stringify(payrollEmployees));
     localStorage.setItem("alibooks-payroll-selected-employee-id", payrollSelectedEmployeeId);
     localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
+    localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
@@ -2173,6 +2183,7 @@ function App() {
     setPayrollEmployeeEmail("");
     setPayrollEmployeeAddress("");
     setPayrollReportMonth(new Date().toISOString().slice(0, 7));
+    setPayrollPaymentStatuses({});
     setPayrollTaxRate("30");
     setPayrollEmployerRate("31.42");
     setPayrollSalaryAccount("7010");
@@ -4828,6 +4839,22 @@ function App() {
 
   function deletePayrollDraft(draftId) {
     setPayrollDrafts((current) => current.filter((draft) => draft.id !== draftId));
+    setPayrollPaymentStatuses((current) => {
+      const next = { ...current };
+      delete next[draftId];
+      return next;
+    });
+  }
+
+  function updatePayrollPaymentStatus(draftId, field, value) {
+    setPayrollPaymentStatuses((current) => ({
+      ...current,
+      [draftId]: {
+        ...(current[draftId] || {}),
+        [field]: value,
+        updatedAt: new Date().toISOString()
+      }
+    }));
   }
 
   async function bookPayrollDraft(draft) {
@@ -5011,6 +5038,37 @@ function App() {
     });
 
     downloadLocalCsv(`loneunderlag-${payrollReportMonth || "period"}.csv`, rows);
+  }
+
+  function downloadPayrollPaymentCsv() {
+    setError("");
+    const rows = [
+      ["Lonebetalningslista / Payroll payment list"],
+      ["Period", payrollReportMonth || "-"],
+      ["Nettolon att betala", payrollPaymentTotals.netToPay],
+      ["Nettolon betald", payrollPaymentTotals.netPaid],
+      ["Kvar att betala", payrollPaymentTotals.netRemaining],
+      ["Skatt att reservera", payrollPaymentTotals.taxToReserve],
+      ["Avgifter att reservera", payrollPaymentTotals.employerFeesToReserve],
+      ["Skatt/avgifter reserverade", payrollPaymentTotals.reservedCount],
+      [],
+      ["Anstalld", "Personnummer", "Nettolon", "Preliminar skatt", "Arbetsgivaravgift", "Nettolon betald", "Skatt/avgift reserverad", "Status"]
+    ];
+
+    payrollPaymentRows.forEach((row) => {
+      rows.push([
+        row.employeeName,
+        row.personalNumber || "",
+        row.netPay,
+        row.withheldTax,
+        row.employerFee,
+        row.netPaid ? "Ja" : "Nej",
+        row.taxReserved ? "Ja" : "Nej",
+        row.statusLabel
+      ]);
+    });
+
+    downloadLocalCsv(`lonebetalningar-${payrollReportMonth || "period"}.csv`, rows);
   }
 
   function openPayrollMonthlyReport() {
@@ -5223,6 +5281,7 @@ function App() {
         payrollEmployees: payrollEmployees.length,
         payrollBooked: payrollDraftTotals.booked,
         payrollTotalCost: payrollDraftTotals.totalCost,
+        payrollPaymentStatuses: Object.keys(payrollPaymentStatuses).length,
         auditEvents: auditTrailRows.length,
         dataQualityIssues: dataQualityIssues.length,
         dataQualityCritical: dataQualityCriticalCount,
@@ -5238,6 +5297,7 @@ function App() {
         drafts: payrollDrafts,
         employees: payrollEmployees,
         reportMonth: payrollReportMonth,
+        paymentStatuses: payrollPaymentStatuses,
         taxRate: payrollTaxRate,
         employerRate: payrollEmployerRate,
         salaryAccount: payrollSalaryAccount
@@ -6120,6 +6180,51 @@ function App() {
         : (language === "sv" ? "Ej bokford" : "Not booked")
   })).sort((first, second) => first.employeeName.localeCompare(second.employeeName));
 
+  const payrollPaymentRows = payrollReportDrafts.map((draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    const status = payrollPaymentStatuses[draft.id] || {};
+    const netPaid = status.netPaid === true;
+    const taxReserved = status.taxReserved === true;
+
+    return {
+      ...draft,
+      gross: calculation.gross,
+      netPay: calculation.netPay,
+      withheldTax: calculation.withheldTax,
+      employerFee: calculation.employerFee,
+      totalCost: calculation.totalCost,
+      netPaid,
+      taxReserved,
+      statusLabel: netPaid && taxReserved
+        ? (language === "sv" ? "Klar" : "Done")
+        : netPaid
+          ? (language === "sv" ? "Lon betald" : "Salary paid")
+          : (language === "sv" ? "Att betala" : "To pay")
+    };
+  }).sort((first, second) => String(first.employeeName || "").localeCompare(String(second.employeeName || "")));
+  const payrollPaymentTotals = payrollPaymentRows.reduce((totals, row) => {
+    totals.netToPay += row.netPay;
+    totals.taxToReserve += row.withheldTax;
+    totals.employerFeesToReserve += row.employerFee;
+    if (row.netPaid) {
+      totals.netPaid += row.netPay;
+      totals.paidCount += 1;
+    }
+    if (row.taxReserved) {
+      totals.reservedCount += 1;
+    }
+    return totals;
+  }, {
+    netToPay: 0,
+    netPaid: 0,
+    netRemaining: 0,
+    taxToReserve: 0,
+    employerFeesToReserve: 0,
+    paidCount: 0,
+    reservedCount: 0
+  });
+  payrollPaymentTotals.netRemaining = Math.max(0, payrollPaymentTotals.netToPay - payrollPaymentTotals.netPaid);
+
   function createAiAssistantAnswer(questionText) {
     const normalizedQuestion = normalizeNameValue(questionText);
     const openInvoiceCount = invoices.filter((item) => invoiceRemainingAmount(item) > 0).length;
@@ -6194,8 +6299,8 @@ function App() {
 
     if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lÃ¶n") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked och bokfora lonen som ett flerradigt verifikat for lon, personalskatt, nettoutbetalning och arbetsgivaravgift. Kontrollera alltid exakta skatter innan riktig utbetalning.`
-        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips and book payroll as a multi-line voucher for salary, tax withholding, net pay and employer contribution. Always verify exact taxes before real payment.`, "payroll");
+        ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar och bokfora lonen som ett flerradigt verifikat. Kontrollera alltid exakta skatter innan riktig utbetalning.`
+        : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments and book payroll as a multi-line voucher. Always verify exact taxes before real payment.`, "payroll");
     }
 
     if (normalizedQuestion.includes("moms") || normalizedQuestion.includes("vat")) {
@@ -6256,6 +6361,7 @@ function App() {
       payrollEmployees: payrollEmployees.length,
       payrollBooked: payrollDraftTotals.booked,
       payrollTotalCost: payrollDraftTotals.totalCost,
+      payrollPaymentStatuses: Object.keys(payrollPaymentStatuses).length,
       sieExportStatus: sieExportStatusText,
       sieExportPeriod: sieExportPeriodLabel,
       sieExportVouchers: filteredJournalGroups.length,
@@ -9636,6 +9742,81 @@ function App() {
                       <span>{row.employerFees} SEK</span>
                       <span className={row.booked === row.count ? "status success-status" : "status warning-status"}>{row.statusLabel}</span>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="payroll-payment-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Lonebetalningar" : "Payroll payments"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Anvand listan som kontroll innan bankbetalning. Markera nettolon som betald och skatt/avgifter som reserverade."
+                      : "Use this list as a control before bank payment. Mark net salary as paid and tax/contributions as reserved."}
+                  </p>
+                </div>
+                <button type="button" className="secondary-button" onClick={downloadPayrollPaymentCsv} disabled={payrollPaymentRows.length === 0}>
+                  {t.exportCsv}
+                </button>
+              </div>
+
+              <div className="payroll-payment-summary">
+                <article>
+                  <span>{language === "sv" ? "Nettolon att betala" : "Net pay to pay"}</span>
+                  <strong>{payrollPaymentTotals.netToPay} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Betalt" : "Paid"}</span>
+                  <strong>{payrollPaymentTotals.netPaid} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Kvar att betala" : "Remaining"}</span>
+                  <strong>{payrollPaymentTotals.netRemaining} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Skatt att reservera" : "Tax to reserve"}</span>
+                  <strong>{payrollPaymentTotals.taxToReserve} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Avgifter att reservera" : "Fees to reserve"}</span>
+                  <strong>{payrollPaymentTotals.employerFeesToReserve} SEK</strong>
+                </article>
+              </div>
+
+              {payrollPaymentRows.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga betalningar for vald period." : "No payments for selected period."}</p>
+              ) : (
+                <div className="payroll-payment-list">
+                  {payrollPaymentRows.map((row) => (
+                    <article className="payroll-payment-card" key={row.id}>
+                      <div>
+                        <strong>{row.employeeName}</strong>
+                        <span>{row.personalNumber || "-"}</span>
+                        <span>{language === "sv" ? "Nettolon" : "Net pay"}: {row.netPay} SEK</span>
+                        <span>{language === "sv" ? "Skatt + avgifter" : "Tax + contributions"}: {row.withheldTax + row.employerFee} SEK</span>
+                      </div>
+                      <label className="checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={row.netPaid}
+                          onChange={(event) => updatePayrollPaymentStatus(row.id, "netPaid", event.target.checked)}
+                        />
+                        {language === "sv" ? "Nettolon betald" : "Net salary paid"}
+                      </label>
+                      <label className="checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={row.taxReserved}
+                          onChange={(event) => updatePayrollPaymentStatus(row.id, "taxReserved", event.target.checked)}
+                        />
+                        {language === "sv" ? "Skatt/avgifter reserverade" : "Tax/contributions reserved"}
+                      </label>
+                      <span className={row.netPaid && row.taxReserved ? "status success-status" : "status warning-status"}>
+                        {row.statusLabel}
+                      </span>
+                    </article>
                   ))}
                 </div>
               )}
