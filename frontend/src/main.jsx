@@ -1022,6 +1022,8 @@ const localPreferenceKeys = [
   "alibooks-payroll-payment-statuses",
   "alibooks-payroll-tax-payment-date",
   "alibooks-payroll-tax-settlements",
+  "alibooks-payroll-auto-sync-enabled",
+  "alibooks-payroll-last-synced-at",
   "alibooks-payroll-tax-rate",
   "alibooks-payroll-employer-rate",
   "alibooks-payroll-salary-account",
@@ -1181,6 +1183,10 @@ function App() {
   const [payrollEmployeeEmail, setPayrollEmployeeEmail] = useState("");
   const [payrollEmployeeAddress, setPayrollEmployeeAddress] = useState("");
   const [payrollSelectedEmployeeId, setPayrollSelectedEmployeeId] = useState(() => localStorage.getItem("alibooks-payroll-selected-employee-id") || "new");
+  const [payrollAutoSyncEnabled, setPayrollAutoSyncEnabled] = useState(() => localStorage.getItem("alibooks-payroll-auto-sync-enabled") !== "false");
+  const [payrollSnapshotReady, setPayrollSnapshotReady] = useState(false);
+  const [payrollSyncStatus, setPayrollSyncStatus] = useState("");
+  const [payrollLastSyncedAt, setPayrollLastSyncedAt] = useState(() => localStorage.getItem("alibooks-payroll-last-synced-at") || "");
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
   const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
@@ -1346,10 +1352,55 @@ function App() {
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
     localStorage.setItem("alibooks-payroll-tax-payment-date", payrollTaxPaymentDate);
     localStorage.setItem("alibooks-payroll-tax-settlements", JSON.stringify(payrollTaxSettlements));
+    localStorage.setItem("alibooks-payroll-auto-sync-enabled", payrollAutoSyncEnabled ? "true" : "false");
+    localStorage.setItem("alibooks-payroll-last-synced-at", payrollLastSyncedAt);
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollPaymentStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+
+  useEffect(() => {
+    if (!token) {
+      setPayrollSnapshotReady(false);
+      setPayrollSyncStatus("");
+      return;
+    }
+
+    if (!payrollAutoSyncEnabled) {
+      setPayrollSnapshotReady(true);
+      setPayrollSyncStatus(language === "sv" ? "Autosynk avstangd" : "Auto sync off");
+      return;
+    }
+
+    setPayrollSnapshotReady(false);
+    loadPayrollSnapshotFromDatabase({ silent: true, markReady: true });
+  }, [token, payrollAutoSyncEnabled]);
+
+  useEffect(() => {
+    if (!token || !payrollAutoSyncEnabled || !payrollSnapshotReady) {
+      return undefined;
+    }
+
+    setPayrollSyncStatus(language === "sv" ? "Autosparar snart..." : "Auto-save pending...");
+    const timeoutId = window.setTimeout(() => {
+      savePayrollSnapshotToDatabase({ silent: true, auto: true });
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    payrollDrafts,
+    payrollEmployees,
+    payrollReportMonth,
+    payrollPaymentStatuses,
+    payrollTaxPaymentDate,
+    payrollTaxSettlements,
+    payrollTaxRate,
+    payrollEmployerRate,
+    payrollSalaryAccount,
+    token,
+    payrollAutoSyncEnabled,
+    payrollSnapshotReady
+  ]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
@@ -2199,6 +2250,10 @@ function App() {
     setPayrollPaymentStatuses({});
     setPayrollTaxPaymentDate(new Date().toISOString().slice(0, 10));
     setPayrollTaxSettlements({});
+    setPayrollAutoSyncEnabled(true);
+    setPayrollSnapshotReady(false);
+    setPayrollSyncStatus("");
+    setPayrollLastSyncedAt("");
     setPayrollTaxRate("30");
     setPayrollEmployerRate("31.42");
     setPayrollSalaryAccount("7010");
@@ -5214,11 +5269,13 @@ function App() {
       taxPaymentDate: payrollTaxPaymentDate,
       taxRate: payrollTaxRate,
       employerRate: payrollEmployerRate,
-      salaryAccount: payrollSalaryAccount
+      salaryAccount: payrollSalaryAccount,
+      autoSyncEnabled: payrollAutoSyncEnabled,
+      lastSyncedAt: payrollLastSyncedAt
     };
   }
 
-  async function savePayrollSnapshotToDatabase() {
+  async function savePayrollSnapshotToDatabase(options = {}) {
     setError("");
 
     const response = await fetch(`${apiUrl}/payroll/snapshot`, {
@@ -5235,17 +5292,27 @@ function App() {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
+      setPayrollSyncStatus(language === "sv" ? "Lonesynk misslyckades" : "Payroll sync failed");
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte spara lon i databasen." : "Could not save payroll to database."));
       return;
     }
 
-    setPayrollMessage(language === "sv"
-      ? `Lon sparad i databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
-      : `Payroll saved to database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+    const syncedAt = data?.updatedAt || new Date().toISOString();
+    setPayrollLastSyncedAt(syncedAt);
+    setPayrollSyncStatus(language === "sv"
+      ? `Synkad ${formatDateTime(syncedAt)}`
+      : `Synced ${formatDateTime(syncedAt)}`);
+
+    if (!options.silent) {
+      setPayrollMessage(language === "sv"
+        ? `Lon sparad i databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
+        : `Payroll saved to database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+    }
   }
 
-  async function loadPayrollSnapshotFromDatabase() {
+  async function loadPayrollSnapshotFromDatabase(options = {}) {
     setError("");
+    setPayrollSyncStatus(language === "sv" ? "Laddar lon fran databasen..." : "Loading payroll from database...");
 
     const response = await fetch(`${apiUrl}/payroll/snapshot`, {
       headers: authHeaders()
@@ -5254,12 +5321,18 @@ function App() {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
+      setPayrollSnapshotReady(false);
+      setPayrollSyncStatus(language === "sv" ? "Kunde inte ladda lonesynk" : "Could not load payroll sync");
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda lon fran databasen." : "Could not load payroll from database."));
       return;
     }
 
     if (!data?.content) {
-      setPayrollMessage(language === "sv" ? "Ingen lon sparad i databasen annu." : "No payroll saved in database yet.");
+      setPayrollSnapshotReady(Boolean(options.markReady));
+      setPayrollSyncStatus(language === "sv" ? "Ingen lon i databasen an" : "No payroll in database yet");
+      if (!options.silent) {
+        setPayrollMessage(language === "sv" ? "Ingen lon sparad i databasen annu." : "No payroll saved in database yet.");
+      }
       return;
     }
 
@@ -5267,6 +5340,8 @@ function App() {
     try {
       snapshot = JSON.parse(data.content);
     } catch {
+      setPayrollSnapshotReady(false);
+      setPayrollSyncStatus(language === "sv" ? "Sparad lonedata kunde inte lasas" : "Saved payroll data could not be read");
       setError(language === "sv" ? "Sparad lonedata kunde inte lasas." : "Saved payroll data could not be read.");
       return;
     }
@@ -5282,9 +5357,16 @@ function App() {
     setPayrollSalaryAccount(snapshot.salaryAccount || "7010");
     setPayrollSelectedEmployeeId("new");
     fillPayrollEmployeeForm(null);
-    setPayrollMessage(language === "sv"
-      ? `Lon laddad fran databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
-      : `Payroll loaded from database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+    setPayrollSnapshotReady(Boolean(options.markReady) || payrollSnapshotReady);
+    setPayrollLastSyncedAt(data?.updatedAt || "");
+    setPayrollSyncStatus(language === "sv"
+      ? `Laddad ${data?.updatedAt ? formatDateTime(data.updatedAt) : ""}`.trim()
+      : `Loaded ${data?.updatedAt ? formatDateTime(data.updatedAt) : ""}`.trim());
+    if (!options.silent) {
+      setPayrollMessage(language === "sv"
+        ? `Lon laddad fran databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
+        : `Payroll loaded from database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
+    }
   }
 
   function openPayrollMonthlyReport() {
@@ -9850,10 +9932,30 @@ function App() {
                 <button type="button" className="secondary-button" onClick={downloadPayrollCsv} disabled={payrollDrafts.length === 0}>
                   {t.exportCsv}
                 </button>
-                <button type="button" className="secondary-button" onClick={loadPayrollSnapshotFromDatabase} disabled={!token}>
+              </div>
+            </div>
+
+            <div className="payroll-sync-panel">
+              <div>
+                <strong>{language === "sv" ? "Lonesynk" : "Payroll sync"}</strong>
+                <span>{payrollSyncStatus || (language === "sv" ? "Inte synkad an" : "Not synced yet")}</span>
+                {payrollLastSyncedAt && (
+                  <small>{language === "sv" ? "Senast" : "Latest"}: {formatDateTime(payrollLastSyncedAt)}</small>
+                )}
+              </div>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={payrollAutoSyncEnabled}
+                  onChange={(event) => setPayrollAutoSyncEnabled(event.target.checked)}
+                />
+                {language === "sv" ? "Autosynk DB" : "DB auto sync"}
+              </label>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={() => loadPayrollSnapshotFromDatabase()} disabled={!token}>
                   {language === "sv" ? "Ladda DB" : "Load DB"}
                 </button>
-                <button type="button" className="primary-small-button" onClick={savePayrollSnapshotToDatabase} disabled={!token}>
+                <button type="button" className="primary-small-button" onClick={() => savePayrollSnapshotToDatabase()} disabled={!token}>
                   {language === "sv" ? "Spara DB" : "Save DB"}
                 </button>
               </div>

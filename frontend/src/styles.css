@@ -2245,6 +2245,30 @@ button:focus-visible,
   color: #5d4b12;
 }
 
+.payroll-sync-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #c9d8ff;
+  border-radius: 8px;
+  background: #f7faff;
+  box-shadow: var(--shadow-small);
+}
+
+.payroll-sync-panel div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.payroll-sync-panel span,
+.payroll-sync-panel small {
+  color: #5d6259;
+  font-weight: 700;
+}
+
 .payroll-summary-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -5192,6 +5216,7 @@ button:focus-visible,
   .budget-hero,
   .budget-row,
   .payroll-summary-grid,
+  .payroll-sync-panel,
   .payroll-report-summary,
   .payroll-report-row,
   .payroll-payment-summary,
