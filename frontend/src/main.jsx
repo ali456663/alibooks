@@ -4979,6 +4979,95 @@ function App() {
     loadBalanceReport();
   }
 
+  async function bookPayrollReportMonth() {
+    setError("");
+    const draftsToBook = payrollDrafts.filter((draft) => (
+      draft.period === payrollReportMonth && draft.status !== "booked"
+    ));
+
+    if (draftsToBook.length === 0) {
+      setError(language === "sv"
+        ? "Det finns inga obokforda loneutkast for vald period."
+        : "There are no unbooked payroll drafts for the selected period.");
+      return;
+    }
+
+    const lockedDraft = draftsToBook.find((draft) => isAccountingDateLocked(`${draft.period || new Date().toISOString().slice(0, 7)}-25`));
+    if (lockedDraft) {
+      setError(lockedAccountingMessage(`${lockedDraft.period || new Date().toISOString().slice(0, 7)}-25`));
+      return;
+    }
+
+    const confirmed = window.confirm(language === "sv"
+      ? `Bokfora ${draftsToBook.length} loner for ${formatMonthLabel(payrollReportMonth, language)}?`
+      : `Book ${draftsToBook.length} payroll drafts for ${formatMonthLabel(payrollReportMonth, language)}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    const bookedDrafts = [];
+
+    for (const draft of draftsToBook) {
+      const calculation = payrollDraftCalculation(draft);
+      const voucherDate = `${draft.period || new Date().toISOString().slice(0, 7)}-25`;
+      const lines = [
+        { accountNumber: draft.salaryAccount || "7010", debit: calculation.gross, credit: 0 },
+        { accountNumber: "7510", debit: calculation.employerFee, credit: 0 },
+        { accountNumber: "2710", debit: 0, credit: calculation.withheldTax },
+        { accountNumber: "2731", debit: 0, credit: calculation.employerFee },
+        { accountNumber: "1930", debit: 0, credit: calculation.netPay }
+      ].filter((line) => line.debit > 0 || line.credit > 0);
+
+      const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders()
+        },
+        body: JSON.stringify({
+          voucherDate,
+          description: `Lon ${draft.employeeName} ${draft.period}`,
+          lines
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        if (bookedDrafts.length > 0) {
+          setPayrollDrafts((current) => current.map((item) => {
+            const booked = bookedDrafts.find((bookedDraft) => bookedDraft.id === item.id);
+            return booked ? { ...item, status: "booked", voucherNumber: booked.voucherNumber } : item;
+          }));
+          loadJournalEntries();
+          loadProfitAndLoss();
+          loadBalanceReport();
+        }
+        setError(apiErrorMessage(data, language === "sv"
+          ? `Manadsbokningen stoppade vid ${draft.employeeName}.`
+          : `Monthly payroll booking stopped at ${draft.employeeName}.`));
+        return;
+      }
+
+      bookedDrafts.push({
+        id: draft.id,
+        voucherNumber: data?.[0]?.voucherNumber || ""
+      });
+    }
+
+    setPayrollDrafts((current) => current.map((item) => {
+      const booked = bookedDrafts.find((bookedDraft) => bookedDraft.id === item.id);
+      return booked ? { ...item, status: "booked", voucherNumber: booked.voucherNumber } : item;
+    }));
+    setPayrollMessage(language === "sv"
+      ? `${bookedDrafts.length} loner bokfordes for ${formatMonthLabel(payrollReportMonth, language)}.`
+      : `${bookedDrafts.length} payroll drafts were booked for ${formatMonthLabel(payrollReportMonth, language)}.`);
+    loadJournalEntries();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
   function openPayrollStatement(draft) {
     const calculation = payrollDraftCalculation(draft);
     const companyName = settings?.companyName || "Muscle&Focus";
@@ -6483,6 +6572,7 @@ function App() {
     ...payrollDrafts.map((draft) => draft.period).filter(Boolean)
   ])).filter(Boolean).sort((first, second) => second.localeCompare(first));
   const payrollReportDrafts = payrollDrafts.filter((draft) => draft.period === payrollReportMonth);
+  const unbookedPayrollReportDrafts = payrollReportDrafts.filter((draft) => draft.status !== "booked");
   const payrollReportTotals = payrollReportDrafts.reduce((totals, draft) => {
     const calculation = payrollDraftCalculation(draft);
     totals.gross += calculation.gross;
@@ -10086,6 +10176,14 @@ function App() {
                   </label>
                   <button type="button" className="secondary-button" onClick={downloadPayrollReportCsv} disabled={payrollReportDrafts.length === 0}>
                     {t.exportCsv}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-small-button"
+                    onClick={bookPayrollReportMonth}
+                    disabled={!token || unbookedPayrollReportDrafts.length === 0}
+                  >
+                    {language === "sv" ? "Bokfor manad" : "Book month"}
                   </button>
                   <button type="button" className="primary-small-button" onClick={openPayrollMonthlyReport}>
                     {language === "sv" ? "Underlag PDF" : "Report PDF"}
