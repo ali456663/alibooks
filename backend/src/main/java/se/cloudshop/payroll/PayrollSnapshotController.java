@@ -1,6 +1,7 @@
 package se.cloudshop.payroll;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -16,10 +17,16 @@ public class PayrollSnapshotController {
   private static final long SNAPSHOT_ID = 1L;
 
   private final PayrollSnapshotRepository payrollSnapshotRepository;
+  private final PayrollSnapshotRevisionRepository payrollSnapshotRevisionRepository;
   private final AuthHeader authHeader;
 
-  public PayrollSnapshotController(PayrollSnapshotRepository payrollSnapshotRepository, AuthHeader authHeader) {
+  public PayrollSnapshotController(
+      PayrollSnapshotRepository payrollSnapshotRepository,
+      PayrollSnapshotRevisionRepository payrollSnapshotRevisionRepository,
+      AuthHeader authHeader
+  ) {
     this.payrollSnapshotRepository = payrollSnapshotRepository;
+    this.payrollSnapshotRevisionRepository = payrollSnapshotRevisionRepository;
     this.authHeader = authHeader;
   }
 
@@ -30,6 +37,14 @@ public class PayrollSnapshotController {
     authHeader.requireValidToken(authorizationHeader);
     return payrollSnapshotRepository.findById(SNAPSHOT_ID)
         .orElseGet(() -> new PayrollSnapshot(SNAPSHOT_ID, "", null));
+  }
+
+  @GetMapping("/payroll/snapshot/revisions")
+  public List<PayrollSnapshotRevision> getPayrollSnapshotRevisions(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
+    return payrollSnapshotRevisionRepository.findTop10ByOrderByCreatedAtDesc();
   }
 
   @PutMapping("/payroll/snapshot")
@@ -46,6 +61,7 @@ public class PayrollSnapshotController {
     PayrollSnapshot snapshot = payrollSnapshotRepository.findById(SNAPSHOT_ID)
         .orElseGet(() -> new PayrollSnapshot(SNAPSHOT_ID, "", LocalDateTime.now()));
     snapshot.updateContent(request.content());
+    payrollSnapshotRevisionRepository.save(new PayrollSnapshotRevision(request.content(), LocalDateTime.now()));
     return payrollSnapshotRepository.save(snapshot);
   }
 }

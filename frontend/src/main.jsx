@@ -1187,6 +1187,7 @@ function App() {
   const [payrollSnapshotReady, setPayrollSnapshotReady] = useState(false);
   const [payrollSyncStatus, setPayrollSyncStatus] = useState("");
   const [payrollLastSyncedAt, setPayrollLastSyncedAt] = useState(() => localStorage.getItem("alibooks-payroll-last-synced-at") || "");
+  const [payrollSnapshotRevisions, setPayrollSnapshotRevisions] = useState([]);
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
   const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
@@ -1369,6 +1370,7 @@ function App() {
     if (!payrollAutoSyncEnabled) {
       setPayrollSnapshotReady(true);
       setPayrollSyncStatus(language === "sv" ? "Autosynk avstangd" : "Auto sync off");
+      loadPayrollSnapshotRevisions({ silent: true });
       return;
     }
 
@@ -5275,6 +5277,37 @@ function App() {
     };
   }
 
+  function applyPayrollSnapshot(snapshot) {
+    setPayrollEmployees(Array.isArray(snapshot.employees) ? snapshot.employees : []);
+    setPayrollDrafts(Array.isArray(snapshot.drafts) ? snapshot.drafts : []);
+    setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
+    setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
+    setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
+    setPayrollTaxPaymentDate(snapshot.taxPaymentDate || new Date().toISOString().slice(0, 10));
+    setPayrollTaxRate(String(snapshot.taxRate || "30"));
+    setPayrollEmployerRate(String(snapshot.employerRate || "31.42"));
+    setPayrollSalaryAccount(snapshot.salaryAccount || "7010");
+    setPayrollSelectedEmployeeId("new");
+    fillPayrollEmployeeForm(null);
+  }
+
+  async function loadPayrollSnapshotRevisions(options = {}) {
+    const response = await fetch(`${apiUrl}/payroll/snapshot/revisions`, {
+      headers: authHeaders()
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda lonehistorik." : "Could not load payroll history."));
+      }
+      return;
+    }
+
+    setPayrollSnapshotRevisions(Array.isArray(data) ? data : []);
+  }
+
   async function savePayrollSnapshotToDatabase(options = {}) {
     setError("");
 
@@ -5308,6 +5341,7 @@ function App() {
         ? `Lon sparad i databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
         : `Payroll saved to database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
     }
+    loadPayrollSnapshotRevisions({ silent: true });
   }
 
   async function loadPayrollSnapshotFromDatabase(options = {}) {
@@ -5330,6 +5364,7 @@ function App() {
     if (!data?.content) {
       setPayrollSnapshotReady(Boolean(options.markReady));
       setPayrollSyncStatus(language === "sv" ? "Ingen lon i databasen an" : "No payroll in database yet");
+      loadPayrollSnapshotRevisions({ silent: true });
       if (!options.silent) {
         setPayrollMessage(language === "sv" ? "Ingen lon sparad i databasen annu." : "No payroll saved in database yet.");
       }
@@ -5346,27 +5381,44 @@ function App() {
       return;
     }
 
-    setPayrollEmployees(Array.isArray(snapshot.employees) ? snapshot.employees : []);
-    setPayrollDrafts(Array.isArray(snapshot.drafts) ? snapshot.drafts : []);
-    setPayrollPaymentStatuses(snapshot.paymentStatuses && typeof snapshot.paymentStatuses === "object" ? snapshot.paymentStatuses : {});
-    setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
-    setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
-    setPayrollTaxPaymentDate(snapshot.taxPaymentDate || new Date().toISOString().slice(0, 10));
-    setPayrollTaxRate(String(snapshot.taxRate || "30"));
-    setPayrollEmployerRate(String(snapshot.employerRate || "31.42"));
-    setPayrollSalaryAccount(snapshot.salaryAccount || "7010");
-    setPayrollSelectedEmployeeId("new");
-    fillPayrollEmployeeForm(null);
+    applyPayrollSnapshot(snapshot);
     setPayrollSnapshotReady(Boolean(options.markReady) || payrollSnapshotReady);
     setPayrollLastSyncedAt(data?.updatedAt || "");
     setPayrollSyncStatus(language === "sv"
       ? `Laddad ${data?.updatedAt ? formatDateTime(data.updatedAt) : ""}`.trim()
       : `Loaded ${data?.updatedAt ? formatDateTime(data.updatedAt) : ""}`.trim());
+    loadPayrollSnapshotRevisions({ silent: true });
     if (!options.silent) {
       setPayrollMessage(language === "sv"
         ? `Lon laddad fran databasen${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`
         : `Payroll loaded from database${data?.updatedAt ? ` ${formatDateTime(data.updatedAt)}` : ""}.`);
     }
+  }
+
+  function restorePayrollSnapshotRevision(revision) {
+    setError("");
+
+    let snapshot;
+    try {
+      snapshot = JSON.parse(revision.content || "");
+    } catch {
+      setError(language === "sv" ? "Versionen kunde inte lasas." : "The revision could not be read.");
+      return;
+    }
+
+    applyPayrollSnapshot(snapshot);
+    setPayrollSnapshotReady(true);
+    setPayrollLastSyncedAt(revision.createdAt || "");
+    setPayrollSyncStatus(language === "sv"
+      ? `Aterstalld ${revision.createdAt ? formatDateTime(revision.createdAt) : ""}`.trim()
+      : `Restored ${revision.createdAt ? formatDateTime(revision.createdAt) : ""}`.trim());
+    setPayrollMessage(payrollAutoSyncEnabled
+      ? (language === "sv"
+        ? "Loneversion aterstalld. Autosynk sparar den som ny aktuell version."
+        : "Payroll revision restored. Auto sync will save it as the new current version.")
+      : (language === "sv"
+        ? "Loneversion aterstalld. Klicka Spara DB om du vill gora den aktuell i databasen."
+        : "Payroll revision restored. Click Save DB if you want to make it current in the database."));
   }
 
   function openPayrollMonthlyReport() {
@@ -9955,10 +10007,26 @@ function App() {
                 <button type="button" className="secondary-button" onClick={() => loadPayrollSnapshotFromDatabase()} disabled={!token}>
                   {language === "sv" ? "Ladda DB" : "Load DB"}
                 </button>
+                <button type="button" className="secondary-button" onClick={() => loadPayrollSnapshotRevisions()} disabled={!token}>
+                  {language === "sv" ? "Historik" : "History"}
+                </button>
                 <button type="button" className="primary-small-button" onClick={() => savePayrollSnapshotToDatabase()} disabled={!token}>
                   {language === "sv" ? "Spara DB" : "Save DB"}
                 </button>
               </div>
+              {payrollSnapshotRevisions.length > 0 && (
+                <div className="payroll-revision-list">
+                  <strong>{language === "sv" ? "Senaste loneversioner" : "Latest payroll versions"}</strong>
+                  {payrollSnapshotRevisions.slice(0, 5).map((revision) => (
+                    <div className="payroll-revision-row" key={revision.id}>
+                      <span>{revision.createdAt ? formatDateTime(revision.createdAt) : "-"}</span>
+                      <button type="button" className="secondary-button" onClick={() => restorePayrollSnapshotRevision(revision)}>
+                        {language === "sv" ? "Aterstall" : "Restore"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="payroll-warning-panel">

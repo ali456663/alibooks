@@ -2269,6 +2269,25 @@ button:focus-visible,
   font-weight: 700;
 }
 
+.payroll-revision-list {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #dce5f2;
+}
+
+.payroll-revision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #dce5f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .payroll-summary-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -5217,6 +5236,7 @@ button:focus-visible,
   .budget-row,
   .payroll-summary-grid,
   .payroll-sync-panel,
+  .payroll-revision-row,
   .payroll-report-summary,
   .payroll-report-row,
   .payroll-payment-summary,
