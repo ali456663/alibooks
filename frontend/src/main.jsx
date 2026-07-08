@@ -4697,6 +4697,172 @@ function App() {
     reportWindow.document.close();
   }
 
+  function downloadTaxDeclarationBasisCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks deklarationsunderlag"],
+      ["Ar", annualCloseYear],
+      ["Foretagsform", annualDeclarationTypeLabel],
+      ["Period", `${annualCloseRange.from} - ${annualCloseRange.to}`],
+      ["OBS", "Arbetsunderlag - kontrollera alltid deklarationen med Skatteverket eller redovisningskonsult."],
+      [],
+      ["Sammanfattning", "Belopp"],
+      ["Intakter", annualCloseTotals.revenue],
+      ["Kostnader", annualCloseTotals.expenses],
+      ["Resultat fore skattemassiga justeringar", annualCloseResult],
+      ["Utgaende moms", annualCloseTotals.outputVat],
+      ["Ingaende moms", annualCloseTotals.inputVat],
+      ["Moms att betala/fa tillbaka", annualCloseVatToPay],
+      ["Egen insattning 2018", annualDeclarationOwnDeposits],
+      ["Egna uttag 2013", annualDeclarationOwnWithdrawals],
+      ["Bruttolon", annualClosePayrollTotals.gross],
+      ["Arbetsgivaravgift", annualClosePayrollTotals.employerFees],
+      [],
+      ["Deklarationsrad", "Belopp", "Kommentar"]
+    ];
+
+    annualDeclarationRows.forEach((row) => {
+      rows.push([row.label, row.amount, row.detail]);
+    });
+
+    rows.push(
+      [],
+      ["Kontroll", "Status", "Detalj"]
+    );
+
+    annualDeclarationChecklist.forEach((item) => {
+      rows.push([item.title, item.status, item.detail]);
+    });
+
+    rows.push(
+      [],
+      ["Intaktskonton"],
+      ["Konto", "Namn", "Belopp"]
+    );
+    annualDeclarationIncomeAccounts.forEach((row) => rows.push([row.accountNumber, row.accountName, row.amount]));
+
+    rows.push(
+      [],
+      ["Kostnadskonton"],
+      ["Konto", "Namn", "Belopp"]
+    );
+    annualDeclarationExpenseAccounts.forEach((row) => rows.push([row.accountNumber, row.accountName, row.amount]));
+
+    downloadLocalCsv(`deklarationsunderlag-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openTaxDeclarationBasisReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade deklarationsunderlaget." : "The browser blocked the declaration basis.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Deklarationsunderlag" : "Tax declaration basis";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const declarationRowsHtml = annualDeclarationRows.map((row) => `<tr>
+      <td>${escapeHtml(row.label)}</td>
+      <td>${row.amount} SEK</td>
+      <td>${escapeHtml(row.detail)}</td>
+    </tr>`).join("");
+    const checklistRowsHtml = annualDeclarationChecklist.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.statusLabel)}</td>
+      <td>${escapeHtml(item.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1060px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th:nth-child(2), td:nth-child(2) { text-align: right; white-space: nowrap; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Ar" : "Year"}:</strong> ${escapeHtml(annualCloseYear)}</p>
+        <p><strong>${language === "sv" ? "Foretagsform" : "Company type"}:</strong> ${escapeHtml(annualDeclarationTypeLabel)}</p>
+        <p><strong>${language === "sv" ? "Period" : "Period"}:</strong> ${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Intakter" : "Revenue"}</span><strong>${annualCloseTotals.revenue} SEK</strong></div>
+      <div><span>${language === "sv" ? "Kostnader" : "Expenses"}</span><strong>${annualCloseTotals.expenses} SEK</strong></div>
+      <div><span>${language === "sv" ? "Resultat" : "Result"}</span><strong>${annualCloseResult} SEK</strong></div>
+      <div><span>${language === "sv" ? "Moms" : "VAT"}</span><strong>${annualCloseVatToPay} SEK</strong></div>
+      <div><span>${language === "sv" ? "Egna insattningar" : "Owner deposits"}</span><strong>${annualDeclarationOwnDeposits} SEK</strong></div>
+      <div><span>${language === "sv" ? "Egna uttag" : "Owner withdrawals"}</span><strong>${annualDeclarationOwnWithdrawals} SEK</strong></div>
+      <div><span>${language === "sv" ? "Bruttolon" : "Gross payroll"}</span><strong>${annualClosePayrollTotals.gross} SEK</strong></div>
+      <div><span>${language === "sv" ? "Kontroller" : "Checks"}</span><strong>${annualDeclarationWarnings}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Deklarationsrader" : "Declaration rows"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Rad" : "Row"}</th>
+          <th>${language === "sv" ? "Belopp" : "Amount"}</th>
+          <th>${language === "sv" ? "Kommentar" : "Comment"}</th>
+        </tr>
+      </thead>
+      <tbody>${declarationRowsHtml}</tbody>
+    </table>
+
+    <h2>${language === "sv" ? "Kontroller innan inlamning" : "Checks before filing"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Kontroll" : "Check"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${checklistRowsHtml}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Detta ar inte en juridisk deklaration eller direkt Skatteverket-inlamning. Anvand som arbetsunderlag och kontrollera alltid exakta rutor, skattemassiga justeringar och bilagor hos Skatteverket."
+      : "This is not a legal tax return or direct tax authority filing. Use it as a working basis and always verify exact fields, tax adjustments and attachments with the tax authority."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadCloseChecklistCsv() {
     setError("");
     const rows = [
@@ -8484,6 +8650,159 @@ function App() {
   const annualCloseStatusText = annualCloseWarnings === 0
     ? (language === "sv" ? "Aret ser redo ut for slutkontroll" : "The year looks ready for final review")
     : `${annualCloseWarnings} ${language === "sv" ? "kontroller kvar" : "checks remaining"}`;
+  const annualDeclarationTypeLabel = settings?.companyType === "LIMITED_COMPANY"
+    ? (language === "sv" ? "Aktiebolag - INK2 kontrollunderlag" : "Limited company - INK2 control basis")
+    : (language === "sv" ? "Enskild firma - NE kontrollunderlag" : "Sole trader - NE control basis");
+  const annualDeclarationAccountRows = Object.values(annualCloseEntries.reduce((rows, entry) => {
+    const accountNumber = String(entry.accountNumber || "-");
+    const current = rows[accountNumber] || {
+      accountNumber,
+      accountName: entry.accountName || "-",
+      debit: 0,
+      credit: 0,
+      amount: 0
+    };
+
+    current.debit += entry.debit || 0;
+    current.credit += entry.credit || 0;
+    rows[accountNumber] = current;
+    return rows;
+  }, {})).map((row) => ({
+    ...row,
+    amount: String(row.accountNumber || "").startsWith("3")
+      ? row.credit - row.debit
+      : row.debit - row.credit
+  })).sort((first, second) => String(first.accountNumber).localeCompare(String(second.accountNumber)));
+  const annualDeclarationIncomeAccounts = annualDeclarationAccountRows.filter((row) => String(row.accountNumber).startsWith("3") && row.amount !== 0);
+  const annualDeclarationExpenseAccounts = annualDeclarationAccountRows.filter((row) => (
+    ["4", "5", "6", "7", "8"].some((prefix) => String(row.accountNumber).startsWith(prefix))
+    && row.amount !== 0
+  ));
+  const annualDeclarationOwnDeposits = annualDeclarationAccountRows
+    .filter((row) => row.accountNumber === "2018")
+    .reduce((sum, row) => sum + Math.max(0, row.credit - row.debit), 0);
+  const annualDeclarationOwnWithdrawals = annualDeclarationAccountRows
+    .filter((row) => row.accountNumber === "2013")
+    .reduce((sum, row) => sum + Math.max(0, row.debit - row.credit), 0);
+  const annualDeclarationRows = settings?.companyType === "LIMITED_COMPANY"
+    ? [
+      {
+        key: "revenue",
+        label: language === "sv" ? "Rorelseintakter" : "Operating revenue",
+        amount: annualCloseTotals.revenue,
+        detail: language === "sv" ? "Summering av konto 3xxx." : "Sum of account class 3xxx."
+      },
+      {
+        key: "expenses",
+        label: language === "sv" ? "Rorelsekostnader" : "Operating expenses",
+        amount: annualCloseTotals.expenses,
+        detail: language === "sv" ? "Summering av konto 4xxx-8xxx enligt bokforingen." : "Sum of account classes 4xxx-8xxx from bookkeeping."
+      },
+      {
+        key: "result",
+        label: language === "sv" ? "Arets resultat fore skatt/justeringar" : "Year result before tax/adjustments",
+        amount: annualCloseResult,
+        detail: language === "sv" ? "Kontrollera mot resultatrapport, bokslutsdispositioner och eventuell bolagsskatt." : "Check against profit and loss, closing adjustments and corporate tax."
+      },
+      {
+        key: "payroll",
+        label: language === "sv" ? "Personalkostnader och avgifter" : "Payroll costs and contributions",
+        amount: annualClosePayrollTotals.gross + annualClosePayrollTotals.employerFees,
+        detail: language === "sv" ? "Bruttolon plus arbetsgivaravgifter i lonemodulen." : "Gross payroll plus employer contributions from payroll."
+      }
+    ]
+    : [
+      {
+        key: "revenue",
+        label: language === "sv" ? "Intakter i naringsverksamhet" : "Business income",
+        amount: annualCloseTotals.revenue,
+        detail: language === "sv" ? "Summering av konto 3xxx som underlag till NE." : "Sum of account class 3xxx as NE basis."
+      },
+      {
+        key: "expenses",
+        label: language === "sv" ? "Kostnader i naringsverksamhet" : "Business expenses",
+        amount: annualCloseTotals.expenses,
+        detail: language === "sv" ? "Summering av konto 4xxx-8xxx. Kontrollera ej avdragsgilla kostnader separat." : "Sum of account classes 4xxx-8xxx. Check non-deductible expenses separately."
+      },
+      {
+        key: "result",
+        label: language === "sv" ? "Resultat fore skattemassiga justeringar" : "Result before tax adjustments",
+        amount: annualCloseResult,
+        detail: language === "sv" ? "Preliminar resultatgrund for NE. Kontrollera egenavgifter, rantefordelning och skattemassiga justeringar." : "Preliminary NE result basis. Verify social fees, interest allocation and tax adjustments."
+      },
+      {
+        key: "own-deposits",
+        label: language === "sv" ? "Egna insattningar 2018" : "Owner deposits 2018",
+        amount: annualDeclarationOwnDeposits,
+        detail: language === "sv" ? "Paverkar eget kapital, normalt inte resultatet." : "Affects equity, normally not the result."
+      },
+      {
+        key: "own-withdrawals",
+        label: language === "sv" ? "Egna uttag 2013" : "Owner withdrawals 2013",
+        amount: annualDeclarationOwnWithdrawals,
+        detail: language === "sv" ? "Paverkar eget kapital, normalt inte resultatet." : "Affects equity, normally not the result."
+      }
+    ];
+  const annualDeclarationChecklist = [
+    {
+      key: "annual-close",
+      status: annualCloseWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Arsbokslut kontrollerat" : "Annual close reviewed",
+      detail: annualCloseWarnings === 0
+        ? (language === "sv" ? "Inga varningar i arsbokslutet." : "No warnings in annual closing.")
+        : `${annualCloseWarnings} ${language === "sv" ? "arsbokslutskontroller kvar" : "annual close checks remaining"}`,
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "vat",
+      status: annualCloseEntries.length > 0 ? "info" : "warning",
+      title: language === "sv" ? "Moms jamford" : "VAT compared",
+      detail: `${annualCloseVatToPay} SEK ${language === "sv" ? "for valt ar" : "for selected year"}`,
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "receipts",
+      status: annualCloseMissingReceipts.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag sparade" : "Receipts saved",
+      detail: annualCloseMissingReceipts.length === 0
+        ? (language === "sv" ? "Inga kostnader saknar underlag." : "No expenses are missing receipts.")
+        : `${annualCloseMissingReceipts.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+      }
+    },
+    {
+      key: "result-account",
+      status: annualCloseNeedsResultVoucher ? "warning" : "ok",
+      title: language === "sv" ? "Resultatkonto kontrollerat" : "Result account checked",
+      detail: annualCloseNeedsResultVoucher
+        ? `${language === "sv" ? "Forbered eller kontrollera resultatverifikat mot" : "Prepare or review result voucher against"} ${annualCloseResultAccount}`
+        : `${language === "sv" ? "Resultatkonto" : "Result account"} ${annualCloseResultAccount}`,
+      action: prepareAnnualResultVoucher
+    },
+    {
+      key: "skatteverket",
+      status: "info",
+      title: language === "sv" ? "Skatteverket kontroll" : "Tax authority review",
+      detail: language === "sv"
+        ? "Kontrollera exakta rutor, bilagor och skattemassiga justeringar innan inlamning."
+        : "Verify exact fields, attachments and tax adjustments before filing.",
+      action: () => setActiveView("reports")
+    }
+  ].map((item) => ({
+    ...item,
+    statusLabel: item.status === "ok"
+      ? "OK"
+      : item.status === "warning"
+        ? (language === "sv" ? "Kontrollera" : "Check")
+        : "Info"
+  }));
+  const annualDeclarationWarnings = annualDeclarationChecklist.filter((item) => item.status === "warning").length;
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -14785,6 +15104,88 @@ function App() {
                   <small>{item.detail}</small>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Deklarationsunderlag" : "Tax declaration basis"}</h2>
+            <div className="button-row">
+              <span className={annualDeclarationWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {annualDeclarationWarnings === 0
+                  ? (language === "sv" ? "Redo for kontroll" : "Ready for review")
+                  : `${annualDeclarationWarnings} ${language === "sv" ? "kontroller kvar" : "checks remaining"}`}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadTaxDeclarationBasisCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openTaxDeclarationBasisReport}>
+                {language === "sv" ? "Underlag PDF" : "Basis PDF"}
+              </button>
+            </div>
+          </div>
+
+          <div className="declaration-basis-panel">
+            <div className="declaration-basis-intro">
+              <span>{annualDeclarationTypeLabel}</span>
+              <strong>
+                {language === "sv"
+                  ? "Samlar siffrorna du behover kontrollera innan deklaration."
+                  : "Gathers the numbers to review before filing."}
+              </strong>
+              <p>
+                {language === "sv"
+                  ? "Detta ar inte en direkt inlamning till Skatteverket. Det ar ett arbetsunderlag som bygger pa din bokforing, moms, lon och arsbokslut i AliBooks."
+                  : "This is not a direct filing to the tax authority. It is a working basis built from your bookkeeping, VAT, payroll and annual closing in AliBooks."}
+              </p>
+            </div>
+
+            <div className="declaration-basis-grid">
+              {annualDeclarationRows.map((row) => (
+                <article key={row.key}>
+                  <span>{row.label}</span>
+                  <strong>{row.amount} SEK</strong>
+                  <small>{row.detail}</small>
+                </article>
+              ))}
+            </div>
+
+            <div className="declaration-checklist">
+              {annualDeclarationChecklist.map((item) => (
+                <button type="button" className={`declaration-check-card ${item.status}`} key={item.key} onClick={item.action}>
+                  <span>{item.statusLabel}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="declaration-account-preview">
+              <article>
+                <h3>{language === "sv" ? "Intaktskonton" : "Income accounts"}</h3>
+                {annualDeclarationIncomeAccounts.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga intaktskonton for valt ar." : "No income accounts for selected year."}</p>
+                ) : (
+                  annualDeclarationIncomeAccounts.slice(0, 5).map((row) => (
+                    <p key={row.accountNumber}>
+                      <span>{row.accountNumber} {row.accountName}</span>
+                      <strong>{row.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+              </article>
+              <article>
+                <h3>{language === "sv" ? "Kostnadskonton" : "Expense accounts"}</h3>
+                {annualDeclarationExpenseAccounts.length === 0 ? (
+                  <p className="muted-line">{language === "sv" ? "Inga kostnadskonton for valt ar." : "No expense accounts for selected year."}</p>
+                ) : (
+                  annualDeclarationExpenseAccounts.slice(0, 5).map((row) => (
+                    <p key={row.accountNumber}>
+                      <span>{row.accountNumber} {row.accountName}</span>
+                      <strong>{row.amount} SEK</strong>
+                    </p>
+                  ))
+                )}
+              </article>
             </div>
           </div>
 

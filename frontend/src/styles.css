@@ -4662,6 +4662,136 @@ button:focus-visible,
   font-weight: 900;
 }
 
+.declaration-basis-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d9ddd4;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fbfdf8 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.declaration-basis-intro {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #dce8d5;
+  border-left: 5px solid #155c49;
+  border-radius: 8px;
+  background: #f7fbf4;
+}
+
+.declaration-basis-intro span,
+.declaration-basis-intro p,
+.declaration-basis-grid small,
+.declaration-check-card small {
+  margin: 0;
+  color: #5d6259;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.declaration-basis-intro strong {
+  font-size: 20px;
+}
+
+.declaration-basis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.declaration-basis-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #dce8d5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.declaration-basis-grid span {
+  color: #5d6259;
+  font-weight: 900;
+}
+
+.declaration-basis-grid strong {
+  font-size: 22px;
+}
+
+.declaration-checklist {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.declaration-check-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #d8e2ee;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.declaration-check-card.ok {
+  border-left-color: #155c49;
+}
+
+.declaration-check-card.warning {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.declaration-check-card.info {
+  border-left-color: #155ee8;
+}
+
+.declaration-check-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(21, 94, 232, 0.1);
+}
+
+.declaration-check-card span {
+  color: #5d6259;
+  font-weight: 900;
+}
+
+.declaration-account-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.declaration-account-preview article {
+  padding: 16px;
+  border: 1px solid #dce8d5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.declaration-account-preview h3 {
+  margin-top: 0;
+}
+
+.declaration-account-preview p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eef2ea;
+}
+
+.declaration-account-preview p:last-child {
+  border-bottom: 0;
+}
+
 .monthly-report-table {
   margin-top: 14px;
 }
@@ -5469,6 +5599,9 @@ button:focus-visible,
   .annual-close-hero,
   .annual-close-summary-grid,
   .annual-close-checklist,
+  .declaration-basis-grid,
+  .declaration-checklist,
+  .declaration-account-preview,
   .data-quality-summary,
   .data-quality-row,
   .tax-plan-panel,
