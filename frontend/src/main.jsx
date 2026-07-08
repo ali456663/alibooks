@@ -5320,10 +5320,39 @@ function App() {
     setPayrollMessage(language === "sv" ? "Lonebeskedets e-posttext kopierades och markerades som skickad." : "Payslip email text copied and marked as sent.");
   }
 
+  function payrollPayslipPayload(draft, options = {}) {
+    const recipientEmail = payrollPayslipRecipientEmail(draft);
+    const calculation = payrollDraftCalculation(draft);
+
+    return {
+      recipientEmail,
+      employeeName: draft.employeeName || "",
+      personalNumber: draft.personalNumber || "",
+      address: draft.address || "",
+      period: draft.period || "",
+      paymentDate: payrollSalaryPaymentDate || "",
+      voucherNumber: draft.voucherNumber || "",
+      salaryAccount: draft.salaryAccount || payrollSalaryAccount || "7010",
+      status: draft.status === "booked" ? "Bokford" : "Utkast",
+      grossSalary: calculation.gross,
+      withheldTax: calculation.withheldTax,
+      netPay: calculation.netPay,
+      employerFee: calculation.employerFee,
+      totalCost: calculation.totalCost,
+      subject: payrollPayslipEmailSubject(draft),
+      body: payrollPayslipEmailText(draft, { attachedPdf: Boolean(options.attachedPdf) })
+    };
+  }
+
+  function payrollPayslipDownloadFilename(draft) {
+    const employee = String(draft.employeeName || "anstalld").replace(/[^A-Za-z0-9_-]+/g, "-");
+    const period = String(draft.period || "period").replace(/[^A-Za-z0-9_-]+/g, "-");
+    return `lonebesked-${period}-${employee}.pdf`;
+  }
+
   async function sendPayrollPayslipEmail(draft) {
     setError("");
     const recipientEmail = payrollPayslipRecipientEmail(draft);
-    const calculation = payrollDraftCalculation(draft);
 
     if (!token) {
       setError(language === "sv" ? "Logga in for att skicka lonebesked via SMTP." : "Sign in to send payslips via SMTP.");
@@ -5341,24 +5370,7 @@ function App() {
         "Content-Type": "application/json",
         ...authHeaders()
       },
-      body: JSON.stringify({
-        recipientEmail,
-        employeeName: draft.employeeName || "",
-        personalNumber: draft.personalNumber || "",
-        address: draft.address || "",
-        period: draft.period || "",
-        paymentDate: payrollSalaryPaymentDate || "",
-        voucherNumber: draft.voucherNumber || "",
-        salaryAccount: draft.salaryAccount || payrollSalaryAccount || "7010",
-        status: draft.status === "booked" ? "Bokford" : "Utkast",
-        grossSalary: calculation.gross,
-        withheldTax: calculation.withheldTax,
-        netPay: calculation.netPay,
-        employerFee: calculation.employerFee,
-        totalCost: calculation.totalCost,
-        subject: payrollPayslipEmailSubject(draft),
-        body: payrollPayslipEmailText(draft, { attachedPdf: true })
-      })
+      body: JSON.stringify(payrollPayslipPayload(draft, { attachedPdf: true }))
     });
 
     const data = await response.json().catch(() => null);
@@ -5372,6 +5384,41 @@ function App() {
     setPayrollMessage(language === "sv"
       ? `Lonebesked skickades till ${recipientEmail}.`
       : `Payslip sent to ${recipientEmail}.`);
+  }
+
+  async function downloadPayrollPayslipPdf(draft) {
+    setError("");
+
+    if (!token) {
+      setError(language === "sv" ? "Logga in for att ladda ner lonebesked som PDF." : "Sign in to download payslip PDF.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/payroll/payslip-pdf`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify(payrollPayslipPayload(draft))
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda ner lonebesked som PDF." : "Could not download payslip PDF."));
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = payrollPayslipDownloadFilename(draft);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setPayrollMessage(language === "sv" ? "Lonebesked laddades ner som PDF." : "Payslip downloaded as PDF.");
   }
 
   function markPayrollPayslipMonthSent() {
@@ -10918,6 +10965,9 @@ function App() {
                         <button type="button" className="primary-small-button" onClick={() => sendPayrollPayslipEmail(row)} disabled={!token || !row.recipientEmail}>
                           {language === "sv" ? "Skicka" : "Send"}
                         </button>
+                        <button type="button" className="secondary-button" onClick={() => downloadPayrollPayslipPdf(row)} disabled={!token}>
+                          PDF
+                        </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(row)} disabled={!row.recipientEmail}>
                           {language === "sv" ? "E-post" : "Email"}
                         </button>
@@ -11223,6 +11273,9 @@ function App() {
                         </button>
                         <button type="button" className="primary-small-button" onClick={() => sendPayrollPayslipEmail(draft)} disabled={!token || !payslipRecipientEmail}>
                           {language === "sv" ? "Skicka" : "Send"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => downloadPayrollPayslipPdf(draft)} disabled={!token}>
+                          PDF
                         </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(draft)} disabled={!payslipRecipientEmail}>
                           {language === "sv" ? "E-post" : "Email"}

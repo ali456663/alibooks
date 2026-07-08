@@ -60,7 +60,7 @@ public class PayrollEmailService {
           ? "Lonebesked " + safe(request.period())
           : request.subject());
       helper.setText(request.body(), false);
-      helper.addAttachment(payslipFilename(request), new ByteArrayResource(createPayslipPdf(request, settings)), "application/pdf");
+      helper.addAttachment(payslipFilename(request), new ByteArrayResource(buildPayslipPdf(request, settings)), "application/pdf");
       mailSender.send(message);
     } catch (MessagingException exception) {
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not create payslip email.");
@@ -74,9 +74,7 @@ public class PayrollEmailService {
   }
 
   private void validateRequest(PayrollPayslipEmailRequest request) {
-    if (request == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip email request is required.");
-    }
+    validatePdfRequest(request);
 
     if (request.recipientEmail() == null || request.recipientEmail().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee has no email address.");
@@ -91,11 +89,36 @@ public class PayrollEmailService {
     }
   }
 
+  public byte[] createPayslipPdf(PayrollPayslipEmailRequest request) {
+    validatePdfRequest(request);
+    return buildPayslipPdf(request, settingsService.getSettings());
+  }
+
+  public String payslipFilename(PayrollPayslipEmailRequest request) {
+    String employee = value(request.employeeName(), "anstalld").replaceAll("[^A-Za-z0-9_-]+", "-");
+    String period = value(request.period(), "period").replaceAll("[^A-Za-z0-9_-]+", "-");
+    return "lonebesked-" + period + "-" + employee + ".pdf";
+  }
+
+  private void validatePdfRequest(PayrollPayslipEmailRequest request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip email request is required.");
+    }
+
+    if (request.employeeName() == null || request.employeeName().isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee name is required.");
+    }
+
+    if (request.period() == null || request.period().isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip period is required.");
+    }
+  }
+
   private String safe(String value) {
     return value == null ? "" : value;
   }
 
-  private byte[] createPayslipPdf(PayrollPayslipEmailRequest request, AppSettings settings) {
+  private byte[] buildPayslipPdf(PayrollPayslipEmailRequest request, AppSettings settings) {
     try {
       ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
       Document document = new Document();
@@ -203,12 +226,6 @@ public class PayrollEmailService {
     cell.setPadding(8);
     cell.setBorderColor(new Color(220, 229, 242));
     table.addCell(cell);
-  }
-
-  private String payslipFilename(PayrollPayslipEmailRequest request) {
-    String employee = value(request.employeeName(), "anstalld").replaceAll("[^A-Za-z0-9_-]+", "-");
-    String period = value(request.period(), "period").replaceAll("[^A-Za-z0-9_-]+", "-");
-    return "lonebesked-" + period + "-" + employee + ".pdf";
   }
 
   private String value(String value, String fallback) {
