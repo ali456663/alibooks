@@ -13,6 +13,10 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
@@ -20,6 +24,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import se.cloudshop.payroll.PayrollPayslipArchiveRequest;
 import se.cloudshop.payroll.PayrollPayslipEmailRequest;
 import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
@@ -100,6 +105,43 @@ public class PayrollEmailService {
     return "lonebesked-" + period + "-" + employee + ".pdf";
   }
 
+  public byte[] createPayslipArchive(PayrollPayslipArchiveRequest request) {
+    if (request == null || request.payslips() == null || request.payslips().isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslips are required.");
+    }
+
+    AppSettings settings = settingsService.getSettings();
+    List<PayrollPayslipEmailRequest> payslips = request.payslips();
+    payslips.forEach(this::validatePdfRequest);
+
+    try {
+      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+      ZipOutputStream zip = new ZipOutputStream(outputStream, StandardCharsets.UTF_8);
+
+      int index = 1;
+      for (PayrollPayslipEmailRequest payslip : payslips) {
+        String filename = String.format("%02d-%s", index, payslipFilename(payslip));
+        zip.putNextEntry(new ZipEntry(filename));
+        zip.write(buildPayslipPdf(payslip, settings));
+        zip.closeEntry();
+        index += 1;
+      }
+
+      zip.putNextEntry(new ZipEntry("manifest.csv"));
+      zip.write(createArchiveManifest(request).getBytes(StandardCharsets.UTF_8));
+      zip.closeEntry();
+      zip.close();
+      return outputStream.toByteArray();
+    } catch (Exception exception) {
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not create payslip archive.");
+    }
+  }
+
+  public String payslipArchiveFilename(String period) {
+    String cleanPeriod = value(period, "period").replaceAll("[^A-Za-z0-9_-]+", "-");
+    return "lonearkiv-" + cleanPeriod + ".zip";
+  }
+
   private void validatePdfRequest(PayrollPayslipEmailRequest request) {
     if (request == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip email request is required.");
@@ -116,6 +158,32 @@ public class PayrollEmailService {
 
   private String safe(String value) {
     return value == null ? "" : value;
+  }
+
+  private String createArchiveManifest(PayrollPayslipArchiveRequest request) {
+    StringBuilder csv = new StringBuilder("\uFEFF");
+    csv.append("Period;Anstalld;Personnummer;E-post;Brutto;Skatt;Netto;Arbetsgivaravgift;Total kostnad;Status;Verifikat\n");
+
+    for (PayrollPayslipEmailRequest payslip : request.payslips()) {
+      csv.append(csvValue(payslip.period())).append(";")
+          .append(csvValue(payslip.employeeName())).append(";")
+          .append(csvValue(payslip.personalNumber())).append(";")
+          .append(csvValue(payslip.recipientEmail())).append(";")
+          .append(payslip.grossSalary()).append(";")
+          .append(payslip.withheldTax()).append(";")
+          .append(payslip.netPay()).append(";")
+          .append(payslip.employerFee()).append(";")
+          .append(payslip.totalCost()).append(";")
+          .append(csvValue(payslip.status())).append(";")
+          .append(csvValue(payslip.voucherNumber()))
+          .append("\n");
+    }
+
+    return csv.toString();
+  }
+
+  private String csvValue(String value) {
+    return "\"" + safe(value).replace("\"", "\"\"") + "\"";
   }
 
   private byte[] buildPayslipPdf(PayrollPayslipEmailRequest request, AppSettings settings) {

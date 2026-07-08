@@ -50,4 +50,17 @@ public class PayrollEmailController {
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + payrollEmailService.payslipFilename(request) + "\"")
         .body(pdf);
   }
+
+  @PostMapping(value = "/payroll/payslip-archive", produces = "application/zip")
+  public ResponseEntity<byte[]> createPayslipArchive(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody PayrollPayslipArchiveRequest request
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
+    byte[] archive = payrollEmailService.createPayslipArchive(request);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType("application/zip"))
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + payrollEmailService.payslipArchiveFilename(request.period()) + "\"")
+        .body(archive);
+  }
 }

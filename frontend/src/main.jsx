@@ -5421,6 +5421,49 @@ function App() {
     setPayrollMessage(language === "sv" ? "Lonebesked laddades ner som PDF." : "Payslip downloaded as PDF.");
   }
 
+  async function downloadPayrollPayslipArchive() {
+    setError("");
+
+    if (!token) {
+      setError(language === "sv" ? "Logga in for att ladda ner lonearkiv." : "Sign in to download payroll archive.");
+      return;
+    }
+
+    if (payrollPayslipRows.length === 0) {
+      setError(language === "sv" ? "Det finns inga lonebesked for vald period." : "There are no payslips for selected period.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/payroll/payslip-archive`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        period: payrollReportMonth,
+        payslips: payrollPayslipRows.map((row) => payrollPayslipPayload(row))
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda ner lonearkiv." : "Could not download payroll archive."));
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lonearkiv-${payrollReportMonth || "period"}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setPayrollMessage(language === "sv" ? "Lonearkiv laddades ner som ZIP." : "Payroll archive downloaded as ZIP.");
+  }
+
   function markPayrollPayslipMonthSent() {
     const now = new Date().toISOString();
     const updates = {};
@@ -10922,9 +10965,14 @@ function App() {
                       : "Send via SMTP, open email drafts or mark payslips as sent for the selected period."}
                   </p>
                 </div>
-                <button type="button" className="secondary-button" onClick={markPayrollPayslipMonthSent} disabled={payrollPayslipRows.length === 0}>
-                  {language === "sv" ? "Markera alla skickade" : "Mark all sent"}
-                </button>
+                <div className="button-row">
+                  <button type="button" className="secondary-button" onClick={downloadPayrollPayslipArchive} disabled={!token || payrollPayslipRows.length === 0}>
+                    {language === "sv" ? "Arkiv ZIP" : "Archive ZIP"}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={markPayrollPayslipMonthSent} disabled={payrollPayslipRows.length === 0}>
+                    {language === "sv" ? "Markera alla skickade" : "Mark all sent"}
+                  </button>
+                </div>
               </div>
 
               <div className="payroll-payslip-summary">
