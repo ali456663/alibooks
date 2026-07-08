@@ -5233,10 +5233,13 @@ function App() {
       : `Payslip ${draft.period} - ${companyName}`;
   }
 
-  function payrollPayslipEmailText(draft) {
+  function payrollPayslipEmailText(draft, options = {}) {
     const calculation = payrollDraftCalculation(draft);
     const companyName = settings?.companyName || "Muscle&Focus";
     const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const pdfLine = options.attachedPdf
+      ? (language === "sv" ? "Ditt lonebesked bifogas som PDF." : "Your payslip is attached as a PDF.")
+      : (language === "sv" ? "Lonebeskedet finns som PDF/utskrift i AliBooks." : "The payslip is available as PDF/printout in AliBooks.");
 
     if (language === "sv") {
       return [
@@ -5249,7 +5252,7 @@ function App() {
         `Nettolon att betala: ${calculation.netPay} SEK`,
         `Utbetalningsdatum: ${formatDateOnly(payrollSalaryPaymentDate) || "-"}`,
         "",
-        "Lonebeskedet finns som PDF/utskrift i AliBooks.",
+        pdfLine,
         "",
         `Vanliga halsningar`,
         companyName,
@@ -5267,7 +5270,7 @@ function App() {
       `Net pay: ${calculation.netPay} SEK`,
       `Payment date: ${formatDateOnly(payrollSalaryPaymentDate) || "-"}`,
       "",
-      "The payslip is available as PDF/printout in AliBooks.",
+      pdfLine,
       "",
       "Best regards",
       companyName,
@@ -5320,6 +5323,7 @@ function App() {
   async function sendPayrollPayslipEmail(draft) {
     setError("");
     const recipientEmail = payrollPayslipRecipientEmail(draft);
+    const calculation = payrollDraftCalculation(draft);
 
     if (!token) {
       setError(language === "sv" ? "Logga in for att skicka lonebesked via SMTP." : "Sign in to send payslips via SMTP.");
@@ -5340,9 +5344,20 @@ function App() {
       body: JSON.stringify({
         recipientEmail,
         employeeName: draft.employeeName || "",
+        personalNumber: draft.personalNumber || "",
+        address: draft.address || "",
         period: draft.period || "",
+        paymentDate: payrollSalaryPaymentDate || "",
+        voucherNumber: draft.voucherNumber || "",
+        salaryAccount: draft.salaryAccount || payrollSalaryAccount || "7010",
+        status: draft.status === "booked" ? "Bokford" : "Utkast",
+        grossSalary: calculation.gross,
+        withheldTax: calculation.withheldTax,
+        netPay: calculation.netPay,
+        employerFee: calculation.employerFee,
+        totalCost: calculation.totalCost,
         subject: payrollPayslipEmailSubject(draft),
-        body: payrollPayslipEmailText(draft)
+        body: payrollPayslipEmailText(draft, { attachedPdf: true })
       })
     });
 
