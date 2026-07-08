@@ -4863,6 +4863,150 @@ function App() {
     reportWindow.document.close();
   }
 
+  function downloadLegalArchiveIndexCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks lagstadgat arkiv"],
+      ["Ar", annualCloseYear],
+      ["Period", `${annualCloseRange.from} - ${annualCloseRange.to}`],
+      ["Spara minst till", legalArchiveRetentionUntil],
+      ["Status", legalArchiveStatusText],
+      ["OBS", "Arbetsregel for arkiv. Kontrollera alltid aktuella arkiveringskrav med Skatteverket/BFN eller redovisningskonsult."],
+      [],
+      ["Del", "Status", "Antal/Belopp", "Detalj"]
+    ];
+
+    legalArchiveItems.forEach((item) => {
+      rows.push([item.title, item.status, item.count, item.detail]);
+    });
+
+    rows.push(
+      [],
+      ["Fakturor"],
+      ["Fakturanummer", "Datum", "Kund", "Total", "Betalt", "Kvar", "Status"]
+    );
+    annualCloseInvoices.forEach((item) => {
+      rows.push([
+        invoiceNumber(item),
+        item.invoiceDate || String(item.createdAt || "").slice(0, 10),
+        item.customerName || item.customer?.name || "",
+        invoiceTotalAmount(item),
+        invoicePaidAmount(item),
+        invoiceRemainingAmount(item),
+        statusLabel(item.status, language)
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Kostnader"],
+      ["Datum", "Beskrivning", "Kategori", "Total", "Underlag"]
+    );
+    annualCloseExpenses.forEach((expense) => {
+      rows.push([
+        expense.expenseDate || String(expense.createdAt || "").slice(0, 10),
+        expense.description || "",
+        expenseCategoryLabel(expense.category),
+        expense.totalAmount || 0,
+        expenseHasReceipt(expense) ? "Ja" : "Saknas"
+      ]);
+    });
+
+    downloadLocalCsv(`arkivforteckning-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openLegalArchiveCertificate() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade arkivrapporten." : "The browser blocked the archive report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Arkivforteckning" : "Archive index";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const itemRows = legalArchiveItems.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.statusLabel)}</td>
+      <td>${escapeHtml(String(item.count))}</td>
+      <td>${escapeHtml(item.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1060px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #155c49; padding-bottom: 22px; }
+    h1 { margin: 0; color: #155c49; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce8d5; border-radius: 10px; padding: 14px; background: #f7fbf4; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #155c49; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Ar" : "Year"}:</strong> ${escapeHtml(annualCloseYear)}</p>
+        <p><strong>${language === "sv" ? "Period" : "Period"}:</strong> ${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+        <p><strong>${language === "sv" ? "Spara minst till" : "Keep at least until"}:</strong> ${escapeHtml(legalArchiveRetentionUntil)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Fakturor" : "Invoices"}</span><strong>${annualCloseInvoices.length}</strong></div>
+      <div><span>${language === "sv" ? "Kostnader" : "Expenses"}</span><strong>${annualCloseExpenses.length}</strong></div>
+      <div><span>${language === "sv" ? "Verifikat" : "Vouchers"}</span><strong>${annualCloseVoucherCount}</strong></div>
+      <div><span>${language === "sv" ? "Underlag saknas" : "Missing receipts"}</span><strong>${annualCloseMissingReceipts.length}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Arkivdelar" : "Archive parts"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Del" : "Part"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Antal/Belopp" : "Count/Amount"}</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Arkivforteckningen ar ett internt kontrollunderlag. Spara backup, fakturor, kvitton, verifikationer, rapporter och exportfiler sakert och kontrollera alltid aktuella arkiveringsregler."
+      : "The archive index is an internal control basis. Store backups, invoices, receipts, vouchers, reports and export files securely and always verify current archive rules."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadCloseChecklistCsv() {
     setError("");
     const rows = [
@@ -8803,6 +8947,109 @@ function App() {
         : "Info"
   }));
   const annualDeclarationWarnings = annualDeclarationChecklist.filter((item) => item.status === "warning").length;
+  const legalArchiveRetentionUntil = `${Number(annualCloseYear || new Date().getFullYear()) + 7}-12-31`;
+  const legalArchiveItems = [
+    {
+      key: "invoices",
+      status: annualCloseInvoices.length > 0 ? "ok" : "info",
+      title: language === "sv" ? "Fakturor och kundreskontra" : "Invoices and customer ledger",
+      count: annualCloseInvoices.length,
+      detail: language === "sv"
+        ? `${annualCloseReceivables} SEK kvar att stamma av vid arsslut.`
+        : `${annualCloseReceivables} SEK left to reconcile at year-end.`,
+      action: () => {
+        setActiveView("invoices");
+        setInvoiceDateFrom(annualCloseRange.from);
+        setInvoiceDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "receipts",
+      status: annualCloseMissingReceipts.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Kvitton och leverantorsunderlag" : "Receipts and supplier documents",
+      count: `${annualCloseExpenses.length - annualCloseMissingReceipts.length}/${annualCloseExpenses.length}`,
+      detail: annualCloseMissingReceipts.length === 0
+        ? (language === "sv" ? "Alla kostnader for valt ar har underlag." : "All expenses for selected year have receipts.")
+        : `${annualCloseMissingReceipts.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+        setExpenseDateFrom(annualCloseRange.from);
+        setExpenseDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "vouchers",
+      status: annualCloseUnbalancedGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Verifikationer och huvudbok" : "Vouchers and ledger",
+      count: annualCloseVoucherCount,
+      detail: annualCloseUnbalancedGroups.length === 0
+        ? (language === "sv" ? "Valt ars verifikationer balanserar." : "Selected year's vouchers balance.")
+        : `${annualCloseUnbalancedGroups.length} ${language === "sv" ? "obalanserade verifikat" : "unbalanced vouchers"}`,
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingDateFrom(annualCloseRange.from);
+        setBookkeepingDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "vat",
+      status: annualCloseEntries.length > 0 ? "info" : "warning",
+      title: language === "sv" ? "Momsrapport och momsavstamning" : "VAT report and reconciliation",
+      count: `${annualCloseVatToPay} SEK`,
+      detail: language === "sv" ? "Spara momsunderlag tillsammans med deklarationsunderlaget." : "Store VAT basis together with the declaration basis.",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "payroll",
+      status: annualClosePayrollTotals.count === annualClosePayrollTotals.booked ? "ok" : "warning",
+      title: language === "sv" ? "Loneunderlag" : "Payroll basis",
+      count: `${annualClosePayrollTotals.booked}/${annualClosePayrollTotals.count}`,
+      detail: annualClosePayrollTotals.count === 0
+        ? (language === "sv" ? "Ingen lon registrerad for valt ar." : "No payroll registered for selected year.")
+        : `${annualClosePayrollTotals.gross} SEK ${language === "sv" ? "bruttolon" : "gross payroll"}`,
+      action: () => {
+        setActiveView("payroll");
+        setPayrollReportYear(annualCloseYear);
+      }
+    },
+    {
+      key: "reports",
+      status: annualDeclarationWarnings === 0 && annualCloseWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Bokslut och deklarationsunderlag" : "Closing and declaration basis",
+      count: `${annualCloseReadiness}%`,
+      detail: language === "sv"
+        ? "Spara arsbokslut, deklarationsunderlag, resultatrapport och balansrapport."
+        : "Store annual closing, declaration basis, profit and loss and balance report.",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "backup",
+      status: backupValidation ? "ok" : "info",
+      title: language === "sv" ? "Sakerhetskopia verifierad" : "Backup verified",
+      count: backupValidation ? formatDateOnly(backupValidation.exportedAt) : "JSON",
+      detail: backupValidation
+        ? (language === "sv" ? "Senaste kontrollerade backup gick att lasa." : "Latest checked backup could be read.")
+        : (language === "sv" ? "Ladda ner och kontrollera JSON-backup i Installningar." : "Download and verify JSON backup in Settings."),
+      action: () => setActiveView("settings")
+    }
+  ].map((item) => ({
+    ...item,
+    statusLabel: item.status === "ok"
+      ? "OK"
+      : item.status === "warning"
+        ? (language === "sv" ? "Kontrollera" : "Check")
+        : "Info"
+  }));
+  const legalArchiveWarnings = legalArchiveItems.filter((item) => item.status === "warning").length;
+  const legalArchiveReadyCount = legalArchiveItems.filter((item) => item.status === "ok").length;
+  const legalArchiveStatusText = legalArchiveWarnings === 0
+    ? (language === "sv" ? "Arkivet ser redo ut" : "Archive looks ready")
+    : `${legalArchiveWarnings} ${language === "sv" ? "arkivdelar behover kontroll" : "archive parts need review"}`;
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -15441,6 +15688,55 @@ function App() {
                     {item.actionLabel}
                   </button>
                 </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Lagstadgat arkiv" : "Legal archive"}</h2>
+            <div className="button-row">
+              <span className={legalArchiveWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {legalArchiveReadyCount}/{legalArchiveItems.length} {language === "sv" ? "redo" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadLegalArchiveIndexCsv}>
+                {language === "sv" ? "Exportera arkivforteckning" : "Export archive index"}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openLegalArchiveCertificate}>
+                {language === "sv" ? "Arkivrapport" : "Archive report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="legal-archive-panel">
+            <div className="legal-archive-hero">
+              <div>
+                <span>{language === "sv" ? "Arkivar" : "Archive year"}</span>
+                <strong>{annualCloseYear}</strong>
+                <p>
+                  {language === "sv"
+                    ? `Spara bokforing och underlag minst till ${legalArchiveRetentionUntil} som arbetsregel. Kontrollera alltid aktuella krav med Skatteverket/BFN.`
+                    : `Keep bookkeeping and documents at least until ${legalArchiveRetentionUntil} as a working rule. Always verify current requirements with the tax authority.`}
+                </p>
+              </div>
+              <div>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{legalArchiveStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Arkivet samlar fakturor, kvitton, verifikationer, moms, lon, rapporter och backup for valt ar."
+                    : "The archive gathers invoices, receipts, vouchers, VAT, payroll, reports and backup for the selected year."}
+                </p>
+              </div>
+            </div>
+
+            <div className="legal-archive-grid">
+              {legalArchiveItems.map((item) => (
+                <button type="button" className={`legal-archive-card ${item.status}`} key={item.key} onClick={item.action}>
+                  <span>{item.statusLabel}</span>
+                  <strong>{item.title}</strong>
+                  <em>{item.count}</em>
+                  <small>{item.detail}</small>
+                </button>
               ))}
             </div>
           </div>
