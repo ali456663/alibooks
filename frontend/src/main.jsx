@@ -5317,6 +5317,48 @@ function App() {
     setPayrollMessage(language === "sv" ? "Lonebeskedets e-posttext kopierades och markerades som skickad." : "Payslip email text copied and marked as sent.");
   }
 
+  async function sendPayrollPayslipEmail(draft) {
+    setError("");
+    const recipientEmail = payrollPayslipRecipientEmail(draft);
+
+    if (!token) {
+      setError(language === "sv" ? "Logga in for att skicka lonebesked via SMTP." : "Sign in to send payslips via SMTP.");
+      return;
+    }
+
+    if (!recipientEmail) {
+      setError(language === "sv" ? "Den anstallde saknar e-postadress." : "The employee has no email address.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/payroll/payslip-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        recipientEmail,
+        employeeName: draft.employeeName || "",
+        period: draft.period || "",
+        subject: payrollPayslipEmailSubject(draft),
+        body: payrollPayslipEmailText(draft)
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skicka lonebesked. Kontrollera SMTP-installningarna." : "Could not send payslip. Check SMTP settings."));
+      return;
+    }
+
+    markPayrollPayslipSent(draft, "smtp");
+    setPayrollMessage(language === "sv"
+      ? `Lonebesked skickades till ${recipientEmail}.`
+      : `Payslip sent to ${recipientEmail}.`);
+  }
+
   function markPayrollPayslipMonthSent() {
     const now = new Date().toISOString();
     const updates = {};
@@ -10814,8 +10856,8 @@ function App() {
                   <h3>{language === "sv" ? "Lonebesked" : "Payslips"}</h3>
                   <p className="automation-note">
                     {language === "sv"
-                      ? "Skicka, kopiera eller markera lonebesked som skickade for vald period. Riktig SMTP kan kopplas pa senare."
-                      : "Send, copy or mark payslips as sent for the selected period. Real SMTP can be connected later."}
+                      ? "Skicka via SMTP, oppna e-postutkast eller markera lonebesked som skickade for vald period."
+                      : "Send via SMTP, open email drafts or mark payslips as sent for the selected period."}
                   </p>
                 </div>
                 <button type="button" className="secondary-button" onClick={markPayrollPayslipMonthSent} disabled={payrollPayslipRows.length === 0}>
@@ -10858,6 +10900,9 @@ function App() {
                         <span className={row.payslipSent ? "status success-status" : "status warning-status"}>
                           {row.payslipSent ? (language === "sv" ? "Skickad" : "Sent") : (language === "sv" ? "Ej skickad" : "Not sent")}
                         </span>
+                        <button type="button" className="primary-small-button" onClick={() => sendPayrollPayslipEmail(row)} disabled={!token || !row.recipientEmail}>
+                          {language === "sv" ? "Skicka" : "Send"}
+                        </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(row)} disabled={!row.recipientEmail}>
                           {language === "sv" ? "E-post" : "Email"}
                         </button>
@@ -11160,6 +11205,9 @@ function App() {
                         </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollStatement(draft)}>
                           {language === "sv" ? "Lonebesked" : "Payslip"}
+                        </button>
+                        <button type="button" className="primary-small-button" onClick={() => sendPayrollPayslipEmail(draft)} disabled={!token || !payslipRecipientEmail}>
+                          {language === "sv" ? "Skicka" : "Send"}
                         </button>
                         <button type="button" className="secondary-button" onClick={() => openPayrollPayslipEmail(draft)} disabled={!payslipRecipientEmail}>
                           {language === "sv" ? "E-post" : "Email"}
