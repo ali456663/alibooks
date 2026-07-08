@@ -1019,6 +1019,7 @@ const localPreferenceKeys = [
   "alibooks-payroll-employees",
   "alibooks-payroll-selected-employee-id",
   "alibooks-payroll-report-month",
+  "alibooks-payroll-report-year",
   "alibooks-payroll-payment-statuses",
   "alibooks-payroll-payment-batches",
   "alibooks-payroll-payslip-statuses",
@@ -1193,6 +1194,7 @@ function App() {
   const [payrollLastSyncedAt, setPayrollLastSyncedAt] = useState(() => localStorage.getItem("alibooks-payroll-last-synced-at") || "");
   const [payrollSnapshotRevisions, setPayrollSnapshotRevisions] = useState([]);
   const [payrollReportMonth, setPayrollReportMonth] = useState(() => localStorage.getItem("alibooks-payroll-report-month") || new Date().toISOString().slice(0, 7));
+  const [payrollReportYear, setPayrollReportYear] = useState(() => localStorage.getItem("alibooks-payroll-report-year") || new Date().toISOString().slice(0, 4));
   const [payrollSalaryPaymentDate, setPayrollSalaryPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-salary-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
@@ -1371,6 +1373,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-employees", JSON.stringify(payrollEmployees));
     localStorage.setItem("alibooks-payroll-selected-employee-id", payrollSelectedEmployeeId);
     localStorage.setItem("alibooks-payroll-report-month", payrollReportMonth);
+    localStorage.setItem("alibooks-payroll-report-year", payrollReportYear);
     localStorage.setItem("alibooks-payroll-salary-payment-date", payrollSalaryPaymentDate);
     localStorage.setItem("alibooks-payroll-payment-statuses", JSON.stringify(payrollPaymentStatuses));
     localStorage.setItem("alibooks-payroll-payment-batches", JSON.stringify(payrollPaymentBatches));
@@ -1382,7 +1385,7 @@ function App() {
     localStorage.setItem("alibooks-payroll-tax-rate", payrollTaxRate);
     localStorage.setItem("alibooks-payroll-employer-rate", payrollEmployerRate);
     localStorage.setItem("alibooks-payroll-salary-account", payrollSalaryAccount);
-  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollPaymentBatches, payrollPayslipStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
+  }, [payrollDrafts, payrollEmployees, payrollSelectedEmployeeId, payrollReportMonth, payrollReportYear, payrollSalaryPaymentDate, payrollPaymentStatuses, payrollPaymentBatches, payrollPayslipStatuses, payrollTaxPaymentDate, payrollTaxSettlements, payrollAutoSyncEnabled, payrollLastSyncedAt, payrollTaxRate, payrollEmployerRate, payrollSalaryAccount]);
 
   useEffect(() => {
     if (!token) {
@@ -1417,6 +1420,7 @@ function App() {
     payrollDrafts,
     payrollEmployees,
     payrollReportMonth,
+    payrollReportYear,
     payrollSalaryPaymentDate,
     payrollPaymentStatuses,
     payrollPaymentBatches,
@@ -2276,6 +2280,7 @@ function App() {
     setPayrollEmployeeEmail("");
     setPayrollEmployeeAddress("");
     setPayrollReportMonth(new Date().toISOString().slice(0, 7));
+    setPayrollReportYear(new Date().toISOString().slice(0, 4));
     setPayrollPaymentStatuses({});
     setPayrollPaymentBatches([]);
     setPayrollPayslipStatuses({});
@@ -5524,6 +5529,150 @@ function App() {
     downloadLocalCsv(`loneunderlag-${payrollReportMonth || "period"}.csv`, rows);
   }
 
+  function downloadPayrollYearCsv() {
+    setError("");
+    const rows = [
+      ["Arsrapport lon / Payroll yearly report"],
+      ["Ar", payrollReportYear || "-"],
+      ["Bruttolon", payrollYearTotals.gross],
+      ["Preliminar skatt", payrollYearTotals.tax],
+      ["Nettolon", payrollYearTotals.net],
+      ["Arbetsgivaravgift", payrollYearTotals.employerFees],
+      ["Total lonekostnad", payrollYearTotals.totalCost],
+      ["Loner", payrollYearTotals.count],
+      ["Bokforda", payrollYearTotals.booked],
+      ["Ej bokforda", payrollYearTotals.unbooked],
+      [],
+      ["Anstalld", "Personnummer", "E-post", "Manader", "Antal loner", "Brutto", "Preliminar skatt", "Nettolon", "Arbetsgivaravgift", "Total kostnad", "Verifikat", "Status"]
+    ];
+
+    payrollYearRows.forEach((row) => {
+      rows.push([
+        row.employeeName,
+        row.personalNumber || "",
+        row.email || "",
+        row.months.join(", "),
+        row.count,
+        row.gross,
+        row.tax,
+        row.net,
+        row.employerFees,
+        row.totalCost,
+        row.vouchers.join(", "),
+        row.statusLabel
+      ]);
+    });
+
+    downloadLocalCsv(`lone-arsrapport-${payrollReportYear || "ar"}.csv`, rows);
+  }
+
+  function openPayrollYearReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade arsrapporten." : "The browser blocked the yearly payroll report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Arsrapport lon" : "Payroll yearly report";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const rowsHtml = payrollYearRows.length > 0
+      ? payrollYearRows.map((row) => `<tr>
+          <td>${escapeHtml(row.employeeName)}</td>
+          <td>${escapeHtml(row.personalNumber || "-")}</td>
+          <td>${escapeHtml(row.months.join(", ") || "-")}</td>
+          <td>${row.gross} SEK</td>
+          <td>${row.tax} SEK</td>
+          <td>${row.net} SEK</td>
+          <td>${row.employerFees} SEK</td>
+          <td>${row.totalCost} SEK</td>
+          <td>${escapeHtml(row.statusLabel)}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="9">${language === "sv" ? "Inga loner for aret." : "No payroll for this year."}</td></tr>`;
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(payrollReportYear || "-")}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1060px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; }
+    th:nth-child(n+4), td:nth-child(n+4) { text-align: right; }
+    th:last-child, td:last-child { text-align: left; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Ar" : "Year"}:</strong> ${escapeHtml(payrollReportYear || "-")}</p>
+        <p><strong>${language === "sv" ? "Loner" : "Payroll rows"}:</strong> ${payrollYearTotals.count}</p>
+        <p><strong>${language === "sv" ? "Bokforda" : "Booked"}:</strong> ${payrollYearTotals.booked}/${payrollYearTotals.count}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Bruttolon" : "Gross salary"}</span><strong>${payrollYearTotals.gross} SEK</strong></div>
+      <div><span>${language === "sv" ? "Preliminar skatt" : "Preliminary tax"}</span><strong>${payrollYearTotals.tax} SEK</strong></div>
+      <div><span>${language === "sv" ? "Nettolon" : "Net pay"}</span><strong>${payrollYearTotals.net} SEK</strong></div>
+      <div><span>${language === "sv" ? "Arbetsgivaravgift" : "Employer contribution"}</span><strong>${payrollYearTotals.employerFees} SEK</strong></div>
+      <div><span>${language === "sv" ? "Total kostnad" : "Total cost"}</span><strong>${payrollYearTotals.totalCost} SEK</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Per anstalld" : "Per employee"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Anstalld" : "Employee"}</th>
+          <th>${language === "sv" ? "Personnummer" : "Personal number"}</th>
+          <th>${language === "sv" ? "Manader" : "Months"}</th>
+          <th>${language === "sv" ? "Brutto" : "Gross"}</th>
+          <th>${language === "sv" ? "Skatt" : "Tax"}</th>
+          <th>${language === "sv" ? "Netto" : "Net"}</th>
+          <th>${language === "sv" ? "Avgift" : "Contribution"}</th>
+          <th>${language === "sv" ? "Total" : "Total"}</th>
+          <th>${language === "sv" ? "Status" : "Status"}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Anvand arsrapporten som kontrollunderlag. Kontrollera alltid exakta individuppgifter, skattetabeller och arbetsgivardeklarationer mot Skatteverket."
+      : "Use the yearly report as a control basis. Always verify exact employee details, tax tables and employer declarations with the tax authority."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadPayrollPaymentCsv() {
     setError("");
     const rows = [
@@ -5775,6 +5924,7 @@ function App() {
       payslipStatuses: payrollPayslipStatuses,
       taxSettlements: payrollTaxSettlements,
       reportMonth: payrollReportMonth,
+      reportYear: payrollReportYear,
       salaryPaymentDate: payrollSalaryPaymentDate,
       taxPaymentDate: payrollTaxPaymentDate,
       taxRate: payrollTaxRate,
@@ -5793,6 +5943,7 @@ function App() {
     setPayrollPayslipStatuses(snapshot.payslipStatuses && typeof snapshot.payslipStatuses === "object" ? snapshot.payslipStatuses : {});
     setPayrollTaxSettlements(snapshot.taxSettlements && typeof snapshot.taxSettlements === "object" ? snapshot.taxSettlements : {});
     setPayrollReportMonth(snapshot.reportMonth || new Date().toISOString().slice(0, 7));
+    setPayrollReportYear(snapshot.reportYear || new Date().toISOString().slice(0, 4));
     setPayrollSalaryPaymentDate(snapshot.salaryPaymentDate || new Date().toISOString().slice(0, 10));
     setPayrollTaxPaymentDate(snapshot.taxPaymentDate || new Date().toISOString().slice(0, 10));
     setPayrollTaxRate(String(snapshot.taxRate || "30"));
@@ -7132,7 +7283,13 @@ function App() {
     payrollReportMonth,
     ...payrollDrafts.map((draft) => draft.period).filter(Boolean)
   ])).filter(Boolean).sort((first, second) => second.localeCompare(first));
+  const payrollYearOptions = Array.from(new Set([
+    payrollReportYear,
+    new Date().toISOString().slice(0, 4),
+    ...payrollDrafts.map((draft) => String(draft.period || "").slice(0, 4)).filter(Boolean)
+  ])).filter(Boolean).sort((first, second) => second.localeCompare(first));
   const payrollReportDrafts = payrollDrafts.filter((draft) => draft.period === payrollReportMonth);
+  const payrollYearDrafts = payrollDrafts.filter((draft) => String(draft.period || "").startsWith(`${payrollReportYear}-`));
   const unbookedPayrollReportDrafts = payrollReportDrafts.filter((draft) => draft.status !== "booked");
   const payrollReportTotals = payrollReportDrafts.reduce((totals, draft) => {
     const calculation = payrollDraftCalculation(draft);
@@ -7178,6 +7335,56 @@ function App() {
     return rows;
   }, {})).map((row) => ({
     ...row,
+    statusLabel: row.booked === row.count
+      ? (language === "sv" ? "Bokford" : "Booked")
+      : row.booked > 0
+        ? (language === "sv" ? "Delvis bokford" : "Partly booked")
+        : (language === "sv" ? "Ej bokford" : "Not booked")
+  })).sort((first, second) => first.employeeName.localeCompare(second.employeeName));
+  const payrollYearTotals = payrollYearDrafts.reduce((totals, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    totals.gross += calculation.gross;
+    totals.tax += calculation.withheldTax;
+    totals.net += calculation.netPay;
+    totals.employerFees += calculation.employerFee;
+    totals.totalCost += calculation.totalCost;
+    totals.count += 1;
+    if (draft.status === "booked") totals.booked += 1;
+    if (draft.status !== "booked") totals.unbooked += 1;
+    return totals;
+  }, { gross: 0, tax: 0, net: 0, employerFees: 0, totalCost: 0, count: 0, booked: 0, unbooked: 0 });
+  const payrollYearRows = Object.values(payrollYearDrafts.reduce((rows, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    const key = draft.employeeId || draft.personalNumber || draft.employeeName || draft.id;
+    const current = rows[key] || {
+      employeeName: draft.employeeName,
+      personalNumber: draft.personalNumber || "",
+      email: draft.email || "",
+      gross: 0,
+      tax: 0,
+      net: 0,
+      employerFees: 0,
+      totalCost: 0,
+      count: 0,
+      booked: 0,
+      months: new Set(),
+      vouchers: []
+    };
+
+    current.gross += calculation.gross;
+    current.tax += calculation.withheldTax;
+    current.net += calculation.netPay;
+    current.employerFees += calculation.employerFee;
+    current.totalCost += calculation.totalCost;
+    current.count += 1;
+    if (draft.status === "booked") current.booked += 1;
+    if (draft.period) current.months.add(draft.period);
+    if (draft.voucherNumber) current.vouchers.push(draft.voucherNumber);
+    rows[key] = current;
+    return rows;
+  }, {})).map((row) => ({
+    ...row,
+    months: Array.from(row.months).sort(),
     statusLabel: row.booked === row.count
       ? (language === "sv" ? "Bokford" : "Booked")
       : row.booked > 0
@@ -10828,6 +11035,81 @@ function App() {
                       <span>{row.tax} SEK</span>
                       <span>{row.net} SEK</span>
                       <span>{row.employerFees} SEK</span>
+                      <span className={row.booked === row.count ? "status success-status" : "status warning-status"}>{row.statusLabel}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="payroll-payment-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Arsrapport lon" : "Payroll yearly report"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Sammanstall helarets loner per anstalld som kontrollunderlag for skatt, arbetsgivaravgift och arkiv."
+                      : "Summarize the full year per employee as a control basis for tax, employer contribution and archive."}
+                  </p>
+                </div>
+                <label className="compact-label">
+                  {language === "sv" ? "Ar" : "Year"}
+                  <select value={payrollReportYear} onChange={(event) => setPayrollReportYear(event.target.value)}>
+                    {payrollYearOptions.map((year) => (
+                      <option value={year} key={year}>{year}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="secondary-button" onClick={downloadPayrollYearCsv} disabled={payrollYearDrafts.length === 0}>
+                  {t.exportCsv}
+                </button>
+                <button type="button" className="primary-small-button" onClick={openPayrollYearReport} disabled={payrollYearDrafts.length === 0}>
+                  {language === "sv" ? "Arsrapport" : "Year report"}
+                </button>
+              </div>
+
+              <div className="payroll-payment-summary">
+                <article>
+                  <span>{language === "sv" ? "Loner" : "Payroll rows"}</span>
+                  <strong>{payrollYearTotals.count}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Brutto" : "Gross"}</span>
+                  <strong>{payrollYearTotals.gross} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Skatt" : "Tax"}</span>
+                  <strong>{payrollYearTotals.tax} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Nettolon" : "Net pay"}</span>
+                  <strong>{payrollYearTotals.net} SEK</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Total kostnad" : "Total cost"}</span>
+                  <strong>{payrollYearTotals.totalCost} SEK</strong>
+                </article>
+              </div>
+
+              {payrollYearRows.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga loner for valt ar." : "No payroll for selected year."}</p>
+              ) : (
+                <div className="payroll-report-table">
+                  <div className="payroll-report-row payroll-report-header">
+                    <span>{language === "sv" ? "Anstalld" : "Employee"}</span>
+                    <span>{language === "sv" ? "Manader" : "Months"}</span>
+                    <span>{language === "sv" ? "Brutto" : "Gross"}</span>
+                    <span>{language === "sv" ? "Skatt" : "Tax"}</span>
+                    <span>{language === "sv" ? "Netto" : "Net"}</span>
+                    <span>{language === "sv" ? "Status" : "Status"}</span>
+                  </div>
+                  {payrollYearRows.map((row) => (
+                    <div className="payroll-report-row" key={`${row.employeeName}-${row.personalNumber}-year`}>
+                      <strong>{row.employeeName}</strong>
+                      <span>{row.months.length}</span>
+                      <span>{row.gross} SEK</span>
+                      <span>{row.tax} SEK</span>
+                      <span>{row.net} SEK</span>
                       <span className={row.booked === row.count ? "status success-status" : "status warning-status"}>{row.statusLabel}</span>
                     </div>
                   ))}
