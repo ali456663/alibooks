@@ -5007,6 +5007,153 @@ function App() {
     reportWindow.document.close();
   }
 
+  function downloadAccountantHandoffCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks redovisningskonsult-paket"],
+      ["Ar", annualCloseYear],
+      ["Period", `${annualCloseRange.from} - ${annualCloseRange.to}`],
+      ["Foretag", settings?.companyName || "Muscle&Focus"],
+      ["Foretagsform", accountCompanyTypeLabel(settings?.companyType, language)],
+      ["Kontakt", settings?.contactEmail || currentEmail || ""],
+      ["Status", accountantHandoffStatusText],
+      [],
+      ["Sammanfattning", "Varde"],
+      ["Resultat", annualCloseResult],
+      ["Moms", annualCloseVatToPay],
+      ["Kundfordringar", annualCloseReceivables],
+      ["Verifikat", annualCloseVoucherCount],
+      ["Saknade underlag", annualCloseMissingReceipts.length],
+      ["Datahalsa", `${dataQualityScore}%`],
+      ["Arkiv redo", `${legalArchiveReadyCount}/${legalArchiveItems.length}`],
+      [],
+      ["Overlamningspunkt", "Status", "Detalj", "Rekommenderad export"]
+    ];
+
+    accountantHandoffItems.forEach((item) => {
+      rows.push([item.title, item.status, item.detail, item.exportLabel]);
+    });
+
+    rows.push(
+      [],
+      ["Fragor till konsult/revisor"],
+      ["Fraga", "Detalj"]
+    );
+
+    accountantQuestionItems.forEach((item) => {
+      rows.push([item.title, item.detail]);
+    });
+
+    downloadLocalCsv(`redovisningspaket-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openAccountantHandoffReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade redovisningspaketet." : "The browser blocked the accountant package.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Redovisningskonsult-paket" : "Accountant handoff package";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const handoffRows = accountantHandoffItems.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.statusLabel)}</td>
+      <td>${escapeHtml(item.detail)}</td>
+      <td>${escapeHtml(item.exportLabel)}</td>
+    </tr>`).join("");
+    const questionRows = accountantQuestionItems.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1100px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Ar" : "Year"}:</strong> ${escapeHtml(annualCloseYear)}</p>
+        <p><strong>${language === "sv" ? "Status" : "Status"}:</strong> ${escapeHtml(accountantHandoffStatusText)}</p>
+        <p><strong>${language === "sv" ? "Skapad" : "Created"}:</strong> ${escapeHtml(todayInput)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Resultat" : "Result"}</span><strong>${annualCloseResult} SEK</strong></div>
+      <div><span>${language === "sv" ? "Moms" : "VAT"}</span><strong>${annualCloseVatToPay} SEK</strong></div>
+      <div><span>${language === "sv" ? "Datahalsa" : "Data quality"}</span><strong>${dataQualityScore}%</strong></div>
+      <div><span>${language === "sv" ? "Arkiv" : "Archive"}</span><strong>${legalArchiveReadyCount}/${legalArchiveItems.length}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Overlamningspunkter" : "Handoff items"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Del" : "Part"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+          <th>${language === "sv" ? "Export" : "Export"}</th>
+        </tr>
+      </thead>
+      <tbody>${handoffRows}</tbody>
+    </table>
+
+    <h2>${language === "sv" ? "Fragor att ta med" : "Questions to bring"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Fraga" : "Question"}</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${questionRows}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Detta paket ar ett overlamningsunderlag. Det ersatter inte professionell kontroll, men gor det tydligt vad som ar exporterat, vad som saknas och vilka fragor som bor stallas."
+      : "This package is a handoff basis. It does not replace professional review, but makes clear what is exported, what is missing and which questions should be raised."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadCloseChecklistCsv() {
     setError("");
     const rows = [
@@ -9831,6 +9978,147 @@ function App() {
     : Math.max(0, Math.round(100 - (dataQualityCriticalCount * 25) - (dataQualityWarningCount * 10) - (dataQualityInfoCount * 3)));
   const topCriticalDataQualityIssue = dataQualityIssues.find((issue) => issue.severity === "critical");
   const overdueOutstanding = overdueInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const accountantHandoffItems = [
+    {
+      key: "annual-close",
+      status: annualCloseWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Arsbokslut" : "Annual closing",
+      detail: annualCloseWarnings === 0
+        ? (language === "sv" ? "Arsbokslutet saknar varningar." : "Annual closing has no warnings.")
+        : `${annualCloseWarnings} ${language === "sv" ? "kontroller kvar" : "checks remaining"}`,
+      exportLabel: language === "sv" ? "Arsrapport + CSV" : "Year report + CSV",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "declaration",
+      status: annualDeclarationWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Deklarationsunderlag" : "Declaration basis",
+      detail: annualDeclarationWarnings === 0
+        ? annualDeclarationTypeLabel
+        : `${annualDeclarationWarnings} ${language === "sv" ? "deklarationskontroller kvar" : "declaration checks remaining"}`,
+      exportLabel: language === "sv" ? "Deklarationsunderlag PDF/CSV" : "Declaration basis PDF/CSV",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "sie",
+      status: sieExportCanDownload ? "ok" : "warning",
+      title: "SIE",
+      detail: sieExportStatusText,
+      exportLabel: language === "sv" ? "SIE4-fil + verifikationslista" : "SIE4 file + voucher list",
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingDateFrom(annualCloseRange.from);
+        setBookkeepingDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "reports",
+      status: profitAndLoss && balanceReport ? "ok" : "info",
+      title: language === "sv" ? "Resultat och balans" : "Profit and balance",
+      detail: profitAndLoss && balanceReport
+        ? `${language === "sv" ? "Resultat" : "Result"} ${annualCloseResult} SEK`
+        : (language === "sv" ? "Uppdatera rapporterna innan export." : "Refresh reports before export."),
+      exportLabel: language === "sv" ? "Resultatrapport + balansrapport" : "Profit and loss + balance report",
+      action: () => {
+        loadProfitAndLoss();
+        loadBalanceReport();
+      }
+    },
+    {
+      key: "vat",
+      status: annualCloseEntries.length > 0 ? "info" : "warning",
+      title: language === "sv" ? "Moms" : "VAT",
+      detail: `${annualCloseVatToPay} SEK ${language === "sv" ? "for valt ar" : "for selected year"}`,
+      exportLabel: language === "sv" ? "Momsrapport + momsavstamning" : "VAT report + reconciliation",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "receipts",
+      status: annualCloseMissingReceipts.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag" : "Receipts",
+      detail: annualCloseMissingReceipts.length === 0
+        ? (language === "sv" ? "Alla kostnader i aret har underlag." : "All yearly expenses have receipts.")
+        : `${annualCloseMissingReceipts.length} ${language === "sv" ? "underlag saknas" : "receipts missing"}`,
+      exportLabel: language === "sv" ? "Arkivforteckning + kvitton" : "Archive index + receipts",
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+        setExpenseDateFrom(annualCloseRange.from);
+        setExpenseDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "data-quality",
+      status: dataQualityCriticalCount === 0 && dataQualityWarningCount === 0 ? "ok" : dataQualityCriticalCount > 0 ? "warning" : "info",
+      title: language === "sv" ? "Datahalsa" : "Data quality",
+      detail: `${dataQualityScore}% - ${dataQualityCriticalCount} ${language === "sv" ? "kritiska" : "critical"}, ${dataQualityWarningCount} ${language === "sv" ? "varningar" : "warnings"}`,
+      exportLabel: language === "sv" ? "Datahalsa CSV" : "Data quality CSV",
+      action: () => {
+        setActiveView("reports");
+        setDataQualityFilter(dataQualityCriticalCount > 0 ? "critical" : dataQualityWarningCount > 0 ? "warning" : "all");
+      }
+    },
+    {
+      key: "archive",
+      status: legalArchiveWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Lagstadgat arkiv" : "Legal archive",
+      detail: `${legalArchiveReadyCount}/${legalArchiveItems.length} ${language === "sv" ? "redo, spara minst till" : "ready, keep until"} ${legalArchiveRetentionUntil}`,
+      exportLabel: language === "sv" ? "Arkivrapport + backup" : "Archive report + backup",
+      action: () => setActiveView("reports")
+    }
+  ].map((item) => ({
+    ...item,
+    statusLabel: item.status === "ok"
+      ? "OK"
+      : item.status === "warning"
+        ? (language === "sv" ? "Kontrollera" : "Check")
+        : "Info"
+  }));
+  const accountantHandoffWarnings = accountantHandoffItems.filter((item) => item.status === "warning").length;
+  const accountantHandoffReadyCount = accountantHandoffItems.filter((item) => item.status === "ok").length;
+  const accountantHandoffStatusText = accountantHandoffWarnings === 0
+    ? (language === "sv" ? "Paketet ser redo ut" : "Package looks ready")
+    : `${accountantHandoffWarnings} ${language === "sv" ? "delar behover kontroll" : "parts need review"}`;
+  const accountantQuestionItems = [
+    annualCloseResult !== 0 && {
+      key: "result",
+      title: language === "sv" ? "Hur ska arets resultat hanteras?" : "How should the yearly result be handled?",
+      detail: `${annualCloseResult} SEK, ${language === "sv" ? "kontrollera konto" : "review account"} ${annualCloseResultAccount}.`
+    },
+    annualCloseVatToPay !== 0 && {
+      key: "vat",
+      title: language === "sv" ? "Stammer momsperioderna med deklarationerna?" : "Do VAT periods match the filings?",
+      detail: `${annualCloseVatToPay} SEK ${language === "sv" ? "for valt ar" : "for selected year"}.`
+    },
+    settings?.companyType !== "LIMITED_COMPANY" && {
+      key: "sole-trader",
+      title: language === "sv" ? "Behovs skattemassiga NE-justeringar?" : "Are tax adjustments needed for NE?",
+      detail: language === "sv"
+        ? "Kontrollera egenavgifter, rantefordelning, periodiseringar och ej avdragsgilla kostnader."
+        : "Review social fees, interest allocation, accruals and non-deductible expenses."
+    },
+    settings?.companyType === "LIMITED_COMPANY" && {
+      key: "limited-company",
+      title: language === "sv" ? "Behovs bolagsskatt eller bokslutsdispositioner?" : "Are corporate tax or closing appropriations needed?",
+      detail: language === "sv"
+        ? "Kontrollera 2510/2512, 2099 och eventuell utdelningsplanering separat."
+        : "Review 2510/2512, 2099 and dividend planning separately."
+    },
+    annualCloseReceivables > 0 && {
+      key: "receivables",
+      title: language === "sv" ? "Ska kundfordringar reserveras eller foljas upp?" : "Should receivables be reserved or followed up?",
+      detail: `${annualCloseReceivables} SEK ${language === "sv" ? "kvar att fa betalt" : "outstanding"}.`
+    },
+    !backupValidation && {
+      key: "backup",
+      title: language === "sv" ? "Ska backup verifieras innan overlamning?" : "Should backup be verified before handoff?",
+      detail: language === "sv" ? "Ladda ner JSON-backup och kontrollera att den gar att lasa." : "Download JSON backup and verify it can be read."
+    }
+  ].filter(Boolean);
   const actionCenterItems = [
     dataQualityCriticalCount > 0 && {
       key: "critical-data-quality",
@@ -15738,6 +16026,67 @@ function App() {
                   <small>{item.detail}</small>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Redovisningskonsult-paket" : "Accountant handoff package"}</h2>
+            <div className="button-row">
+              <span className={accountantHandoffWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {accountantHandoffReadyCount}/{accountantHandoffItems.length} {language === "sv" ? "redo" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadAccountantHandoffCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openAccountantHandoffReport}>
+                {language === "sv" ? "Overlamningsrapport" : "Handoff report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="accountant-handoff-panel">
+            <div className="accountant-handoff-hero">
+              <div>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{accountantHandoffStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Samlar bokslut, deklarationsunderlag, SIE, moms, underlag, datahalsa, arkiv och backup sa du kan lamna over aret mer professionellt."
+                    : "Gathers closing, declaration basis, SIE, VAT, receipts, data quality, archive and backup so you can hand off the year more professionally."}
+                </p>
+              </div>
+              <div>
+                <span>{language === "sv" ? "Kontakt" : "Contact"}</span>
+                <strong>{settings?.companyName || "Muscle&Focus"}</strong>
+                <p>{settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com"}</p>
+              </div>
+            </div>
+
+            <div className="accountant-handoff-grid">
+              {accountantHandoffItems.map((item) => (
+                <button type="button" className={`accountant-handoff-card ${item.status}`} key={item.key} onClick={item.action}>
+                  <span>{item.statusLabel}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                  <em>{item.exportLabel}</em>
+                </button>
+              ))}
+            </div>
+
+            <div className="accountant-question-panel">
+              <h3>{language === "sv" ? "Fragor att ta med" : "Questions to bring"}</h3>
+              {accountantQuestionItems.length === 0 ? (
+                <p className="muted-line">{language === "sv" ? "Inga tydliga fragor baserat pa nuvarande data." : "No obvious questions based on current data."}</p>
+              ) : (
+                <div className="accountant-question-list">
+                  {accountantQuestionItems.map((item) => (
+                    <article key={item.key}>
+                      <strong>{item.title}</strong>
+                      <span>{item.detail}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

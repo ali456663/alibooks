@@ -3523,6 +3523,113 @@ button:focus-visible,
   font-weight: 900;
 }
 
+.accountant-handoff-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d7e0ff;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.accountant-handoff-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 14px;
+}
+
+.accountant-handoff-hero > div {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.accountant-handoff-hero span,
+.accountant-handoff-hero p,
+.accountant-handoff-card span,
+.accountant-handoff-card small,
+.accountant-handoff-card em,
+.accountant-question-list span {
+  margin: 0;
+  color: #5d6259;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.accountant-handoff-hero strong {
+  font-size: 24px;
+}
+
+.accountant-handoff-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.accountant-handoff-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #d8e2ee;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accountant-handoff-card.ok {
+  border-left-color: #155c49;
+}
+
+.accountant-handoff-card.warning {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.accountant-handoff-card.info {
+  border-left-color: #155ee8;
+}
+
+.accountant-handoff-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(21, 94, 232, 0.1);
+}
+
+.accountant-handoff-card em {
+  font-style: normal;
+}
+
+.accountant-question-panel {
+  padding: 16px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.accountant-question-panel h3 {
+  margin-top: 0;
+}
+
+.accountant-question-list {
+  display: grid;
+  gap: 10px;
+}
+
+.accountant-question-list article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #e3e8f7;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
 .action-center-section {
   border-color: #cfd9ff;
   background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
@@ -5693,6 +5800,8 @@ button:focus-visible,
   .archive-package-grid,
   .legal-archive-hero,
   .legal-archive-grid,
+  .accountant-handoff-hero,
+  .accountant-handoff-grid,
   .bokio-import-intro,
   .bokio-import-summary,
   .bokio-import-row,
