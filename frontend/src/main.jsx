@@ -1252,6 +1252,7 @@ function App() {
     }
   });
   const [monthCloseSelectedMonth, setMonthCloseSelectedMonth] = useState(() => localStorage.getItem("alibooks-month-close-selected-month") || new Date().toISOString().slice(0, 7));
+  const [annualCloseYear, setAnnualCloseYear] = useState(() => localStorage.getItem("alibooks-annual-close-year") || new Date().toISOString().slice(0, 4));
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1438,6 +1439,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("alibooks-month-close-selected-month", monthCloseSelectedMonth);
   }, [monthCloseSelectedMonth]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-annual-close-year", annualCloseYear);
+  }, [annualCloseYear]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -4539,6 +4544,157 @@ function App() {
     });
 
     downloadLocalCsv(`monthly-close-${monthCloseSelectedMonth || "month"}.csv`, rows);
+  }
+
+  function prepareAnnualResultVoucher() {
+    const amount = Math.abs(annualCloseResult);
+
+    if (amount <= 0) {
+      setError(language === "sv" ? "Arets resultat ar 0 SEK, ingen resultatverifikation behovs." : "The yearly result is 0 SEK, no result voucher is needed.");
+      return;
+    }
+
+    setActiveView("bookkeeping");
+    setManualVoucherDate(annualCloseRange.to);
+    setManualDescription(language === "sv" ? `Arets resultat ${annualCloseYear}` : `Year-end result ${annualCloseYear}`);
+    setManualDebitAccount(annualCloseResult > 0 ? "8999" : annualCloseResultAccount);
+    setManualCreditAccount(annualCloseResult > 0 ? annualCloseResultAccount : "8999");
+    setManualAmount(String(amount));
+    setError("");
+  }
+
+  function downloadAnnualCloseCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks arsbokslut"],
+      ["Ar", annualCloseYear],
+      ["Period", `${annualCloseRange.from} - ${annualCloseRange.to}`],
+      ["Status", annualCloseStatusText],
+      ["Klarhet", `${annualCloseReadiness}%`],
+      ["Resultatkonto", annualCloseResultAccount],
+      [],
+      ["Nyckeltal", "Belopp"],
+      ["Intakter", annualCloseTotals.revenue],
+      ["Kostnader", annualCloseTotals.expenses],
+      ["Arets resultat", annualCloseResult],
+      ["Utgaende moms", annualCloseTotals.outputVat],
+      ["Ingaende moms", annualCloseTotals.inputVat],
+      ["Moms att betala/fa tillbaka", annualCloseVatToPay],
+      ["Kassa in", annualCloseTotals.cashIn],
+      ["Kassa ut", annualCloseTotals.cashOut],
+      ["Kassaforandring", annualCloseTotals.cashChange],
+      ["Bruttolon", annualClosePayrollTotals.gross],
+      ["Arbetsgivaravgift", annualClosePayrollTotals.employerFees],
+      ["Kundfordringar", annualCloseReceivables],
+      ["Verifikat", annualCloseVoucherCount],
+      [],
+      ["Kontroll", "Status", "Detalj"]
+    ];
+
+    annualCloseChecklist.forEach((item) => {
+      rows.push([item.title, item.status, item.detail]);
+    });
+
+    rows.push(
+      [],
+      ["OBS", "Detta ar ett kontrollunderlag. Kontrollera alltid bokslut, skatt och deklaration med Skatteverket eller redovisningskonsult."]
+    );
+
+    downloadLocalCsv(`arsbokslut-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openAnnualCloseReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade arsbokslutsrapporten." : "The browser blocked the annual closing report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Arsbokslut kontrollrapport" : "Annual closing control report";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const checklistRows = annualCloseChecklist.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.statusLabel)}</td>
+      <td>${escapeHtml(item.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1060px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Ar" : "Year"}:</strong> ${escapeHtml(annualCloseYear)}</p>
+        <p><strong>${language === "sv" ? "Period" : "Period"}:</strong> ${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+        <p><strong>${language === "sv" ? "Klarhet" : "Readiness"}:</strong> ${annualCloseReadiness}%</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Intakter" : "Revenue"}</span><strong>${annualCloseTotals.revenue} SEK</strong></div>
+      <div><span>${language === "sv" ? "Kostnader" : "Expenses"}</span><strong>${annualCloseTotals.expenses} SEK</strong></div>
+      <div><span>${language === "sv" ? "Arets resultat" : "Year result"}</span><strong>${annualCloseResult} SEK</strong></div>
+      <div><span>${language === "sv" ? "Moms" : "VAT"}</span><strong>${annualCloseVatToPay} SEK</strong></div>
+      <div><span>${language === "sv" ? "Kundfordringar" : "Receivables"}</span><strong>${annualCloseReceivables} SEK</strong></div>
+      <div><span>${language === "sv" ? "Bruttolon" : "Gross payroll"}</span><strong>${annualClosePayrollTotals.gross} SEK</strong></div>
+      <div><span>${language === "sv" ? "Verifikat" : "Vouchers"}</span><strong>${annualCloseVoucherCount}</strong></div>
+      <div><span>${language === "sv" ? "Resultatkonto" : "Result account"}</span><strong>${annualCloseResultAccount}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Kontrollpunkter" : "Checks"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Kontroll" : "Check"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${checklistRows}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Detta ar ett arbetsunderlag for arsbokslut. Kontrollera alltid slutlig skatt, bokslutsdispositioner och deklaration med Skatteverket eller redovisningskonsult."
+      : "This is a working basis for annual closing. Always verify final tax, closing entries and filing with the tax authority or an accountant."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
   }
 
   function downloadCloseChecklistCsv() {
@@ -8160,6 +8316,174 @@ function App() {
   const monthlyCloseStatusText = monthlyCloseWarnings === 0
     ? (language === "sv" ? "Manaden ser redo ut" : "Month looks ready")
     : `${monthlyCloseWarnings} ${language === "sv" ? "saker att kontrollera" : "items to check"}`;
+  const annualCloseYearOptions = Array.from(new Set([
+    annualCloseYear,
+    new Date().toISOString().slice(0, 4),
+    ...monthlyReportRows.map((row) => String(row.monthKey || "").slice(0, 4)).filter(Boolean),
+    ...journalEntries.map((entry) => String(entry.voucherDate || entry.createdAt || "").slice(0, 4)).filter(Boolean),
+    ...invoices.map((item) => String(item.invoiceDate || item.createdAt || "").slice(0, 4)).filter(Boolean),
+    ...expenses.map((expense) => String(expense.expenseDate || expense.createdAt || "").slice(0, 4)).filter(Boolean),
+    ...payrollDrafts.map((draft) => String(draft.period || "").slice(0, 4)).filter(Boolean)
+  ])).filter((year) => /^\d{4}$/.test(year)).sort((first, second) => second.localeCompare(first));
+  const annualCloseRange = {
+    from: `${annualCloseYear}-01-01`,
+    to: `${annualCloseYear}-12-31`
+  };
+  const annualCloseEntries = journalEntries.filter((entry) => {
+    const voucherDate = String(entry.voucherDate || entry.createdAt || "").slice(0, 10);
+    return voucherDate >= annualCloseRange.from && voucherDate <= annualCloseRange.to;
+  });
+  const annualCloseVoucherNumbers = new Set(annualCloseEntries.map((entry) => entry.voucherNumber).filter(Boolean));
+  const annualCloseVoucherCount = annualCloseVoucherNumbers.size;
+  const annualCloseUnbalancedGroups = journalGroups.filter((group) => {
+    const voucherDate = String(group.voucherDate || group.createdAt || "").slice(0, 10);
+    return voucherDate >= annualCloseRange.from
+      && voucherDate <= annualCloseRange.to
+      && (group.debit || 0) !== (group.credit || 0);
+  });
+  const annualCloseTotals = annualCloseEntries.reduce((totals, entry) => {
+    const accountNumber = String(entry.accountNumber || "");
+    const debit = entry.debit || 0;
+    const credit = entry.credit || 0;
+
+    if (accountNumber.startsWith("3")) totals.revenue += credit - debit;
+    if (["4", "5", "6", "7", "8"].some((prefix) => accountNumber.startsWith(prefix))) totals.expenses += debit - credit;
+    if (accountNumber === "2611") totals.outputVat += credit - debit;
+    if (accountNumber === "2641") totals.inputVat += debit - credit;
+    if (accountNumber === "1930") {
+      totals.cashIn += debit;
+      totals.cashOut += credit;
+    }
+
+    return totals;
+  }, { revenue: 0, expenses: 0, outputVat: 0, inputVat: 0, cashIn: 0, cashOut: 0, cashChange: 0 });
+  annualCloseTotals.cashChange = annualCloseTotals.cashIn - annualCloseTotals.cashOut;
+  const annualCloseResult = annualCloseTotals.revenue - annualCloseTotals.expenses;
+  const annualCloseVatToPay = annualCloseTotals.outputVat - annualCloseTotals.inputVat;
+  const annualCloseInvoices = invoices.filter((item) => {
+    const invoiceDate = String(item.invoiceDate || item.createdAt || "").slice(0, 10);
+    return invoiceDate >= annualCloseRange.from && invoiceDate <= annualCloseRange.to;
+  });
+  const annualCloseExpenses = expenses.filter((expense) => {
+    const expenseDate = String(expense.expenseDate || expense.createdAt || "").slice(0, 10);
+    return expenseDate >= annualCloseRange.from && expenseDate <= annualCloseRange.to;
+  });
+  const annualCloseMissingReceipts = annualCloseExpenses.filter((expense) => !expenseHasReceipt(expense));
+  const annualCloseReceivables = annualCloseInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const annualClosePayrollDrafts = payrollDrafts.filter((draft) => String(draft.period || "").startsWith(`${annualCloseYear}-`));
+  const annualClosePayrollTotals = annualClosePayrollDrafts.reduce((totals, draft) => {
+    const calculation = payrollDraftCalculation(draft);
+    totals.gross += calculation.gross;
+    totals.tax += calculation.withheldTax;
+    totals.net += calculation.netPay;
+    totals.employerFees += calculation.employerFee;
+    totals.totalCost += calculation.totalCost;
+    totals.count += 1;
+    if (draft.status === "booked") totals.booked += 1;
+    return totals;
+  }, { gross: 0, tax: 0, net: 0, employerFees: 0, totalCost: 0, count: 0, booked: 0 });
+  const annualCloseResultAccount = settings?.companyType === "LIMITED_COMPANY" ? "2099" : "2019";
+  const annualCloseHasResultVoucher = annualCloseEntries.some((entry) => String(entry.accountNumber || "") === annualCloseResultAccount);
+  const annualCloseNeedsResultVoucher = annualCloseResult !== 0 && !annualCloseHasResultVoucher;
+  const annualCloseChecklist = [
+    {
+      key: "vouchers",
+      status: annualCloseUnbalancedGroups.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Verifikat balanserar" : "Vouchers are balanced",
+      detail: annualCloseUnbalancedGroups.length === 0
+        ? `${annualCloseVoucherCount} ${language === "sv" ? "verifikat i aret" : "vouchers in the year"}`
+        : `${annualCloseUnbalancedGroups.length} ${language === "sv" ? "obalanserade verifikat" : "unbalanced vouchers"}`,
+      action: () => {
+        setActiveView("bookkeeping");
+        setBookkeepingDateFrom(annualCloseRange.from);
+        setBookkeepingDateTo(annualCloseRange.to);
+        setBookkeepingSearch(annualCloseUnbalancedGroups[0]?.voucherNumber || "");
+      }
+    },
+    {
+      key: "receipts",
+      status: annualCloseMissingReceipts.length === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Underlag for kostnader" : "Expense receipts",
+      detail: annualCloseMissingReceipts.length === 0
+        ? (language === "sv" ? "Alla kostnader i aret har underlag" : "All expenses in the year have receipts")
+        : `${annualCloseMissingReceipts.length} ${language === "sv" ? "kostnader saknar underlag" : "expenses missing receipts"}`,
+      action: () => {
+        setActiveView("uploaded");
+        setExpenseFilter("missingReceipt");
+        setExpenseDateFrom(annualCloseRange.from);
+        setExpenseDateTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "receivables",
+      status: annualCloseReceivables === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Kundfordringar vid arsslut" : "Year-end receivables",
+      detail: annualCloseReceivables === 0
+        ? (language === "sv" ? "Inga obetalda fakturor skapade detta ar" : "No unpaid invoices created this year")
+        : `${annualCloseReceivables} SEK ${language === "sv" ? "kvar att kontrollera" : "left to review"}`,
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("open");
+      }
+    },
+    {
+      key: "vat",
+      status: annualCloseEntries.length > 0 ? "info" : "warning",
+      title: language === "sv" ? "Arsmoms och momsavstamning" : "Yearly VAT reconciliation",
+      detail: `${annualCloseVatToPay} SEK (${annualCloseRange.from} - ${annualCloseRange.to})`,
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      }
+    },
+    {
+      key: "payroll",
+      status: annualClosePayrollTotals.count === annualClosePayrollTotals.booked ? "ok" : "warning",
+      title: language === "sv" ? "Lon bokford for aret" : "Payroll booked for the year",
+      detail: annualClosePayrollTotals.count === 0
+        ? (language === "sv" ? "Ingen lon registrerad for aret" : "No payroll registered for the year")
+        : `${annualClosePayrollTotals.booked}/${annualClosePayrollTotals.count} ${language === "sv" ? "loner bokforda" : "payroll rows booked"}`,
+      action: () => {
+        setActiveView("payroll");
+        setPayrollReportYear(annualCloseYear);
+      }
+    },
+    {
+      key: "result",
+      status: annualCloseNeedsResultVoucher ? "warning" : "ok",
+      title: language === "sv" ? "Arets resultat" : "Year-end result",
+      detail: annualCloseResult === 0
+        ? (language === "sv" ? "Resultatet ar 0 SEK" : "Result is 0 SEK")
+        : annualCloseHasResultVoucher
+          ? `${language === "sv" ? "Resultatkonto finns" : "Result account exists"}: ${annualCloseResultAccount}`
+          : `${annualCloseResult} SEK ${language === "sv" ? `behover kontrolleras mot ${annualCloseResultAccount}` : `needs review against ${annualCloseResultAccount}`}`,
+      action: prepareAnnualResultVoucher
+    },
+    {
+      key: "lock",
+      status: accountingLockedThroughDate && accountingLockedThroughDate >= annualCloseRange.to ? "ok" : "info",
+      title: language === "sv" ? "Periodlasning" : "Period lock",
+      detail: accountingLockedThroughDate && accountingLockedThroughDate >= annualCloseRange.to
+        ? `${language === "sv" ? "Last till" : "Locked through"} ${formatDateOnly(accountingLockedThroughDate)}`
+        : (language === "sv" ? "Aret ar inte last i installningar" : "The year is not locked in settings"),
+      action: () => setActiveView("settings")
+    }
+  ].map((item) => ({
+    ...item,
+    statusLabel: item.status === "ok"
+      ? "OK"
+      : item.status === "warning"
+        ? (language === "sv" ? "Kontrollera" : "Check")
+        : "Info"
+  }));
+  const annualCloseWarnings = annualCloseChecklist.filter((item) => item.status === "warning").length;
+  const annualCloseReadiness = annualCloseChecklist.length === 0
+    ? 0
+    : Math.round(((annualCloseChecklist.length - annualCloseWarnings) / annualCloseChecklist.length) * 100);
+  const annualCloseStatusText = annualCloseWarnings === 0
+    ? (language === "sv" ? "Aret ser redo ut for slutkontroll" : "The year looks ready for final review")
+    : `${annualCloseWarnings} ${language === "sv" ? "kontroller kvar" : "checks remaining"}`;
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -14376,6 +14700,92 @@ function App() {
               <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
               <strong>{expensesMissingReceipt.length}</strong>
             </article>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Arsbokslut" : "Annual closing"}</h2>
+            <div className="button-row">
+              <label className="compact-label">
+                {language === "sv" ? "Ar" : "Year"}
+                <select value={annualCloseYear} onChange={(event) => setAnnualCloseYear(event.target.value)}>
+                  {annualCloseYearOptions.map((year) => (
+                    <option value={year} key={year}>{year}</option>
+                  ))}
+                </select>
+              </label>
+              <span className={annualCloseWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {annualCloseReadiness}% {language === "sv" ? "klart" : "ready"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadAnnualCloseCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openAnnualCloseReport}>
+                {language === "sv" ? "Arsrapport" : "Year report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="annual-close-panel">
+            <div className="annual-close-hero">
+              <div>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{annualCloseStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? `Period ${annualCloseRange.from} - ${annualCloseRange.to}. Samlar resultat, moms, lon, kundfordringar, underlag och resultatkonto innan du gor slutkontroll.`
+                    : `Period ${annualCloseRange.from} - ${annualCloseRange.to}. Gathers result, VAT, payroll, receivables, receipts and result account before final review.`}
+                </p>
+              </div>
+              <div className="annual-close-result-card">
+                <span>{language === "sv" ? "Arets resultat" : "Year result"}</span>
+                <strong>{annualCloseResult} SEK</strong>
+                <small>
+                  {language === "sv"
+                    ? `Kontrollera mot ${annualCloseResultAccount} ${settings?.companyType === "LIMITED_COMPANY" ? "Arets resultat" : "Eget kapital"}.`
+                    : `Review against ${annualCloseResultAccount}.`}
+                </small>
+                <button type="button" className="secondary-button" onClick={prepareAnnualResultVoucher} disabled={Math.abs(annualCloseResult) === 0}>
+                  {language === "sv" ? "Forbered resultatverifikat" : "Prepare result voucher"}
+                </button>
+              </div>
+            </div>
+
+            <div className="expense-summary-grid annual-close-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Intakter" : "Revenue"}</span>
+                <strong>{annualCloseTotals.revenue} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kostnader" : "Expenses"}</span>
+                <strong>{annualCloseTotals.expenses} SEK</strong>
+              </article>
+              <article className={annualCloseVatToPay >= 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Moms" : "VAT"}</span>
+                <strong>{annualCloseVatToPay} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kundfordringar" : "Receivables"}</span>
+                <strong>{annualCloseReceivables} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bruttolon" : "Gross payroll"}</span>
+                <strong>{annualClosePayrollTotals.gross} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Verifikat" : "Vouchers"}</span>
+                <strong>{annualCloseVoucherCount}</strong>
+              </article>
+            </div>
+
+            <div className="annual-close-checklist">
+              {annualCloseChecklist.map((item) => (
+                <button type="button" className={`annual-close-card ${item.status}`} key={item.key} onClick={item.action}>
+                  <span>{item.statusLabel}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="section-heading report-subheading">
