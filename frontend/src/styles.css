@@ -728,6 +728,141 @@ textarea {
   min-height: 40px;
 }
 
+.fixed-asset-section {
+  display: grid;
+  gap: 18px;
+}
+
+.fixed-asset-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fixed-asset-summary-grid article,
+.fixed-asset-help-card,
+.fixed-asset-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.fixed-asset-summary-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.fixed-asset-summary-grid span,
+.fixed-asset-card p,
+.fixed-asset-card small,
+.fixed-asset-help-card p,
+.fixed-asset-help-card li,
+.fixed-asset-amount-box span,
+.fixed-asset-amount-box small {
+  color: #51606d;
+}
+
+.fixed-asset-summary-grid strong {
+  font-size: 24px;
+}
+
+.fixed-asset-workspace {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.25fr) minmax(280px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.fixed-asset-form {
+  margin: 0;
+}
+
+.fixed-asset-form h3 {
+  margin: 0;
+}
+
+.fixed-asset-note-field {
+  grid-column: 1 / -1;
+}
+
+.fixed-asset-help-card {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border-color: #d8c6ff;
+  background: linear-gradient(135deg, #f8f5ff, #f7fbff);
+}
+
+.fixed-asset-help-card strong {
+  font-size: 20px;
+}
+
+.fixed-asset-help-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.fixed-asset-list {
+  display: grid;
+  gap: 12px;
+}
+
+.fixed-asset-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(180px, 230px) minmax(180px, 230px) minmax(230px, 320px);
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+  border-left: 6px solid #155ee8;
+}
+
+.fixed-asset-card h3,
+.fixed-asset-card p {
+  margin: 6px 0;
+}
+
+.fixed-asset-card.fullyDepreciated {
+  border-left-color: #f2a900;
+}
+
+.fixed-asset-card.disposed {
+  border-left-color: #8aa0b5;
+  opacity: 0.8;
+}
+
+.fixed-asset-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #155ee8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fixed-asset-amount-box {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+}
+
+.fixed-asset-amount-box strong {
+  font-size: 22px;
+}
+
+.fixed-asset-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fixed-asset-actions button {
+  min-height: 40px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -6463,6 +6598,7 @@ button:focus-visible,
   .invoice-summary-cards,
   .quote-summary-grid,
   .supplier-summary-grid,
+  .fixed-asset-summary-grid,
   .business-insight-grid,
   .expense-summary-grid,
   .payroll-summary-grid,
@@ -6547,6 +6683,9 @@ button:focus-visible,
   .supplier-summary-grid,
   .supplier-workspace,
   .supplier-invoice-card,
+  .fixed-asset-summary-grid,
+  .fixed-asset-workspace,
+  .fixed-asset-card,
   .business-insight-hero,
   .business-insight-grid,
   .customer-360-hero,
@@ -6655,17 +6794,20 @@ button:focus-visible,
   .quote-note-field,
   .quote-preview,
   .supplier-wide-field,
-  .supplier-payment-hint {
+  .supplier-payment-hint,
+  .fixed-asset-note-field {
     grid-column: auto;
   }
 
   .quote-amount-box,
-  .supplier-amount-box {
+  .supplier-amount-box,
+  .fixed-asset-amount-box {
     text-align: left;
   }
 
   .quote-actions,
-  .supplier-actions {
+  .supplier-actions,
+  .fixed-asset-actions {
     grid-template-columns: 1fr;
   }
 

@@ -18,6 +18,8 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("1630", "Skattekonto", "BOTH");
     upsert("1580", "Fordran hos Stripe", "BOTH");
     upsert("1510", "Kundfordringar", "BOTH");
+    upsert("1220", "Inventarier och verktyg", "BOTH");
+    upsert("1229", "Ackumulerade avskrivningar pa inventarier", "BOTH");
     upsert("2611", "Utgaende moms", "BOTH");
     upsert("2641", "Ingaende moms", "BOTH");
     upsert("3041", "Forsaljning tjanster 25 procent", "BOTH");
@@ -29,6 +31,7 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("7010", "Lon till anstallda", "BOTH");
     upsert("7210", "Lon till tjansteman", "BOTH");
     upsert("7510", "Arbetsgivaravgifter", "BOTH");
+    upsert("7830", "Avskrivningar pa maskiner och inventarier", "BOTH");
     upsert("1710", "Forutbetalda hyreskostnader", "BOTH");
     upsert("1790", "Ovriga forutbetalda kostnader och upplupna intakter", "BOTH");
     upsert("2990", "Ovriga upplupna kostnader och forutbetalda intakter", "BOTH");

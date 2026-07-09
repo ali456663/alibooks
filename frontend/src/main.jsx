@@ -23,6 +23,7 @@ const copy = {
     invoices: "Invoices",
     quotes: "Quotes",
     suppliers: "Suppliers",
+    fixedAssets: "Fixed assets",
     contracts: "Contracts",
     services: "Services",
     activities: "Events",
@@ -158,6 +159,7 @@ const copy = {
     invoices: "Fakturor",
     quotes: "Offerter",
     suppliers: "Leverantorer",
+    fixedAssets: "Anlaggningstillgangar",
     contracts: "Avtal",
     services: "Tjanster",
     activities: "Handelser",
@@ -970,6 +972,7 @@ const viewKeys = [
   "invoices",
   "quotes",
   "suppliers",
+  "fixedAssets",
   "contracts",
   "services",
   "activities",
@@ -1173,6 +1176,24 @@ function App() {
   const [supplierInvoiceVatAmount, setSupplierInvoiceVatAmount] = useState("");
   const [supplierInvoiceCategory, setSupplierInvoiceCategory] = useState("5420");
   const [supplierMessage, setSupplierMessage] = useState("");
+  const [fixedAssets, setFixedAssets] = useState(() => {
+    try {
+      const savedAssets = JSON.parse(localStorage.getItem("alibooks-fixed-assets") || "[]");
+      return Array.isArray(savedAssets) ? savedAssets : [];
+    } catch {
+      return [];
+    }
+  });
+  const [fixedAssetName, setFixedAssetName] = useState("");
+  const [fixedAssetPurchaseDate, setFixedAssetPurchaseDate] = useState(() => localStorage.getItem("alibooks-fixed-asset-purchase-date") || dateInputString(new Date()));
+  const [fixedAssetPurchaseAmount, setFixedAssetPurchaseAmount] = useState("");
+  const [fixedAssetVatAmount, setFixedAssetVatAmount] = useState("");
+  const [fixedAssetUsefulLifeYears, setFixedAssetUsefulLifeYears] = useState(() => localStorage.getItem("alibooks-fixed-asset-life-years") || "5");
+  const [fixedAssetAssetAccount, setFixedAssetAssetAccount] = useState(() => localStorage.getItem("alibooks-fixed-asset-account") || "1220");
+  const [fixedAssetDepreciationAccount, setFixedAssetDepreciationAccount] = useState(() => localStorage.getItem("alibooks-fixed-asset-depreciation-account") || "7830");
+  const [fixedAssetAccumulatedAccount, setFixedAssetAccumulatedAccount] = useState(() => localStorage.getItem("alibooks-fixed-asset-accumulated-account") || "1229");
+  const [fixedAssetNote, setFixedAssetNote] = useState("");
+  const [fixedAssetMessage, setFixedAssetMessage] = useState("");
   const [contracts, setContracts] = useState([]);
   const [contractCustomerId, setContractCustomerId] = useState("");
   const [contractServiceId, setContractServiceId] = useState("");
@@ -1581,6 +1602,15 @@ function App() {
     localStorage.setItem("alibooks-supplier-invoice-date", supplierInvoiceDate);
     localStorage.setItem("alibooks-supplier-invoice-due-date", supplierInvoiceDueDate);
   }, [suppliers, supplierInvoices, supplierInvoiceSupplierId, supplierInvoiceDate, supplierInvoiceDueDate]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-fixed-assets", JSON.stringify(fixedAssets));
+    localStorage.setItem("alibooks-fixed-asset-purchase-date", fixedAssetPurchaseDate);
+    localStorage.setItem("alibooks-fixed-asset-life-years", fixedAssetUsefulLifeYears);
+    localStorage.setItem("alibooks-fixed-asset-account", fixedAssetAssetAccount);
+    localStorage.setItem("alibooks-fixed-asset-depreciation-account", fixedAssetDepreciationAccount);
+    localStorage.setItem("alibooks-fixed-asset-accumulated-account", fixedAssetAccumulatedAccount);
+  }, [fixedAssets, fixedAssetPurchaseDate, fixedAssetUsefulLifeYears, fixedAssetAssetAccount, fixedAssetDepreciationAccount, fixedAssetAccumulatedAccount]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-expense-category", expenseCategory);
@@ -2377,6 +2407,146 @@ function App() {
     });
 
     downloadLocalCsv("leverantorer-inkop.csv", rows);
+  }
+
+  function fixedAssetNetCost(asset) {
+    return Math.max(0, Number(asset.purchaseAmount || 0) - Number(asset.vatAmount || 0));
+  }
+
+  function fixedAssetUsefulLife(asset) {
+    return Math.max(1, Number(asset.usefulLifeYears || 1));
+  }
+
+  function fixedAssetAnnualDepreciation(asset) {
+    return Math.round(fixedAssetNetCost(asset) / fixedAssetUsefulLife(asset));
+  }
+
+  function fixedAssetMonthlyDepreciation(asset) {
+    return Math.round(fixedAssetAnnualDepreciation(asset) / 12);
+  }
+
+  function fixedAssetElapsedMonths(asset, endDate = todayInput) {
+    if (!asset.purchaseDate || !endDate) return 0;
+    const start = new Date(`${asset.purchaseDate}T00:00:00`);
+    const end = new Date(`${endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
+    return Math.max(0, months);
+  }
+
+  function fixedAssetAccumulatedDepreciation(asset) {
+    if (asset.status === "disposed") return fixedAssetNetCost(asset);
+    return Math.min(fixedAssetNetCost(asset), fixedAssetElapsedMonths(asset) * fixedAssetMonthlyDepreciation(asset));
+  }
+
+  function fixedAssetBookValue(asset) {
+    return Math.max(0, fixedAssetNetCost(asset) - fixedAssetAccumulatedDepreciation(asset));
+  }
+
+  function fixedAssetStatusLabel(status) {
+    if (status === "disposed") return language === "sv" ? "Avyttrad/utrangerad" : "Disposed";
+    if (status === "fullyDepreciated") return language === "sv" ? "Fullt avskriven" : "Fully depreciated";
+    return language === "sv" ? "Aktiv" : "Active";
+  }
+
+  function handleCreateFixedAsset(event) {
+    event.preventDefault();
+    setFixedAssetMessage("");
+    setError("");
+
+    const purchaseAmount = Math.round(Number(fixedAssetPurchaseAmount || 0));
+    const vatAmount = Math.round(Number(fixedAssetVatAmount || 0));
+
+    if (!fixedAssetName.trim()) {
+      setFixedAssetMessage(language === "sv" ? "Skriv namn pa tillgangen." : "Enter asset name.");
+      return;
+    }
+
+    if (purchaseAmount <= 0 || vatAmount < 0 || vatAmount > purchaseAmount) {
+      setFixedAssetMessage(language === "sv" ? "Kontrollera anskaffningsvarde och moms." : "Check purchase amount and VAT.");
+      return;
+    }
+
+    const newAsset = {
+      id: `fixed-asset-${Date.now()}`,
+      name: fixedAssetName.trim(),
+      purchaseDate: fixedAssetPurchaseDate,
+      purchaseAmount,
+      vatAmount,
+      netCost: Math.max(0, purchaseAmount - vatAmount),
+      usefulLifeYears: Math.max(1, Number(fixedAssetUsefulLifeYears || 1)),
+      assetAccount: fixedAssetAssetAccount || "1220",
+      depreciationAccount: fixedAssetDepreciationAccount || "7830",
+      accumulatedAccount: fixedAssetAccumulatedAccount || "1229",
+      note: fixedAssetNote.trim(),
+      status: "active",
+      createdAt: new Date().toISOString()
+    };
+
+    setFixedAssets((current) => [newAsset, ...current]);
+    setFixedAssetName("");
+    setFixedAssetPurchaseAmount("");
+    setFixedAssetVatAmount("");
+    setFixedAssetNote("");
+    setFixedAssetMessage(language === "sv" ? "Tillgangen sparades." : "Asset saved.");
+  }
+
+  function updateFixedAssetStatus(assetId, status) {
+    setFixedAssets((current) => current.map((asset) => (
+      asset.id === assetId ? { ...asset, status, updatedAt: new Date().toISOString() } : asset
+    )));
+  }
+
+  function deleteFixedAsset(assetId) {
+    setFixedAssets((current) => current.filter((asset) => asset.id !== assetId));
+  }
+
+  function prepareFixedAssetDepreciationVoucher(asset) {
+    const amount = Math.min(fixedAssetAnnualDepreciation(asset), fixedAssetBookValue(asset));
+    if (amount <= 0) {
+      setFixedAssetMessage(language === "sv" ? "Tillgangen har inget kvar att skriva av." : "The asset has nothing left to depreciate.");
+      return;
+    }
+
+    const voucherDate = `${new Date().getFullYear()}-12-31`;
+    setManualVoucherDate(voucherDate);
+    setManualDescription(`${language === "sv" ? "Avskrivning" : "Depreciation"} - ${asset.name}`);
+    setManualDebitAccount(asset.depreciationAccount || "7830");
+    setManualCreditAccount(asset.accumulatedAccount || "1229");
+    setManualAmount(String(amount));
+    setActiveView("bookkeeping");
+    setFixedAssetMessage(language === "sv" ? "Verifikationen ar forberedd i Bokforing." : "Voucher prepared in Bookkeeping.");
+  }
+
+  function downloadFixedAssetsCsv() {
+    const rows = [
+      ["Anlaggningstillgangar och avskrivningar / Fixed assets and depreciation"],
+      ["Antal", fixedAssets.length],
+      ["Anskaffningsvarde netto", fixedAssetNetTotal],
+      ["Ackumulerad avskrivning", fixedAssetAccumulatedTotal],
+      ["Bokfort varde", fixedAssetBookValueTotal],
+      [],
+      ["Namn", "Status", "Inkopsdatum", "Konto", "Anskaffning exkl moms", "Moms", "Livslangd ar", "Arlig avskrivning", "Manad", "Ack avskrivning", "Bokfort varde", "Notering"]
+    ];
+
+    fixedAssets.forEach((asset) => {
+      rows.push([
+        asset.name,
+        fixedAssetStatusLabel(asset.status),
+        asset.purchaseDate,
+        asset.assetAccount,
+        fixedAssetNetCost(asset),
+        asset.vatAmount,
+        fixedAssetUsefulLife(asset),
+        fixedAssetAnnualDepreciation(asset),
+        fixedAssetMonthlyDepreciation(asset),
+        fixedAssetAccumulatedDepreciation(asset),
+        fixedAssetBookValue(asset),
+        asset.note || ""
+      ]);
+    });
+
+    downloadLocalCsv("anlaggningstillgangar.csv", rows);
   }
 
   async function handleCreateContract(event) {
@@ -8029,6 +8199,8 @@ function App() {
         suppliers: suppliers.length,
         supplierInvoices: supplierInvoices.length,
         supplierPayablesTotal,
+        fixedAssets: fixedAssets.length,
+        fixedAssetBookValueTotal,
         paidInvoices,
         unpaidInvoices,
         expenses: expenses.length,
@@ -8060,6 +8232,7 @@ function App() {
       quotes,
       suppliers,
       supplierInvoices,
+      fixedAssets,
       expenses,
       accounts,
       journalEntries,
@@ -8081,6 +8254,7 @@ function App() {
         vatReport,
         quotes,
         supplierInvoices,
+        fixedAssets,
         monthlyReportRows,
         customerLedgerRows,
         agingBuckets: agingBuckets.map((bucket) => ({
@@ -9114,6 +9288,12 @@ function App() {
         : `${answerIntro} For suppliers and purchases: go to Suppliers, save the supplier and register the supplier invoice with due date, total amount, VAT and category. When it is paid, fill the expense form and save the expense to create bookkeeping. You have ${supplierInvoices.length} supplier invoices, ${openSupplierInvoices.length} unpaid and ${supplierPayablesTotal} SEK to monitor.`, "suppliers");
     }
 
+    if (normalizedQuestion.includes("anlaggning") || normalizedQuestion.includes("anläggning") || normalizedQuestion.includes("avskriv") || normalizedQuestion.includes("inventarie") || normalizedQuestion.includes("fixed asset") || normalizedQuestion.includes("depreciation")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For anlaggningstillgangar: ga till Anlaggningstillgangar och lagg in dyrare inkop som ska anvandas flera ar, till exempel dator eller utrustning. AliBooks raknar ungefar arlig avskrivning och kan forbereda verifikat med 7830 debet och 1229 kredit. Du har ${fixedAssets.length} tillgangar och ${fixedAssetBookValueTotal} SEK i bokfort varde. Kontrollera alltid beloppsgranser och skattemassiga regler innan riktigt bokslut.`
+        : `${answerIntro} For fixed assets: go to Fixed assets and add larger purchases used for several years, such as computers or equipment. AliBooks estimates annual depreciation and can prepare a voucher with 7830 debit and 1229 credit. You have ${fixedAssets.length} assets and ${fixedAssetBookValueTotal} SEK book value. Always verify thresholds and tax rules before final closing.`, "fixedAssets");
+    }
+
     if (normalizedQuestion.includes("faktura") || normalizedQuestion.includes("invoice")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Nar fakturan skapas bokfors den automatiskt som 1510 debet, 3041 kredit och 2611 kredit. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
@@ -9213,6 +9393,8 @@ function App() {
       suppliers: suppliers.length,
       supplierInvoices: supplierInvoices.length,
       supplierPayablesTotal,
+      fixedAssets: fixedAssets.length,
+      fixedAssetBookValueTotal,
       totalOutstanding,
       vatToPay: vatReport?.vatToPay || 0,
       profitNet,
@@ -9320,6 +9502,7 @@ function App() {
       invoices: t.invoices,
       quotes: t.quotes,
       suppliers: t.suppliers,
+      fixedAssets: t.fixedAssets,
       bookkeeping: t.bookkeeping,
       uploaded: t.uploaded,
       activities: t.activities,
@@ -9367,6 +9550,9 @@ function App() {
       suppliers: language === "sv"
         ? ["Hur sparar jag leverantor?", "Hur bokfor jag leverantorsfaktura?", "Vad betyder inkopsskuld?"]
         : ["How do I save a supplier?", "How do I book supplier invoice?", "What does purchase payable mean?"],
+      fixedAssets: language === "sv"
+        ? ["Vad ska skrivas av?", "Hur bokfor jag avskrivning?", "Vad betyder bokfort varde?"]
+        : ["What should be depreciated?", "How do I book depreciation?", "What does book value mean?"],
       payments: language === "sv"
         ? ["Hur registrerar jag betalning?", "Hur funkar bankimport?", "Hur gor jag delbetalning?"]
         : ["How do I register payment?", "How does bank import work?", "How do I make partial payment?"],
@@ -9622,6 +9808,13 @@ function App() {
   const supplierOverdueTotal = overdueSupplierInvoices.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0);
   const supplierVatTotal = supplierInvoices.reduce((sum, invoice) => sum + (invoice.vatAmount || 0), 0);
   const supplierExpenseTotal = supplierInvoices.reduce((sum, invoice) => sum + (invoice.netAmount || supplierInvoiceNetAmount(invoice)), 0);
+  const activeFixedAssets = fixedAssets.filter((asset) => asset.status !== "disposed");
+  const fullyDepreciatedAssets = fixedAssets.filter((asset) => fixedAssetBookValue(asset) <= 0 && asset.status !== "disposed");
+  const fixedAssetNetTotal = fixedAssets.reduce((sum, asset) => sum + fixedAssetNetCost(asset), 0);
+  const fixedAssetVatTotal = fixedAssets.reduce((sum, asset) => sum + (asset.vatAmount || 0), 0);
+  const fixedAssetAnnualDepreciationTotal = activeFixedAssets.reduce((sum, asset) => sum + Math.min(fixedAssetAnnualDepreciation(asset), fixedAssetBookValue(asset)), 0);
+  const fixedAssetAccumulatedTotal = fixedAssets.reduce((sum, asset) => sum + fixedAssetAccumulatedDepreciation(asset), 0);
+  const fixedAssetBookValueTotal = fixedAssets.reduce((sum, asset) => sum + fixedAssetBookValue(asset), 0);
   const reminderPreviewInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0) || demoInvoiceForReminderPreview(settings);
   const sortedJournalEntries = [...journalEntries].sort((first, second) => {
     return new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0);
@@ -11741,6 +11934,23 @@ function App() {
       action: () => setActiveView("suppliers")
     },
     {
+      key: "fixed-assets",
+      tone: fullyDepreciatedAssets.length > 0 ? "warning" : fixedAssets.length > 0 ? "good" : "neutral",
+      title: language === "sv" ? "Anlaggningstillgangar" : "Fixed assets",
+      statusLabel: fullyDepreciatedAssets.length > 0
+        ? (language === "sv" ? "Kontrollera" : "Review")
+        : fixedAssets.length > 0
+          ? (language === "sv" ? "Under kontroll" : "Under control")
+          : (language === "sv" ? "Ingen lista" : "No register"),
+      amountLabel: `${fixedAssetBookValueTotal} SEK`,
+      detail: `${activeFixedAssets.length} ${language === "sv" ? "aktiva" : "active"}, ${fixedAssetAnnualDepreciationTotal} SEK ${language === "sv" ? "arsavskrivning" : "annual depreciation"}`,
+      recommendation: fixedAssets.length > 0
+        ? (language === "sv" ? "Forbered avskrivningar innan bokslut." : "Prepare depreciation before closing.")
+        : (language === "sv" ? "Lagg in dyrare inkop som ska skrivas av over tid." : "Add larger purchases that should be depreciated over time."),
+      actionLabel: language === "sv" ? "Oppna tillgangar" : "Open assets",
+      action: () => setActiveView("fixedAssets")
+    },
+    {
       key: "stripe",
       tone: stripeReceivableBalance > 0 ? "warning" : "good",
       title: "Stripe",
@@ -11924,6 +12134,7 @@ function App() {
     if (activeView === "invoices") return t.invoices;
     if (activeView === "quotes") return t.quotes;
     if (activeView === "suppliers") return t.suppliers;
+    if (activeView === "fixedAssets") return t.fixedAssets;
     if (activeView === "contracts") return t.contracts;
     if (activeView === "services") return t.services;
     if (activeView === "activities") return t.activities;
@@ -11998,6 +12209,7 @@ function App() {
           {navButton("invoices", t.invoices)}
           {navButton("quotes", t.quotes)}
           {navButton("suppliers", t.suppliers)}
+          {navButton("fixedAssets", t.fixedAssets)}
           {navButton("contracts", t.contracts)}
           {navButton("services", t.services)}
           {navButton("activities", t.activities)}
@@ -13400,6 +13612,167 @@ function App() {
                 );
               })}
             </div>
+          </section>
+        )}
+
+        {activeView === "fixedAssets" && (
+          <section className="orders-section fixed-asset-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.fixedAssets}</h2>
+                <p className="muted-line">
+                  {language === "sv"
+                    ? "Hall koll pa dyrare inkop som ska anvandas flera ar och forbered avskrivningar till bokforingen."
+                    : "Track larger purchases used over several years and prepare depreciation for bookkeeping."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadFixedAssetsCsv} disabled={fixedAssets.length === 0}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="fixed-asset-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Aktiva tillgangar" : "Active assets"}</span>
+                <strong>{activeFixedAssets.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Anskaffning exkl. moms" : "Cost excl. VAT"}</span>
+                <strong>{fixedAssetNetTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Ingaende moms" : "Input VAT"}</span>
+                <strong>{fixedAssetVatTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Ack. avskrivning" : "Accum. depreciation"}</span>
+                <strong>{fixedAssetAccumulatedTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bokfort varde" : "Book value"}</span>
+                <strong>{fixedAssetBookValueTotal} SEK</strong>
+              </article>
+              <article className={fullyDepreciatedAssets.length > 0 ? "warning-summary" : ""}>
+                <span>{language === "sv" ? "Arsavskrivning" : "Annual depreciation"}</span>
+                <strong>{fixedAssetAnnualDepreciationTotal} SEK</strong>
+              </article>
+            </div>
+
+            <div className="fixed-asset-workspace">
+              <form className="form fixed-asset-form" onSubmit={handleCreateFixedAsset}>
+                <h3>{language === "sv" ? "Ny anlaggningstillgang" : "New fixed asset"}</h3>
+                <label>
+                  {language === "sv" ? "Namn" : "Name"}
+                  <input value={fixedAssetName} onChange={(event) => setFixedAssetName(event.target.value)} placeholder={language === "sv" ? "Laptop, kamera, gymutrustning..." : "Laptop, camera, gym equipment..."} />
+                </label>
+                <label>
+                  {language === "sv" ? "Inkopsdatum" : "Purchase date"}
+                  <input type="date" value={fixedAssetPurchaseDate} onChange={(event) => setFixedAssetPurchaseDate(event.target.value)} />
+                </label>
+                <label>
+                  {language === "sv" ? "Totalbelopp inkl. moms" : "Total incl. VAT"}
+                  <input type="number" value={fixedAssetPurchaseAmount} onChange={(event) => setFixedAssetPurchaseAmount(event.target.value)} placeholder="25000" />
+                </label>
+                <label>
+                  {t.vat}
+                  <input type="number" value={fixedAssetVatAmount} onChange={(event) => setFixedAssetVatAmount(event.target.value)} placeholder="5000" />
+                </label>
+                <label>
+                  {language === "sv" ? "Ekonomisk livslangd" : "Useful life"}
+                  <select value={fixedAssetUsefulLifeYears} onChange={(event) => setFixedAssetUsefulLifeYears(event.target.value)}>
+                    <option value="3">3 {language === "sv" ? "ar" : "years"}</option>
+                    <option value="5">5 {language === "sv" ? "ar" : "years"}</option>
+                    <option value="10">10 {language === "sv" ? "ar" : "years"}</option>
+                  </select>
+                </label>
+                <label>
+                  {language === "sv" ? "Tillgangskonto" : "Asset account"}
+                  <select value={fixedAssetAssetAccount} onChange={(event) => setFixedAssetAssetAccount(event.target.value)}>
+                    <option value="1220">1220 Inventarier och verktyg</option>
+                    <option value="1221">1221 Inventarier</option>
+                  </select>
+                </label>
+                <label>
+                  {language === "sv" ? "Avskrivningskonto" : "Depreciation account"}
+                  <select value={fixedAssetDepreciationAccount} onChange={(event) => setFixedAssetDepreciationAccount(event.target.value)}>
+                    <option value="7830">7830 Avskrivningar inventarier</option>
+                    <option value="7832">7832 Avskrivningar installationer</option>
+                  </select>
+                </label>
+                <label>
+                  {language === "sv" ? "Ack. avskrivningskonto" : "Accumulated depreciation account"}
+                  <select value={fixedAssetAccumulatedAccount} onChange={(event) => setFixedAssetAccumulatedAccount(event.target.value)}>
+                    <option value="1229">1229 Ack. avskrivningar inventarier</option>
+                  </select>
+                </label>
+                <label className="fixed-asset-note-field">
+                  {language === "sv" ? "Notering" : "Note"}
+                  <textarea value={fixedAssetNote} onChange={(event) => setFixedAssetNote(event.target.value)} rows="3" placeholder={language === "sv" ? "Serienummer, kvitto, leverantor..." : "Serial number, receipt, supplier..."} />
+                </label>
+                <button type="submit">{language === "sv" ? "Spara tillgang" : "Save asset"}</button>
+              </form>
+
+              <article className="fixed-asset-help-card">
+                <strong>{language === "sv" ? "Hur ska detta anvandas?" : "How to use this"}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Anvand detta for dyrare inkop som ska anvandas over flera ar. Mindre inkop kan ofta bokforas direkt som kostnad, men kontrollera alltid regler och beloppsgranser."
+                    : "Use this for larger purchases used over several years. Smaller purchases can often be expensed directly, but always verify rules and thresholds."}
+                </p>
+                <ul>
+                  <li>{language === "sv" ? "Tillgang: 1220 debet vid inkop." : "Asset: 1220 debit on purchase."}</li>
+                  <li>{language === "sv" ? "Avskrivning: 7830 debet, 1229 kredit." : "Depreciation: 7830 debit, 1229 credit."}</li>
+                  <li>{language === "sv" ? "Kontrollera alltid med redovisningskonsult vid bokslut." : "Always verify with an accountant at closing."}</li>
+                </ul>
+              </article>
+            </div>
+
+            {fixedAssetMessage && <p className="message success">{fixedAssetMessage}</p>}
+
+            {fixedAssets.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga anlaggningstillgangar annu." : "No fixed assets yet."}</p>
+            ) : (
+              <div className="fixed-asset-list">
+                {fixedAssets.map((asset) => (
+                  <article className={`fixed-asset-card ${asset.status || "active"}`} key={asset.id}>
+                    <div>
+                      <span className="fixed-asset-status">{fixedAssetStatusLabel(asset.status)}</span>
+                      <h3>{asset.name}</h3>
+                      <p>{language === "sv" ? "Inkopsdatum" : "Purchase date"}: {formatDateOnly(asset.purchaseDate)}</p>
+                      <small>{asset.note || `${asset.assetAccount} / ${asset.depreciationAccount} / ${asset.accumulatedAccount}`}</small>
+                    </div>
+                    <div className="fixed-asset-amount-box">
+                      <span>{language === "sv" ? "Bokfort varde" : "Book value"}</span>
+                      <strong>{fixedAssetBookValue(asset)} SEK</strong>
+                      <small>{language === "sv" ? "Anskaffning" : "Cost"}: {fixedAssetNetCost(asset)} SEK</small>
+                      <small>{language === "sv" ? "Ack. avskrivning" : "Accum. depreciation"}: {fixedAssetAccumulatedDepreciation(asset)} SEK</small>
+                    </div>
+                    <div className="fixed-asset-amount-box">
+                      <span>{language === "sv" ? "Avskrivning" : "Depreciation"}</span>
+                      <strong>{fixedAssetAnnualDepreciation(asset)} SEK/{language === "sv" ? "ar" : "year"}</strong>
+                      <small>{fixedAssetMonthlyDepreciation(asset)} SEK/{language === "sv" ? "manad" : "month"}</small>
+                      <small>{fixedAssetUsefulLife(asset)} {language === "sv" ? "ar" : "years"}</small>
+                    </div>
+                    <div className="fixed-asset-actions">
+                      <button type="button" className="primary-small-button" onClick={() => prepareFixedAssetDepreciationVoucher(asset)}>
+                        {language === "sv" ? "Forbered avskrivning" : "Prepare depreciation"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateFixedAssetStatus(asset.id, "fullyDepreciated")}>
+                        {language === "sv" ? "Fullt avskriven" : "Fully depreciated"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateFixedAssetStatus(asset.id, "disposed")}>
+                        {language === "sv" ? "Avyttrad" : "Disposed"}
+                      </button>
+                      <button type="button" className="danger-button soft" onClick={() => deleteFixedAsset(asset.id)}>
+                        {language === "sv" ? "Ta bort" : "Delete"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
