@@ -1298,6 +1298,9 @@ function App() {
   const [bankStatementDate, setBankStatementDate] = useState(() => localStorage.getItem("alibooks-bank-statement-date") || new Date().toISOString().slice(0, 10));
   const [bankStatementBalance, setBankStatementBalance] = useState(() => localStorage.getItem("alibooks-bank-statement-balance") || "");
   const [bankStatementNote, setBankStatementNote] = useState(() => localStorage.getItem("alibooks-bank-statement-note") || "");
+  const [taxAccountStatementDate, setTaxAccountStatementDate] = useState(() => localStorage.getItem("alibooks-tax-account-statement-date") || new Date().toISOString().slice(0, 10));
+  const [taxAccountStatementBalance, setTaxAccountStatementBalance] = useState(() => localStorage.getItem("alibooks-tax-account-statement-balance") || "");
+  const [taxAccountStatementNote, setTaxAccountStatementNote] = useState(() => localStorage.getItem("alibooks-tax-account-statement-note") || "");
   const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
   const [stripePayoutFeeAmount, setStripePayoutFeeAmount] = useState("");
@@ -1463,6 +1466,12 @@ function App() {
     localStorage.setItem("alibooks-bank-statement-balance", bankStatementBalance);
     localStorage.setItem("alibooks-bank-statement-note", bankStatementNote);
   }, [bankStatementDate, bankStatementBalance, bankStatementNote]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-tax-account-statement-date", taxAccountStatementDate);
+    localStorage.setItem("alibooks-tax-account-statement-balance", taxAccountStatementBalance);
+    localStorage.setItem("alibooks-tax-account-statement-note", taxAccountStatementNote);
+  }, [taxAccountStatementDate, taxAccountStatementBalance, taxAccountStatementNote]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bokio-import-queue", JSON.stringify(bokioImportQueue));
@@ -5289,6 +5298,131 @@ function App() {
     <div class="note">${language === "sv"
       ? "Kontoavstamningen ar ett arbetsunderlag. Jamfor alltid bankkonto, Stripe, moms och skattekonto mot externa underlag innan bokslut eller deklaration skickas."
       : "The account reconciliation is a working basis. Always compare bank, Stripe, VAT and tax account against external records before closing or filing."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
+  function downloadTaxAccountReconciliationCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks skattekonto-avstamning"],
+      ["Ar", annualCloseYear],
+      ["Skattekonto datum", taxAccountReconciliationDate],
+      ["Foretag", settings?.companyName || "Muscle&Focus"],
+      ["Status", taxAccountReconciliationStatusText],
+      ["Skatteverkets saldo", taxAccountStatementBalanceIsSet ? taxAccountStatementBalanceNumber : "-"],
+      ["Bokfort saldo 1630", taxAccountBookedBalance],
+      ["Differens", taxAccountDifference === null ? "-" : taxAccountDifference],
+      ["Notering", taxAccountStatementNote || "-"],
+      [],
+      ["Kontroll", "Bokfort/aktuellt", "Forvantat", "Differens", "Status", "Detalj"]
+    ];
+
+    taxAccountReconciliationRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.actual,
+        row.expected === null ? "-" : row.expected,
+        row.difference === null ? "-" : row.difference,
+        row.statusLabel,
+        row.detail
+      ]);
+    });
+
+    downloadLocalCsv(`skattekonto-avstamning-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openTaxAccountReconciliationReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade skattekonto-rapporten." : "The browser blocked the tax account report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Skattekonto-avstamning" : "Tax account reconciliation";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const rowsHtml = taxAccountReconciliationRows.map((row) => `<tr>
+      <td>${escapeHtml(row.title)}</td>
+      <td>${row.actual} SEK</td>
+      <td>${row.expected === null ? "-" : `${row.expected} SEK`}</td>
+      <td>${row.difference === null ? "-" : `${row.difference} SEK`}</td>
+      <td>${escapeHtml(row.statusLabel)}</td>
+      <td>${escapeHtml(row.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1120px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Skattekonto datum" : "Tax account date"}:</strong> ${escapeHtml(taxAccountReconciliationDate)}</p>
+        <p><strong>${language === "sv" ? "Status" : "Status"}:</strong> ${escapeHtml(taxAccountReconciliationStatusText)}</p>
+        <p><strong>${language === "sv" ? "Skapad" : "Created"}:</strong> ${escapeHtml(todayInput)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Bokfort 1630" : "Booked 1630"}</span><strong>${taxAccountBookedBalance} SEK</strong></div>
+      <div><span>${language === "sv" ? "Skatteverkets saldo" : "Tax authority balance"}</span><strong>${taxAccountStatementBalanceIsSet ? `${taxAccountStatementBalanceNumber} SEK` : "-"}</strong></div>
+      <div><span>${language === "sv" ? "Differens" : "Difference"}</span><strong>${taxAccountDifference === null ? "-" : `${taxAccountDifference} SEK`}</strong></div>
+      <div><span>${language === "sv" ? "Planerat att hantera" : "Planned to handle"}</span><strong>${taxAccountTotalToHandle} SEK</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Kontroller" : "Checks"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Kontroll" : "Check"}</th>
+          <th>${language === "sv" ? "Aktuellt" : "Actual"}</th>
+          <th>${language === "sv" ? "Forvantat" : "Expected"}</th>
+          <th>${language === "sv" ? "Differens" : "Difference"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Skattekonto-avstamningen ar ett arbetsunderlag. Jamfor alltid mot Skatteverkets skattekonto, momsdeklaration och arbetsgivardeklaration innan betalning eller bokslut."
+      : "The tax account reconciliation is a working basis. Always compare against the tax authority account, VAT filing and employer declaration before payment or closing."}</div>
     <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
   </main>
 </body>
@@ -9546,6 +9680,113 @@ function App() {
   const accountReconciliationStatusText = accountReconciliationWarnings === 0
     ? (language === "sv" ? "Kontona ser redo ut for slutkontroll" : "Accounts look ready for final review")
     : `${accountReconciliationWarnings} ${language === "sv" ? "konton behover avstamning" : "accounts need reconciliation"}`;
+  const parsedTaxAccountStatementBalance = Number(taxAccountStatementBalance);
+  const taxAccountStatementBalanceIsSet = String(taxAccountStatementBalance).trim() !== "" && Number.isFinite(parsedTaxAccountStatementBalance);
+  const taxAccountStatementBalanceNumber = taxAccountStatementBalanceIsSet ? Math.round(parsedTaxAccountStatementBalance) : null;
+  const taxAccountReconciliationDate = taxAccountStatementDate || annualCloseRange.to;
+  const taxAccountEntries = journalEntries.filter((entry) => {
+    const voucherDate = String(entry.voucherDate || entry.createdAt || "").slice(0, 10);
+    return voucherDate && voucherDate <= taxAccountReconciliationDate;
+  });
+  const taxAccountBookedBalance = accountReconciliationAmount("1630", taxAccountEntries);
+  const taxAccountDifference = taxAccountStatementBalanceIsSet
+    ? taxAccountBookedBalance - taxAccountStatementBalanceNumber
+    : null;
+  const taxAccountVatToHandle = Math.max(annualCloseVatToPay, 0);
+  const taxAccountPayrollToHandle = annualClosePayrollTotals.tax + annualClosePayrollTotals.employerFees;
+  const taxAccountTotalToHandle = taxAccountVatToHandle + taxAccountPayrollToHandle;
+  const createTaxAccountReconciliationRow = ({
+    key,
+    title,
+    actual,
+    expected = null,
+    detail,
+    action,
+    forcedStatus = null
+  }) => {
+    const difference = expected === null ? null : actual - expected;
+    const status = forcedStatus || (expected === null
+      ? "info"
+      : Math.abs(difference) <= 1
+        ? "ok"
+        : "warning");
+
+    return {
+      key,
+      title,
+      actual,
+      expected,
+      difference,
+      detail,
+      action,
+      status,
+      statusLabel: status === "ok"
+        ? "OK"
+        : status === "warning"
+          ? (language === "sv" ? "Stam av" : "Reconcile")
+          : "Info"
+    };
+  };
+  const taxAccountReconciliationRows = [
+    createTaxAccountReconciliationRow({
+      key: "statement",
+      title: language === "sv" ? "1630 mot Skatteverkets skattekonto" : "1630 against tax authority account",
+      actual: taxAccountBookedBalance,
+      expected: taxAccountStatementBalanceNumber,
+      detail: language === "sv"
+        ? (taxAccountStatementBalanceIsSet
+          ? `Skatteverkets saldo ${taxAccountStatementBalanceNumber} SEK per ${taxAccountReconciliationDate}. ${taxAccountStatementNote || ""}`.trim()
+          : "Fyll i saldo fran Skatteverkets skattekonto for exakt differens.")
+        : (taxAccountStatementBalanceIsSet
+          ? `Tax authority balance ${taxAccountStatementBalanceNumber} SEK on ${taxAccountReconciliationDate}. ${taxAccountStatementNote || ""}`.trim()
+          : "Enter the tax authority account balance to get an exact difference."),
+      action: () => setActiveView("reports")
+    }),
+    createTaxAccountReconciliationRow({
+      key: "vat",
+      title: language === "sv" ? "Moms att hantera" : "VAT to handle",
+      actual: annualCloseVatToPay,
+      expected: taxAccountVatToHandle,
+      detail: language === "sv"
+        ? "Positivt belopp betyder moms att betala. Negativt belopp kan betyda moms att fa tillbaka."
+        : "A positive amount means VAT to pay. A negative amount can mean VAT to receive.",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      }
+    }),
+    createTaxAccountReconciliationRow({
+      key: "payroll",
+      title: language === "sv" ? "Personalskatt och arbetsgivaravgifter" : "Employee tax and employer contributions",
+      actual: taxAccountPayrollToHandle,
+      expected: taxAccountPayrollToHandle,
+      detail: annualClosePayrollTotals.count === 0
+        ? (language === "sv" ? "Ingen lon finns for valt ar." : "No payroll exists for selected year.")
+        : `${annualClosePayrollTotals.tax} SEK ${language === "sv" ? "personalskatt" : "employee tax"} + ${annualClosePayrollTotals.employerFees} SEK ${language === "sv" ? "arbetsgivaravgift" : "employer contributions"}.`,
+      action: () => {
+        setActiveView("payroll");
+        setPayrollReportYear(annualCloseYear);
+      }
+    }),
+    createTaxAccountReconciliationRow({
+      key: "planned",
+      title: language === "sv" ? "Totalt planerat till skattekonto" : "Total planned for tax account",
+      actual: taxAccountTotalToHandle,
+      expected: taxAccountTotalToHandle,
+      detail: language === "sv"
+        ? "Summerar moms att betala och lonerelaterade skatter/avgifter for valt ar."
+        : "Sums VAT to pay and payroll-related taxes/contributions for selected year.",
+      action: () => setActiveView("reports")
+    })
+  ];
+  const taxAccountReconciliationWarnings = taxAccountReconciliationRows.filter((row) => row.status === "warning").length;
+  const taxAccountReconciliationReadyCount = taxAccountReconciliationRows.filter((row) => row.status === "ok").length;
+  const taxAccountReconciliationStatusText = taxAccountStatementBalanceIsSet
+    ? taxAccountReconciliationWarnings === 0
+      ? (language === "sv" ? "Skattekontot stammer mot bokforingen" : "Tax account matches bookkeeping")
+      : `${taxAccountReconciliationWarnings} ${language === "sv" ? "skattekontroller behover avstamning" : "tax checks need reconciliation"}`
+    : (language === "sv" ? "Fyll i Skatteverkets saldo" : "Enter tax authority balance");
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -16313,6 +16554,143 @@ function App() {
                   <span>
                     <strong>{row.statusLabel}</strong>
                     <small>{row.detail}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Skattekonto-avstamning" : "Tax account reconciliation"}</h2>
+            <div className="button-row">
+              <span className={taxAccountReconciliationWarnings === 0 && taxAccountStatementBalanceIsSet ? "status success-status" : "status warning-status"}>
+                {taxAccountStatementBalanceIsSet
+                  ? `${taxAccountReconciliationReadyCount}/${taxAccountReconciliationRows.length} ${language === "sv" ? "stammer" : "matched"}`
+                  : (language === "sv" ? "Saldo saknas" : "Missing balance")}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadTaxAccountReconciliationCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openTaxAccountReconciliationReport}>
+                {language === "sv" ? "Skattekonto PDF" : "Tax account PDF"}
+              </button>
+            </div>
+          </div>
+
+          <div className="tax-account-panel">
+            <div className="tax-account-hero">
+              <div>
+                <span>{language === "sv" ? "Skattekonto" : "Tax account"}</span>
+                <strong>{taxAccountReconciliationStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Jamfor bokfort saldo pa 1630 mot saldot du ser hos Skatteverket. Kontrollera samtidigt moms, personalskatt och arbetsgivaravgifter."
+                    : "Compare booked balance on 1630 against the balance shown by the tax authority. Also review VAT, employee tax and employer contributions."}
+                </p>
+              </div>
+              <div>
+                <span>{language === "sv" ? "Planerat att hantera" : "Planned to handle"}</span>
+                <strong>{taxAccountTotalToHandle} SEK</strong>
+                <p>
+                  {language === "sv"
+                    ? `${taxAccountVatToHandle} SEK moms och ${taxAccountPayrollToHandle} SEK lonerelaterade skatter/avgifter for valt ar.`
+                    : `${taxAccountVatToHandle} SEK VAT and ${taxAccountPayrollToHandle} SEK payroll-related taxes/contributions for selected year.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="tax-account-control">
+              <div>
+                <span>{language === "sv" ? "Saldo fran Skatteverket" : "Balance from tax authority"}</span>
+                <strong>
+                  {taxAccountStatementBalanceIsSet
+                    ? `${language === "sv" ? "Differens" : "Difference"} ${taxAccountDifference} SEK`
+                    : (language === "sv" ? "Fyll i saldo" : "Enter balance")}
+                </strong>
+                <p>
+                  {language === "sv"
+                    ? "Skriv saldot fran Skatteverkets skattekonto. AliBooks jamfor mot bokfort saldo pa 1630 fram till valt datum."
+                    : "Enter the tax authority account balance. AliBooks compares it with booked account 1630 up to the selected date."}
+                </p>
+              </div>
+              <label>
+                {language === "sv" ? "Datum" : "Date"}
+                <input
+                  type="date"
+                  value={taxAccountStatementDate}
+                  onChange={(event) => setTaxAccountStatementDate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Skatteverkets saldo" : "Tax authority balance"}
+                <input
+                  type="number"
+                  step="1"
+                  value={taxAccountStatementBalance}
+                  onChange={(event) => setTaxAccountStatementBalance(event.target.value)}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Anteckning" : "Note"}
+                <input
+                  value={taxAccountStatementNote}
+                  onChange={(event) => setTaxAccountStatementNote(event.target.value)}
+                  placeholder={language === "sv" ? "Skatteverket, period..." : "Tax authority, period..."}
+                />
+              </label>
+            </div>
+
+            <div className="expense-summary-grid tax-account-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Bokfort 1630" : "Booked 1630"}</span>
+                <strong>{taxAccountBookedBalance} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Skatteverkets saldo" : "Tax authority balance"}</span>
+                <strong>{taxAccountStatementBalanceIsSet ? `${taxAccountStatementBalanceNumber} SEK` : "-"}</strong>
+              </article>
+              <article className={taxAccountDifference === 0 ? "balanced-summary" : taxAccountStatementBalanceIsSet ? "unbalanced-summary" : ""}>
+                <span>{language === "sv" ? "Differens" : "Difference"}</span>
+                <strong>{taxAccountDifference === null ? "-" : `${taxAccountDifference} SEK`}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Moms att betala" : "VAT to pay"}</span>
+                <strong>{taxAccountVatToHandle} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Lon skatt/avgift" : "Payroll tax/fees"}</span>
+                <strong>{taxAccountPayrollToHandle} SEK</strong>
+              </article>
+            </div>
+
+            <div className="tax-account-list">
+              {taxAccountReconciliationRows.map((row) => (
+                <button
+                  type="button"
+                  className={`tax-account-row ${row.status}`}
+                  key={row.key}
+                  onClick={row.action}
+                >
+                  <span>
+                    <strong>{row.title}</strong>
+                    <small>{row.detail}</small>
+                  </span>
+                  <span>
+                    <strong>{row.actual} SEK</strong>
+                    <small>{language === "sv" ? "Aktuellt" : "Actual"}</small>
+                  </span>
+                  <span>
+                    <strong>{row.expected === null ? "-" : `${row.expected} SEK`}</strong>
+                    <small>{language === "sv" ? "Forvantat" : "Expected"}</small>
+                  </span>
+                  <span>
+                    <strong>{row.difference === null ? "-" : `${row.difference} SEK`}</strong>
+                    <small>{language === "sv" ? "Differens" : "Difference"}</small>
+                  </span>
+                  <span>
+                    <strong>{row.statusLabel}</strong>
+                    <small>{language === "sv" ? "Klicka for att oppna" : "Click to open"}</small>
                   </span>
                 </button>
               ))}
