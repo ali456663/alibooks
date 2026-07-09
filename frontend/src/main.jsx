@@ -22,6 +22,7 @@ const copy = {
     customers: "Customers",
     invoices: "Invoices",
     quotes: "Quotes",
+    suppliers: "Suppliers",
     contracts: "Contracts",
     services: "Services",
     activities: "Events",
@@ -156,6 +157,7 @@ const copy = {
     customers: "Kunder",
     invoices: "Fakturor",
     quotes: "Offerter",
+    suppliers: "Leverantorer",
     contracts: "Avtal",
     services: "Tjanster",
     activities: "Handelser",
@@ -967,6 +969,7 @@ const viewKeys = [
   "customers",
   "invoices",
   "quotes",
+  "suppliers",
   "contracts",
   "services",
   "activities",
@@ -1140,6 +1143,36 @@ function App() {
   const [quoteValidUntil, setQuoteValidUntil] = useState(() => localStorage.getItem("alibooks-quote-valid-until") || addDaysInputString(dateInputString(new Date()), 30));
   const [quoteNote, setQuoteNote] = useState(() => localStorage.getItem("alibooks-quote-note") || "");
   const [quoteMessage, setQuoteMessage] = useState("");
+  const [suppliers, setSuppliers] = useState(() => {
+    try {
+      const savedSuppliers = JSON.parse(localStorage.getItem("alibooks-suppliers") || "[]");
+      return Array.isArray(savedSuppliers) ? savedSuppliers : [];
+    } catch {
+      return [];
+    }
+  });
+  const [supplierInvoices, setSupplierInvoices] = useState(() => {
+    try {
+      const savedInvoices = JSON.parse(localStorage.getItem("alibooks-supplier-invoices") || "[]");
+      return Array.isArray(savedInvoices) ? savedInvoices : [];
+    } catch {
+      return [];
+    }
+  });
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierEmail, setSupplierEmail] = useState("");
+  const [supplierOrgNumber, setSupplierOrgNumber] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierPaymentInfo, setSupplierPaymentInfo] = useState("");
+  const [supplierInvoiceSupplierId, setSupplierInvoiceSupplierId] = useState(() => localStorage.getItem("alibooks-supplier-invoice-supplier-id") || "");
+  const [supplierInvoiceDate, setSupplierInvoiceDate] = useState(() => localStorage.getItem("alibooks-supplier-invoice-date") || dateInputString(new Date()));
+  const [supplierInvoiceDueDate, setSupplierInvoiceDueDate] = useState(() => localStorage.getItem("alibooks-supplier-invoice-due-date") || addDaysInputString(dateInputString(new Date()), 30));
+  const [supplierInvoiceDescription, setSupplierInvoiceDescription] = useState("");
+  const [supplierInvoiceReference, setSupplierInvoiceReference] = useState("");
+  const [supplierInvoiceTotalAmount, setSupplierInvoiceTotalAmount] = useState("");
+  const [supplierInvoiceVatAmount, setSupplierInvoiceVatAmount] = useState("");
+  const [supplierInvoiceCategory, setSupplierInvoiceCategory] = useState("5420");
+  const [supplierMessage, setSupplierMessage] = useState("");
   const [contracts, setContracts] = useState([]);
   const [contractCustomerId, setContractCustomerId] = useState("");
   const [contractServiceId, setContractServiceId] = useState("");
@@ -1540,6 +1573,14 @@ function App() {
     localStorage.setItem("alibooks-quote-valid-until", quoteValidUntil);
     localStorage.setItem("alibooks-quote-note", quoteNote);
   }, [quotes, quoteCustomerId, quoteServiceId, quoteQuantity, quoteValidUntil, quoteNote]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-suppliers", JSON.stringify(suppliers));
+    localStorage.setItem("alibooks-supplier-invoices", JSON.stringify(supplierInvoices));
+    localStorage.setItem("alibooks-supplier-invoice-supplier-id", supplierInvoiceSupplierId);
+    localStorage.setItem("alibooks-supplier-invoice-date", supplierInvoiceDate);
+    localStorage.setItem("alibooks-supplier-invoice-due-date", supplierInvoiceDueDate);
+  }, [suppliers, supplierInvoices, supplierInvoiceSupplierId, supplierInvoiceDate, supplierInvoiceDueDate]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-expense-category", expenseCategory);
@@ -2181,6 +2222,161 @@ function App() {
 
     quoteWindow.document.write(html);
     quoteWindow.document.close();
+  }
+
+  function supplierInvoiceStatusLabel(status) {
+    if (status === "paid") return language === "sv" ? "Betald" : "Paid";
+    if (status === "prepared") return language === "sv" ? "Forberedd" : "Prepared";
+    if (status === "booked") return language === "sv" ? "Bokford som kostnad" : "Booked as expense";
+    if (status === "cancelled") return language === "sv" ? "Makulerad" : "Cancelled";
+    return language === "sv" ? "Obetald" : "Unpaid";
+  }
+
+  function supplierInvoiceNetAmount(invoice) {
+    return Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.vatAmount || 0));
+  }
+
+  function handleCreateSupplier(event) {
+    event.preventDefault();
+    setSupplierMessage("");
+    setError("");
+
+    const normalizedName = supplierName.trim();
+    if (normalizedName.length < 2) {
+      setSupplierMessage(language === "sv" ? "Skriv leverantorens namn." : "Enter supplier name.");
+      return;
+    }
+
+    const newSupplier = {
+      id: `supplier-${Date.now()}`,
+      name: normalizedName,
+      email: supplierEmail.trim(),
+      orgNumber: supplierOrgNumber.trim(),
+      phone: supplierPhone.trim(),
+      paymentInfo: supplierPaymentInfo.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    setSuppliers((current) => [newSupplier, ...current]);
+    setSupplierInvoiceSupplierId(newSupplier.id);
+    setSupplierName("");
+    setSupplierEmail("");
+    setSupplierOrgNumber("");
+    setSupplierPhone("");
+    setSupplierPaymentInfo("");
+    setSupplierMessage(language === "sv" ? "Leverantoren sparades." : "Supplier saved.");
+  }
+
+  function handleCreateSupplierInvoice(event) {
+    event.preventDefault();
+    setSupplierMessage("");
+    setError("");
+
+    const supplier = suppliers.find((item) => String(item.id) === String(supplierInvoiceSupplierId));
+    const totalAmount = Math.round(Number(supplierInvoiceTotalAmount || 0));
+    const vatAmount = Math.round(Number(supplierInvoiceVatAmount || 0));
+
+    if (!supplier) {
+      setSupplierMessage(language === "sv" ? "Valj leverantor." : "Choose supplier.");
+      return;
+    }
+
+    if (!supplierInvoiceDescription.trim()) {
+      setSupplierMessage(language === "sv" ? "Skriv vad inkopet galler." : "Enter what the purchase is for.");
+      return;
+    }
+
+    if (totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
+      setSupplierMessage(language === "sv" ? "Kontrollera totalbelopp och moms." : "Check total amount and VAT.");
+      return;
+    }
+
+    const newInvoice = {
+      id: `supplier-invoice-${Date.now()}`,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      supplierEmail: supplier.email,
+      supplierOrgNumber: supplier.orgNumber,
+      invoiceDate: supplierInvoiceDate,
+      dueDate: supplierInvoiceDueDate,
+      description: supplierInvoiceDescription.trim(),
+      reference: supplierInvoiceReference.trim(),
+      totalAmount,
+      vatAmount,
+      netAmount: Math.max(0, totalAmount - vatAmount),
+      category: supplierInvoiceCategory,
+      status: "unpaid",
+      createdAt: new Date().toISOString()
+    };
+
+    setSupplierInvoices((current) => [newInvoice, ...current]);
+    setSupplierInvoiceDescription("");
+    setSupplierInvoiceReference("");
+    setSupplierInvoiceTotalAmount("");
+    setSupplierInvoiceVatAmount("");
+    setSupplierMessage(language === "sv" ? "Leverantorsfakturan sparades." : "Supplier invoice saved.");
+  }
+
+  function updateSupplierInvoiceStatus(invoiceId, status) {
+    setSupplierInvoices((current) => current.map((invoice) => (
+      invoice.id === invoiceId
+        ? {
+          ...invoice,
+          status,
+          paidAt: status === "paid" ? dateInputString(new Date()) : invoice.paidAt,
+          updatedAt: new Date().toISOString()
+        }
+        : invoice
+    )));
+  }
+
+  function deleteSupplierInvoice(invoiceId) {
+    setSupplierInvoices((current) => current.filter((invoice) => invoice.id !== invoiceId));
+  }
+
+  function prepareExpenseFromSupplierInvoice(invoice) {
+    setExpenseDate(invoice.paidAt || invoice.invoiceDate || dateInputString(new Date()));
+    setExpenseDescription(`${invoice.supplierName} - ${invoice.description}`);
+    setExpenseNetAmount(String(invoice.netAmount ?? supplierInvoiceNetAmount(invoice)));
+    setExpenseVatAmount(String(invoice.vatAmount || 0));
+    setExpenseCategory(invoice.category || "5420");
+    setExpenseFilter("all");
+    setExpenseSearch(invoice.supplierName || invoice.description || "");
+    setActiveView("payments");
+    updateSupplierInvoiceStatus(invoice.id, "prepared");
+  }
+
+  function downloadSuppliersCsv() {
+    const rows = [
+      ["Leverantorer och inkop / Suppliers and purchases"],
+      ["Leverantorer", suppliers.length],
+      ["Leverantorsfakturor", supplierInvoices.length],
+      [],
+      ["Leverantor", "E-post", "Org/personnummer", "Telefon", "Betalinfo"]
+    ];
+
+    suppliers.forEach((supplier) => {
+      rows.push([supplier.name, supplier.email, supplier.orgNumber, supplier.phone, supplier.paymentInfo]);
+    });
+
+    rows.push([]);
+    rows.push(["Fakturadatum", "Forfallodatum", "Status", "Leverantor", "Referens", "Beskrivning", "Kategori", "Netto", "Moms", "Totalt"]);
+    supplierInvoices.forEach((invoice) => {
+      rows.push([
+        invoice.invoiceDate,
+        invoice.dueDate,
+        supplierInvoiceStatusLabel(invoice.status),
+        invoice.supplierName,
+        invoice.reference,
+        invoice.description,
+        expenseCategoryLabel(invoice.category),
+        invoice.netAmount,
+        invoice.vatAmount,
+        invoice.totalAmount
+      ]);
+    });
+
+    downloadLocalCsv("leverantorer-inkop.csv", rows);
   }
 
   async function handleCreateContract(event) {
@@ -7830,6 +8026,9 @@ function App() {
         customers: customers.length,
         invoices: invoices.length,
         quotes: quotes.length,
+        suppliers: suppliers.length,
+        supplierInvoices: supplierInvoices.length,
+        supplierPayablesTotal,
         paidInvoices,
         unpaidInvoices,
         expenses: expenses.length,
@@ -7859,6 +8058,8 @@ function App() {
       customers,
       invoices,
       quotes,
+      suppliers,
+      supplierInvoices,
       expenses,
       accounts,
       journalEntries,
@@ -7879,6 +8080,7 @@ function App() {
         balanceReport,
         vatReport,
         quotes,
+        supplierInvoices,
         monthlyReportRows,
         customerLedgerRows,
         agingBuckets: agingBuckets.map((bucket) => ({
@@ -8906,6 +9108,12 @@ function App() {
         : `${answerIntro} For quotes: go to Quotes, choose customer and service, create the quote and print/save PDF. A quote is not booked directly. When the customer accepts it, click Create invoice to create a real invoice with automatic bookkeeping. You have ${quotes.length} quotes, ${acceptedQuotes.length} accepted and ${quotePipelineValue} SEK in active pipeline.`, "quotes");
     }
 
+    if (normalizedQuestion.includes("leverantor") || normalizedQuestion.includes("leverantör") || normalizedQuestion.includes("supplier") || normalizedQuestion.includes("inkop") || normalizedQuestion.includes("inköp") || normalizedQuestion.includes("purchase")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For leverantorer och inkop: ga till Leverantorer, spara leverantoren och registrera leverantorsfakturan med forfallodatum, totalbelopp, moms och kategori. Nar fakturan ar betald kan du fylla kostnadsformularet och spara kostnaden, da skapas bokforing. Du har ${supplierInvoices.length} leverantorsfakturor, ${openSupplierInvoices.length} obetalda och ${supplierPayablesTotal} SEK att bevaka.`
+        : `${answerIntro} For suppliers and purchases: go to Suppliers, save the supplier and register the supplier invoice with due date, total amount, VAT and category. When it is paid, fill the expense form and save the expense to create bookkeeping. You have ${supplierInvoices.length} supplier invoices, ${openSupplierInvoices.length} unpaid and ${supplierPayablesTotal} SEK to monitor.`, "suppliers");
+    }
+
     if (normalizedQuestion.includes("faktura") || normalizedQuestion.includes("invoice")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Nar fakturan skapas bokfors den automatiskt som 1510 debet, 3041 kredit och 2611 kredit. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
@@ -9002,6 +9210,9 @@ function App() {
       quotes: quotes.length,
       acceptedQuotes: acceptedQuotes.length,
       quotePipelineValue,
+      suppliers: suppliers.length,
+      supplierInvoices: supplierInvoices.length,
+      supplierPayablesTotal,
       totalOutstanding,
       vatToPay: vatReport?.vatToPay || 0,
       profitNet,
@@ -9108,6 +9319,7 @@ function App() {
     const labels = {
       invoices: t.invoices,
       quotes: t.quotes,
+      suppliers: t.suppliers,
       bookkeeping: t.bookkeeping,
       uploaded: t.uploaded,
       activities: t.activities,
@@ -9152,6 +9364,9 @@ function App() {
       quotes: language === "sv"
         ? ["Hur skapar jag offert?", "Nar bokfors en offert?", "Hur blir offert faktura?"]
         : ["How do I create a quote?", "When is a quote booked?", "How does a quote become an invoice?"],
+      suppliers: language === "sv"
+        ? ["Hur sparar jag leverantor?", "Hur bokfor jag leverantorsfaktura?", "Vad betyder inkopsskuld?"]
+        : ["How do I save a supplier?", "How do I book supplier invoice?", "What does purchase payable mean?"],
       payments: language === "sv"
         ? ["Hur registrerar jag betalning?", "Hur funkar bankimport?", "Hur gor jag delbetalning?"]
         : ["How do I register payment?", "How does bank import work?", "How do I make partial payment?"],
@@ -9398,6 +9613,15 @@ function App() {
   const quotePipelineValue = activeQuotes.reduce((sum, quote) => sum + (quote.totalAmount || 0), 0);
   const acceptedQuoteValue = acceptedQuotes.reduce((sum, quote) => sum + (quote.totalAmount || 0), 0);
   const expiredQuotes = quotes.filter((quote) => quote.validUntil && quote.validUntil < todayInput && !["accepted", "invoiced", "rejected"].includes(quote.status));
+  const selectedSupplier = suppliers.find((supplier) => String(supplier.id) === String(supplierInvoiceSupplierId));
+  const openSupplierInvoices = supplierInvoices.filter((invoice) => !["paid", "prepared", "booked", "cancelled"].includes(invoice.status));
+  const overdueSupplierInvoices = openSupplierInvoices.filter((invoice) => invoice.dueDate && invoice.dueDate < todayInput);
+  const supplierInvoicesToBook = supplierInvoices.filter((invoice) => ["paid", "prepared"].includes(invoice.status));
+  const bookedSupplierInvoices = supplierInvoices.filter((invoice) => invoice.status === "booked");
+  const supplierPayablesTotal = openSupplierInvoices.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0);
+  const supplierOverdueTotal = overdueSupplierInvoices.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0);
+  const supplierVatTotal = supplierInvoices.reduce((sum, invoice) => sum + (invoice.vatAmount || 0), 0);
+  const supplierExpenseTotal = supplierInvoices.reduce((sum, invoice) => sum + (invoice.netAmount || supplierInvoiceNetAmount(invoice)), 0);
   const reminderPreviewInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0) || demoInvoiceForReminderPreview(settings);
   const sortedJournalEntries = [...journalEntries].sort((first, second) => {
     return new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0);
@@ -11325,6 +11549,17 @@ function App() {
         setExpenseSearch("");
       }
     },
+    overdueSupplierInvoices.length > 0 && {
+      key: "overdue-supplier-invoices",
+      severity: "warning",
+      title: language === "sv" ? "Forfallna leverantorsfakturor" : "Overdue supplier invoices",
+      detail: language === "sv"
+        ? "Det finns inkop som borde betalas eller markeras som hanterade."
+        : "There are purchases that should be paid or marked as handled.",
+      meta: `${supplierOverdueTotal} SEK`,
+      actionLabel: language === "sv" ? "Oppna leverantorer" : "Open suppliers",
+      action: () => setActiveView("suppliers")
+    },
     totalOutstanding > 0 && overdueInvoices.length === 0 && {
       key: "open-receivables",
       severity: "info",
@@ -11487,6 +11722,23 @@ function App() {
         setActiveView("payments");
         setBankImportFilter(bankImportNeedsReviewCount > 0 ? "review" : "ready");
       }
+    },
+    {
+      key: "supplier-payables",
+      tone: overdueSupplierInvoices.length > 0 ? "danger" : supplierPayablesTotal > 0 ? "warning" : "good",
+      title: language === "sv" ? "Leverantorer och inkop" : "Suppliers and purchases",
+      statusLabel: overdueSupplierInvoices.length > 0
+        ? (language === "sv" ? "Forfallet" : "Overdue")
+        : supplierPayablesTotal > 0
+          ? (language === "sv" ? "Att betala" : "To pay")
+          : (language === "sv" ? "Klart" : "Clear"),
+      amountLabel: `${supplierPayablesTotal} SEK`,
+      detail: `${openSupplierInvoices.length} ${language === "sv" ? "oppna inkop" : "open purchases"}, ${supplierInvoicesToBook.length} ${language === "sv" ? "redo att bokfora" : "ready to book"}`,
+      recommendation: overdueSupplierInvoices.length > 0
+        ? (language === "sv" ? "Betala eller stang forfallna leverantorsfakturor." : "Pay or close overdue supplier invoices.")
+        : (language === "sv" ? "Bokfor betalda leverantorsfakturor som kostnader." : "Book paid supplier invoices as expenses."),
+      actionLabel: language === "sv" ? "Oppna leverantorer" : "Open suppliers",
+      action: () => setActiveView("suppliers")
     },
     {
       key: "stripe",
@@ -11671,6 +11923,7 @@ function App() {
     if (activeView === "customers") return t.customers;
     if (activeView === "invoices") return t.invoices;
     if (activeView === "quotes") return t.quotes;
+    if (activeView === "suppliers") return t.suppliers;
     if (activeView === "contracts") return t.contracts;
     if (activeView === "services") return t.services;
     if (activeView === "activities") return t.activities;
@@ -11744,6 +11997,7 @@ function App() {
           {navButton("customers", t.customers)}
           {navButton("invoices", t.invoices)}
           {navButton("quotes", t.quotes)}
+          {navButton("suppliers", t.suppliers)}
           {navButton("contracts", t.contracts)}
           {navButton("services", t.services)}
           {navButton("activities", t.activities)}
@@ -12972,6 +13226,180 @@ function App() {
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {activeView === "suppliers" && (
+          <section className="orders-section supplier-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.suppliers}</h2>
+                <p className="muted-line">
+                  {language === "sv"
+                    ? "Spara leverantorer, bevaka inkopsfakturor och forbered kostnadsbokforing nar fakturan ar betald."
+                    : "Save suppliers, monitor purchase invoices and prepare expense bookkeeping when the invoice is paid."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadSuppliersCsv} disabled={suppliers.length === 0 && supplierInvoices.length === 0}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="supplier-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Leverantorer" : "Suppliers"}</span>
+                <strong>{suppliers.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Obetalda inkop" : "Unpaid purchases"}</span>
+                <strong>{openSupplierInvoices.length}</strong>
+              </article>
+              <article className={overdueSupplierInvoices.length > 0 ? "warning-summary" : ""}>
+                <span>{language === "sv" ? "Forfallna" : "Overdue"}</span>
+                <strong>{supplierOverdueTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Att betala" : "To pay"}</span>
+                <strong>{supplierPayablesTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Ingaende moms" : "Input VAT"}</span>
+                <strong>{supplierVatTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Redo att bokfora" : "Ready to book"}</span>
+                <strong>{supplierInvoicesToBook.length}</strong>
+              </article>
+            </div>
+
+            <div className="supplier-workspace">
+              <form className="form supplier-form" onSubmit={handleCreateSupplier}>
+                <h3>{language === "sv" ? "Ny leverantor" : "New supplier"}</h3>
+                <label>
+                  {language === "sv" ? "Namn" : "Name"}
+                  <input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} placeholder="Adobe, Fortnox, SJ..." />
+                </label>
+                <label>
+                  {t.email}
+                  <input type="email" value={supplierEmail} onChange={(event) => setSupplierEmail(event.target.value)} placeholder="faktura@example.com" />
+                </label>
+                <label>
+                  {language === "sv" ? "Org/personnummer" : "Org/personal number"}
+                  <input value={supplierOrgNumber} onChange={(event) => setSupplierOrgNumber(event.target.value)} placeholder="556000-0000" />
+                </label>
+                <label>
+                  {t.phone}
+                  <input value={supplierPhone} onChange={(event) => setSupplierPhone(event.target.value)} placeholder="070..." />
+                </label>
+                <label className="supplier-wide-field">
+                  {language === "sv" ? "Betalinfo" : "Payment info"}
+                  <input value={supplierPaymentInfo} onChange={(event) => setSupplierPaymentInfo(event.target.value)} placeholder={language === "sv" ? "Bankgiro, OCR, IBAN eller notering" : "Bankgiro, OCR, IBAN or note"} />
+                </label>
+                <button type="submit">{language === "sv" ? "Spara leverantor" : "Save supplier"}</button>
+              </form>
+
+              <form className="form supplier-form" onSubmit={handleCreateSupplierInvoice}>
+                <h3>{language === "sv" ? "Ny leverantorsfaktura" : "New supplier invoice"}</h3>
+                <label>
+                  {language === "sv" ? "Leverantor" : "Supplier"}
+                  <select value={supplierInvoiceSupplierId} onChange={(event) => setSupplierInvoiceSupplierId(event.target.value)}>
+                    <option value="">{language === "sv" ? "Valj leverantor" : "Choose supplier"}</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t.date}
+                  <input type="date" value={supplierInvoiceDate} onChange={(event) => setSupplierInvoiceDate(event.target.value)} />
+                </label>
+                <label>
+                  {t.dueDate}
+                  <input type="date" value={supplierInvoiceDueDate} onChange={(event) => setSupplierInvoiceDueDate(event.target.value)} />
+                </label>
+                <label>
+                  {t.description}
+                  <input value={supplierInvoiceDescription} onChange={(event) => setSupplierInvoiceDescription(event.target.value)} placeholder={language === "sv" ? "Programvara, resa, inkop..." : "Software, travel, purchase..."} />
+                </label>
+                <label>
+                  {language === "sv" ? "Referens/OCR" : "Reference/OCR"}
+                  <input value={supplierInvoiceReference} onChange={(event) => setSupplierInvoiceReference(event.target.value)} placeholder="OCR, fakturanr..." />
+                </label>
+                <label>
+                  {t.total}
+                  <input type="number" value={supplierInvoiceTotalAmount} onChange={(event) => setSupplierInvoiceTotalAmount(event.target.value)} placeholder="1250" />
+                </label>
+                <label>
+                  {t.vat}
+                  <input type="number" value={supplierInvoiceVatAmount} onChange={(event) => setSupplierInvoiceVatAmount(event.target.value)} placeholder="250" />
+                </label>
+                <label>
+                  {t.category}
+                  <select value={supplierInvoiceCategory} onChange={(event) => setSupplierInvoiceCategory(event.target.value)}>
+                    <option value="5420">5420 Programvaror</option>
+                    <option value="5410">5410 Forbrukningsinventarier</option>
+                    <option value="5800">5800 Resekostnader</option>
+                    <option value="6570">6570 Bankkostnader</option>
+                    <option value="4010">4010 Inkop</option>
+                  </select>
+                </label>
+                {selectedSupplier?.paymentInfo && (
+                  <p className="supplier-payment-hint">
+                    {language === "sv" ? "Betalinfo" : "Payment info"}: {selectedSupplier.paymentInfo}
+                  </p>
+                )}
+                <button type="submit" disabled={suppliers.length === 0}>{language === "sv" ? "Spara inkopsfaktura" : "Save purchase invoice"}</button>
+              </form>
+            </div>
+
+            {supplierMessage && <p className="message success">{supplierMessage}</p>}
+
+            <div className="supplier-list">
+              {supplierInvoices.length === 0 ? (
+                <p className="empty-state">{language === "sv" ? "Inga leverantorsfakturor annu." : "No supplier invoices yet."}</p>
+              ) : supplierInvoices.map((invoice) => {
+                const isOverdue = invoice.dueDate && invoice.dueDate < todayInput && !["paid", "booked", "cancelled"].includes(invoice.status);
+                return (
+                  <article className={`supplier-invoice-card ${isOverdue ? "overdue" : invoice.status}`} key={invoice.id}>
+                    <div>
+                      <span className="supplier-status">{supplierInvoiceStatusLabel(invoice.status)}</span>
+                      <h3>{invoice.supplierName}</h3>
+                      <p>{invoice.description}</p>
+                      <small>
+                        {language === "sv" ? "Fakturadatum" : "Invoice date"}: {formatDateOnly(invoice.invoiceDate)}
+                        {" | "}
+                        {t.dueDate}: {formatDateOnly(invoice.dueDate)}
+                      </small>
+                      <small>{language === "sv" ? "Referens" : "Reference"}: {invoice.reference || "-"}</small>
+                    </div>
+                    <div className="supplier-amount-box">
+                      <span>{expenseCategoryLabel(invoice.category)}</span>
+                      <strong>{invoice.totalAmount} SEK</strong>
+                      <small>{t.net}: {invoice.netAmount} SEK | {t.vat}: {invoice.vatAmount} SEK</small>
+                    </div>
+                    <div className="supplier-actions">
+                      <button type="button" className="secondary-button" onClick={() => updateSupplierInvoiceStatus(invoice.id, "paid")}>
+                        {language === "sv" ? "Markera betald" : "Mark paid"}
+                      </button>
+                      <button type="button" className="primary-small-button" onClick={() => prepareExpenseFromSupplierInvoice(invoice)}>
+                        {language === "sv" ? "Fyll kostnad" : "Fill expense"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateSupplierInvoiceStatus(invoice.id, "booked")}>
+                        {language === "sv" ? "Markera bokford" : "Mark booked"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateSupplierInvoiceStatus(invoice.id, "cancelled")}>
+                        {language === "sv" ? "Makulera" : "Cancel"}
+                      </button>
+                      <button type="button" className="danger-button soft" onClick={() => deleteSupplierInvoice(invoice.id)}>
+                        {language === "sv" ? "Ta bort" : "Delete"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </section>
         )}
 

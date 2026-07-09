@@ -591,6 +591,143 @@ textarea {
   min-height: 40px;
 }
 
+.supplier-section {
+  display: grid;
+  gap: 18px;
+}
+
+.supplier-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.supplier-summary-grid article,
+.supplier-invoice-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.supplier-summary-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.supplier-summary-grid span,
+.supplier-invoice-card p,
+.supplier-invoice-card small,
+.supplier-amount-box span,
+.supplier-amount-box small,
+.supplier-payment-hint {
+  color: #51606d;
+}
+
+.supplier-summary-grid strong {
+  font-size: 24px;
+}
+
+.supplier-workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.supplier-form {
+  margin: 0;
+}
+
+.supplier-form h3 {
+  margin: 0;
+}
+
+.supplier-wide-field,
+.supplier-payment-hint {
+  grid-column: 1 / -1;
+}
+
+.supplier-payment-hint {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #eef4ff;
+  font-weight: 800;
+}
+
+.supplier-list {
+  display: grid;
+  gap: 12px;
+}
+
+.supplier-invoice-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 260px) minmax(220px, 320px);
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+  border-left: 6px solid #8aa0b5;
+}
+
+.supplier-invoice-card h3,
+.supplier-invoice-card p {
+  margin: 6px 0;
+}
+
+.supplier-invoice-card.overdue {
+  border-left-color: #d64045;
+}
+
+.supplier-invoice-card.paid {
+  border-left-color: #155ee8;
+}
+
+.supplier-invoice-card.prepared {
+  border-left-color: #f2a900;
+}
+
+.supplier-invoice-card.booked {
+  border-left-color: #14966b;
+}
+
+.supplier-invoice-card.cancelled {
+  border-left-color: #8aa0b5;
+  opacity: 0.78;
+}
+
+.supplier-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff3c4;
+  color: #705000;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.supplier-amount-box {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+}
+
+.supplier-amount-box strong {
+  font-size: 26px;
+}
+
+.supplier-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.supplier-actions button {
+  min-height: 40px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -6325,6 +6462,7 @@ button:focus-visible,
   .customer-stats,
   .invoice-summary-cards,
   .quote-summary-grid,
+  .supplier-summary-grid,
   .business-insight-grid,
   .expense-summary-grid,
   .payroll-summary-grid,
@@ -6406,6 +6544,9 @@ button:focus-visible,
   .quote-summary-grid,
   .quote-workspace,
   .quote-card,
+  .supplier-summary-grid,
+  .supplier-workspace,
+  .supplier-invoice-card,
   .business-insight-hero,
   .business-insight-grid,
   .customer-360-hero,
@@ -6512,15 +6653,19 @@ button:focus-visible,
   }
 
   .quote-note-field,
-  .quote-preview {
+  .quote-preview,
+  .supplier-wide-field,
+  .supplier-payment-hint {
     grid-column: auto;
   }
 
-  .quote-amount-box {
+  .quote-amount-box,
+  .supplier-amount-box {
     text-align: left;
   }
 
-  .quote-actions {
+  .quote-actions,
+  .supplier-actions {
     grid-template-columns: 1fr;
   }
 
