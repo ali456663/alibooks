@@ -1253,6 +1253,22 @@ function App() {
   });
   const [monthCloseSelectedMonth, setMonthCloseSelectedMonth] = useState(() => localStorage.getItem("alibooks-month-close-selected-month") || new Date().toISOString().slice(0, 7));
   const [annualCloseYear, setAnnualCloseYear] = useState(() => localStorage.getItem("alibooks-annual-close-year") || new Date().toISOString().slice(0, 4));
+  const [periodizationItems, setPeriodizationItems] = useState(() => {
+    try {
+      const savedItems = JSON.parse(localStorage.getItem("alibooks-periodization-items") || "[]");
+      return Array.isArray(savedItems) ? savedItems : [];
+    } catch {
+      return [];
+    }
+  });
+  const [periodizationType, setPeriodizationType] = useState("prepaidExpense");
+  const [periodizationDescription, setPeriodizationDescription] = useState("");
+  const [periodizationAmount, setPeriodizationAmount] = useState("");
+  const [periodizationAccount, setPeriodizationAccount] = useState("5420");
+  const [periodizationFromDate, setPeriodizationFromDate] = useState(() => `${new Date().toISOString().slice(0, 4)}-01-01`);
+  const [periodizationToDate, setPeriodizationToDate] = useState(() => `${new Date().toISOString().slice(0, 4)}-12-31`);
+  const [periodizationNote, setPeriodizationNote] = useState("");
+  const [periodizationMessage, setPeriodizationMessage] = useState("");
   const [bookkeepingFilter, setBookkeepingFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-bookkeeping-filter");
     return bookkeepingFilterKeys.includes(savedFilter) ? savedFilter : "all";
@@ -1449,6 +1465,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("alibooks-annual-close-year", annualCloseYear);
   }, [annualCloseYear]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-periodization-items", JSON.stringify(periodizationItems));
+  }, [periodizationItems]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bookkeeping-filter", bookkeepingFilter);
@@ -4581,6 +4601,237 @@ function App() {
     setError("");
   }
 
+  function periodizationTypeLabel(type) {
+    if (type === "accruedExpense") return language === "sv" ? "Upplupen kostnad" : "Accrued expense";
+    if (type === "accruedRevenue") return language === "sv" ? "Upplupen intakt" : "Accrued revenue";
+    if (type === "deferredRevenue") return language === "sv" ? "Forutbetald intakt" : "Deferred revenue";
+    return language === "sv" ? "Forutbetald kostnad" : "Prepaid expense";
+  }
+
+  function periodizationSuggestion(type, baseAccount) {
+    if (type === "accruedExpense") {
+      return {
+        debitAccount: baseAccount || "6570",
+        creditAccount: "2990",
+        effect: language === "sv" ? "Kostnad tas upp nu, skuld bokas upp." : "Expense is recognized now, liability is booked.",
+        direction: "expense"
+      };
+    }
+
+    if (type === "accruedRevenue") {
+      return {
+        debitAccount: "1790",
+        creditAccount: baseAccount || "3041",
+        effect: language === "sv" ? "Intakt tas upp nu, fordran bokas upp." : "Revenue is recognized now, receivable is booked.",
+        direction: "revenue"
+      };
+    }
+
+    if (type === "deferredRevenue") {
+      return {
+        debitAccount: baseAccount || "3041",
+        creditAccount: "2990",
+        effect: language === "sv" ? "Intakt flyttas fram, skuld bokas upp." : "Revenue is deferred, liability is booked.",
+        direction: "revenue"
+      };
+    }
+
+    return {
+      debitAccount: "1790",
+      creditAccount: baseAccount || "5420",
+      effect: language === "sv" ? "Kostnad flyttas fram, tillgang bokas upp." : "Expense is deferred, asset is booked.",
+      direction: "expense"
+    };
+  }
+
+  function periodizationYearMatches(item) {
+    const from = String(item.fromDate || "").slice(0, 10);
+    const to = String(item.toDate || "").slice(0, 10);
+    return (!from || from <= annualCloseRange.to) && (!to || to >= annualCloseRange.from);
+  }
+
+  function addPeriodizationItem(event) {
+    event.preventDefault();
+    const amount = Math.round(Number(periodizationAmount || 0));
+
+    if (!periodizationDescription.trim()) {
+      setPeriodizationMessage(language === "sv" ? "Skriv en beskrivning for justeringen." : "Enter a description for the adjustment.");
+      return;
+    }
+
+    if (amount <= 0) {
+      setPeriodizationMessage(language === "sv" ? "Beloppet maste vara storre an 0." : "Amount must be greater than 0.");
+      return;
+    }
+
+    const suggestion = periodizationSuggestion(periodizationType, periodizationAccount);
+    const item = {
+      id: `periodization-${Date.now()}`,
+      type: periodizationType,
+      description: periodizationDescription.trim(),
+      amount,
+      baseAccount: periodizationAccount || (periodizationType.includes("Revenue") ? "3041" : "5420"),
+      fromDate: periodizationFromDate,
+      toDate: periodizationToDate,
+      note: periodizationNote.trim(),
+      debitAccount: suggestion.debitAccount,
+      creditAccount: suggestion.creditAccount,
+      status: "draft",
+      createdAt: new Date().toISOString()
+    };
+
+    setPeriodizationItems((current) => [item, ...current]);
+    setPeriodizationDescription("");
+    setPeriodizationAmount("");
+    setPeriodizationNote("");
+    setPeriodizationMessage(language === "sv" ? "Periodisering lades till." : "Periodization added.");
+  }
+
+  function updatePeriodizationStatus(itemId, status) {
+    setPeriodizationItems((current) => current.map((item) => (
+      item.id === itemId ? { ...item, status } : item
+    )));
+  }
+
+  function removePeriodizationItem(itemId) {
+    setPeriodizationItems((current) => current.filter((item) => item.id !== itemId));
+    setPeriodizationMessage(language === "sv" ? "Periodisering togs bort." : "Periodization removed.");
+  }
+
+  function preparePeriodizationVoucher(item) {
+    const suggestion = periodizationSuggestion(item.type, item.baseAccount);
+    setActiveView("bookkeeping");
+    setManualVoucherDate(annualCloseRange.to);
+    setManualDescription(`${periodizationTypeLabel(item.type)} - ${item.description}`);
+    setManualDebitAccount(item.debitAccount || suggestion.debitAccount);
+    setManualCreditAccount(item.creditAccount || suggestion.creditAccount);
+    setManualAmount(String(item.amount || 0));
+    updatePeriodizationStatus(item.id, "prepared");
+    setError("");
+  }
+
+  function downloadPeriodizationCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks bokslutsjusteringar"],
+      ["Ar", annualCloseYear],
+      ["Status", periodizationStatusText],
+      [],
+      ["Typ", "Beskrivning", "Belopp", "Debet", "Kredit", "Period fran", "Period till", "Status", "Notering"]
+    ];
+
+    annualPeriodizationItems.forEach((item) => {
+      rows.push([
+        periodizationTypeLabel(item.type),
+        item.description,
+        item.amount,
+        item.debitAccount,
+        item.creditAccount,
+        item.fromDate,
+        item.toDate,
+        item.status,
+        item.note || ""
+      ]);
+    });
+
+    downloadLocalCsv(`bokslutsjusteringar-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openPeriodizationReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade periodiseringsrapporten." : "The browser blocked the periodization report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Bokslutsjusteringar och periodiseringar" : "Closing adjustments and periodizations";
+    const rowsHtml = annualPeriodizationItems.map((item) => `<tr>
+      <td>${escapeHtml(periodizationTypeLabel(item.type))}</td>
+      <td>${escapeHtml(item.description)}</td>
+      <td>${item.amount} SEK</td>
+      <td>${escapeHtml(item.debitAccount || "-")}</td>
+      <td>${escapeHtml(item.creditAccount || "-")}</td>
+      <td>${escapeHtml(item.fromDate || "-")} - ${escapeHtml(item.toDate || "-")}</td>
+      <td>${escapeHtml(item.status || "draft")}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1120px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(settings?.companyName || "Muscle&Focus")}</p>
+        <p class="muted">${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Status" : "Status"}:</strong> ${escapeHtml(periodizationStatusText)}</p>
+        <p><strong>${language === "sv" ? "Skapad" : "Created"}:</strong> ${escapeHtml(todayInput)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Justeringar" : "Adjustments"}</span><strong>${annualPeriodizationItems.length}</strong></div>
+      <div><span>${language === "sv" ? "Belopp" : "Amount"}</span><strong>${periodizationTotalAmount} SEK</strong></div>
+      <div><span>${language === "sv" ? "Utkast" : "Drafts"}</span><strong>${periodizationDraftCount}</strong></div>
+      <div><span>${language === "sv" ? "Forberedda" : "Prepared"}</span><strong>${periodizationPreparedCount}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Forslag" : "Suggestions"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Typ" : "Type"}</th>
+          <th>${language === "sv" ? "Beskrivning" : "Description"}</th>
+          <th>${language === "sv" ? "Belopp" : "Amount"}</th>
+          <th>Debet</th>
+          <th>Kredit</th>
+          <th>${language === "sv" ? "Period" : "Period"}</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml || `<tr><td colspan="7">${language === "sv" ? "Inga periodiseringar for valt ar." : "No periodizations for selected year."}</td></tr>`}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Detta ar ett arbetsunderlag. Kontrollera alltid periodiseringar och konton med redovisningskonsult innan bokslut skickas."
+      : "This is a working basis. Always verify periodizations and accounts with an accountant before final closing."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadAnnualCloseCsv() {
     setError("");
     const rows = [
@@ -7323,6 +7574,7 @@ function App() {
         payrollTotalCost: payrollDraftTotals.totalCost,
         payrollPaymentStatuses: Object.keys(payrollPaymentStatuses).length,
         payrollTaxSettlements: Object.keys(payrollTaxSettlements).length,
+        periodizations: periodizationItems.length,
         auditEvents: auditTrailRows.length,
         dataQualityIssues: dataQualityIssues.length,
         dataQualityCritical: dataQualityCriticalCount,
@@ -7359,6 +7611,7 @@ function App() {
           total: bucket.items.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0)
         })),
         closeChecklist: closeChecklistItems.map(({ action, ...item }) => item),
+        periodizations: periodizationItems,
         archivePackage: sanitizedArchiveItems,
         auditTrail: sanitizedAuditTrail,
         dataQuality: dataQualityIssues.map(({ action, ...issue }) => issue)
@@ -9118,6 +9371,17 @@ function App() {
   const annualCloseResultAccount = settings?.companyType === "LIMITED_COMPANY" ? "2099" : "2019";
   const annualCloseHasResultVoucher = annualCloseEntries.some((entry) => String(entry.accountNumber || "") === annualCloseResultAccount);
   const annualCloseNeedsResultVoucher = annualCloseResult !== 0 && !annualCloseHasResultVoucher;
+  const annualPeriodizationItems = periodizationItems.filter(periodizationYearMatches);
+  const periodizationTotalAmount = annualPeriodizationItems.reduce((sum, item) => sum + Math.round(Number(item.amount || 0)), 0);
+  const periodizationDraftCount = annualPeriodizationItems.filter((item) => !item.status || item.status === "draft").length;
+  const periodizationPreparedCount = annualPeriodizationItems.filter((item) => item.status === "prepared").length;
+  const periodizationBookedCount = annualPeriodizationItems.filter((item) => item.status === "booked").length;
+  const periodizationStatusText = annualPeriodizationItems.length === 0
+    ? (language === "sv" ? "Inga bokslutsjusteringar registrerade" : "No closing adjustments registered")
+    : periodizationDraftCount === 0
+      ? (language === "sv" ? "Alla justeringar ar forberedda eller klara" : "All adjustments are prepared or done")
+      : `${periodizationDraftCount} ${language === "sv" ? "justeringar behover forberedas" : "adjustments need preparation"}`;
+  const activePeriodizationSuggestion = periodizationSuggestion(periodizationType, periodizationAccount);
   const annualCloseChecklist = [
     {
       key: "vouchers",
@@ -9181,6 +9445,15 @@ function App() {
         setActiveView("payroll");
         setPayrollReportYear(annualCloseYear);
       }
+    },
+    {
+      key: "periodizations",
+      status: annualPeriodizationItems.length === 0 || periodizationDraftCount === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Bokslutsjusteringar" : "Closing adjustments",
+      detail: annualPeriodizationItems.length === 0
+        ? (language === "sv" ? "Inga periodiseringar registrerade for aret" : "No periodizations registered for the year")
+        : `${periodizationPreparedCount + periodizationBookedCount}/${annualPeriodizationItems.length} ${language === "sv" ? "forberedda eller klara" : "prepared or done"}`,
+      action: () => setActiveView("reports")
     },
     {
       key: "result",
@@ -16230,6 +16503,173 @@ function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Bokslutsjusteringar" : "Closing adjustments"}</h2>
+            <div className="button-row">
+              <span className={periodizationDraftCount === 0 ? "status success-status" : "status warning-status"}>
+                {annualPeriodizationItems.length} {language === "sv" ? "justeringar" : "adjustments"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadPeriodizationCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openPeriodizationReport}>
+                {language === "sv" ? "Periodiseringsrapport" : "Periodization report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="periodization-panel">
+            <div className="periodization-hero">
+              <div>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{periodizationStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Lagg upp forutbetalda kostnader, upplupna kostnader, upplupna intakter eller forutbetalda intakter och skapa ett bokslutsunderlag innan du bokfor."
+                    : "Add prepaid expenses, accrued expenses, accrued revenue or deferred revenue and create a closing basis before booking."}
+                </p>
+              </div>
+              <div>
+                <span>{language === "sv" ? "Forslagen verifikation" : "Suggested voucher"}</span>
+                <strong>{activePeriodizationSuggestion.debitAccount} / {activePeriodizationSuggestion.creditAccount}</strong>
+                <p>{activePeriodizationSuggestion.effect}</p>
+              </div>
+            </div>
+
+            <form className="periodization-form" onSubmit={addPeriodizationItem}>
+              <label>
+                {language === "sv" ? "Typ" : "Type"}
+                <select value={periodizationType} onChange={(event) => setPeriodizationType(event.target.value)}>
+                  <option value="prepaidExpense">{language === "sv" ? "Forutbetald kostnad" : "Prepaid expense"}</option>
+                  <option value="accruedExpense">{language === "sv" ? "Upplupen kostnad" : "Accrued expense"}</option>
+                  <option value="accruedRevenue">{language === "sv" ? "Upplupen intakt" : "Accrued revenue"}</option>
+                  <option value="deferredRevenue">{language === "sv" ? "Forutbetald intakt" : "Deferred revenue"}</option>
+                </select>
+              </label>
+              <label>
+                {language === "sv" ? "Beskrivning" : "Description"}
+                <input
+                  value={periodizationDescription}
+                  onChange={(event) => setPeriodizationDescription(event.target.value)}
+                  placeholder={language === "sv" ? "Ex. programvara som avser nasta ar" : "E.g. software covering next year"}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Belopp" : "Amount"}
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={periodizationAmount}
+                  onChange={(event) => setPeriodizationAmount(event.target.value)}
+                  placeholder="1000"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Kostnads-/intaktskonto" : "Expense/revenue account"}
+                <select value={periodizationAccount} onChange={(event) => setPeriodizationAccount(event.target.value)}>
+                  <option value="5420">5420 Programvaror</option>
+                  <option value="5410">5410 Forbrukningsinventarier</option>
+                  <option value="6570">6570 Bankkostnader</option>
+                  <option value="5800">5800 Resekostnader</option>
+                  <option value="4010">4010 Inkop</option>
+                  <option value="3041">3041 Forsaljning tjanster 25 procent</option>
+                </select>
+              </label>
+              <label>
+                {language === "sv" ? "Period fran" : "Period from"}
+                <input type="date" value={periodizationFromDate} onChange={(event) => setPeriodizationFromDate(event.target.value)} />
+              </label>
+              <label>
+                {language === "sv" ? "Period till" : "Period to"}
+                <input type="date" value={periodizationToDate} onChange={(event) => setPeriodizationToDate(event.target.value)} />
+              </label>
+              <label className="periodization-note-field">
+                {language === "sv" ? "Notering" : "Note"}
+                <input
+                  value={periodizationNote}
+                  onChange={(event) => setPeriodizationNote(event.target.value)}
+                  placeholder={language === "sv" ? "Underlag, avtal, fakturanummer..." : "Receipt, contract, invoice number..."}
+                />
+              </label>
+              <button type="submit" className="primary-small-button">
+                {language === "sv" ? "Lagg till justering" : "Add adjustment"}
+              </button>
+            </form>
+
+            {periodizationMessage && <p className="message success">{periodizationMessage}</p>}
+
+            <div className="expense-summary-grid periodization-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Justeringar" : "Adjustments"}</span>
+                <strong>{annualPeriodizationItems.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Totalt belopp" : "Total amount"}</span>
+                <strong>{periodizationTotalAmount} SEK</strong>
+              </article>
+              <article className={periodizationDraftCount > 0 ? "unbalanced-summary" : "balanced-summary"}>
+                <span>{language === "sv" ? "Utkast" : "Drafts"}</span>
+                <strong>{periodizationDraftCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Forberedda" : "Prepared"}</span>
+                <strong>{periodizationPreparedCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Klara" : "Done"}</span>
+                <strong>{periodizationBookedCount}</strong>
+              </article>
+            </div>
+
+            {annualPeriodizationItems.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Inga periodiseringar for valt ar annu."
+                  : "No periodizations for selected year yet."}
+              </p>
+            ) : (
+              <div className="periodization-list">
+                {annualPeriodizationItems.map((item) => {
+                  const suggestion = periodizationSuggestion(item.type, item.baseAccount);
+
+                  return (
+                    <article className={`periodization-row ${item.status || "draft"}`} key={item.id}>
+                      <div>
+                        <span>{periodizationTypeLabel(item.type)}</span>
+                        <strong>{item.description}</strong>
+                        <small>{item.note || suggestion.effect}</small>
+                      </div>
+                      <div>
+                        <strong>{item.amount} SEK</strong>
+                        <small>{item.fromDate || "-"} - {item.toDate || "-"}</small>
+                      </div>
+                      <div>
+                        <strong>{item.debitAccount || suggestion.debitAccount} / {item.creditAccount || suggestion.creditAccount}</strong>
+                        <small>{language === "sv" ? "Debet / Kredit" : "Debit / Credit"}</small>
+                      </div>
+                      <div>
+                        <strong>{item.status || "draft"}</strong>
+                        <small>{formatDateTime(item.createdAt)}</small>
+                      </div>
+                      <div className="periodization-actions">
+                        <button type="button" className="secondary-button" onClick={() => preparePeriodizationVoucher(item)}>
+                          {language === "sv" ? "Forbered verifikat" : "Prepare voucher"}
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => updatePeriodizationStatus(item.id, "booked")}>
+                          {language === "sv" ? "Markera klar" : "Mark done"}
+                        </button>
+                        <button type="button" className="danger-button soft" onClick={() => removePeriodizationItem(item.id)}>
+                          {language === "sv" ? "Ta bort" : "Delete"}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="section-heading report-subheading">

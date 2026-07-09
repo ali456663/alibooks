@@ -29,6 +29,10 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("7010", "Lon till anstallda", "BOTH");
     upsert("7210", "Lon till tjansteman", "BOTH");
     upsert("7510", "Arbetsgivaravgifter", "BOTH");
+    upsert("1710", "Forutbetalda hyreskostnader", "BOTH");
+    upsert("1790", "Ovriga forutbetalda kostnader och upplupna intakter", "BOTH");
+    upsert("2990", "Ovriga upplupna kostnader och forutbetalda intakter", "BOTH");
+    upsert("8999", "Arets resultat", "BOTH");
 
     upsert("2010", "Eget kapital", "SOLE_TRADER");
     upsert("2012", "Avrakning skatter och avgifter", "SOLE_TRADER");
