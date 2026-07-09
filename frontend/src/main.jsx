@@ -21,6 +21,7 @@ const copy = {
     createNew: "Create new",
     customers: "Customers",
     invoices: "Invoices",
+    quotes: "Quotes",
     contracts: "Contracts",
     services: "Services",
     activities: "Events",
@@ -154,6 +155,7 @@ const copy = {
     createNew: "Skapa ny",
     customers: "Kunder",
     invoices: "Fakturor",
+    quotes: "Offerter",
     contracts: "Avtal",
     services: "Tjanster",
     activities: "Handelser",
@@ -964,6 +966,7 @@ const viewKeys = [
   "overview",
   "customers",
   "invoices",
+  "quotes",
   "contracts",
   "services",
   "activities",
@@ -1123,6 +1126,20 @@ function App() {
     const savedQuantity = localStorage.getItem("alibooks-invoice-quantity");
     return Number(savedQuantity) > 0 ? savedQuantity : "1";
   });
+  const [quotes, setQuotes] = useState(() => {
+    try {
+      const savedQuotes = JSON.parse(localStorage.getItem("alibooks-quotes") || "[]");
+      return Array.isArray(savedQuotes) ? savedQuotes : [];
+    } catch {
+      return [];
+    }
+  });
+  const [quoteCustomerId, setQuoteCustomerId] = useState(() => localStorage.getItem("alibooks-quote-customer-id") || "");
+  const [quoteServiceId, setQuoteServiceId] = useState(() => localStorage.getItem("alibooks-quote-service-id") || "");
+  const [quoteQuantity, setQuoteQuantity] = useState(() => localStorage.getItem("alibooks-quote-quantity") || "1");
+  const [quoteValidUntil, setQuoteValidUntil] = useState(() => localStorage.getItem("alibooks-quote-valid-until") || addDaysInputString(dateInputString(new Date()), 30));
+  const [quoteNote, setQuoteNote] = useState(() => localStorage.getItem("alibooks-quote-note") || "");
+  const [quoteMessage, setQuoteMessage] = useState("");
   const [contracts, setContracts] = useState([]);
   const [contractCustomerId, setContractCustomerId] = useState("");
   const [contractServiceId, setContractServiceId] = useState("");
@@ -1514,6 +1531,15 @@ function App() {
       localStorage.setItem("alibooks-invoice-quantity", invoiceQuantity);
     }
   }, [invoiceQuantity]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-quotes", JSON.stringify(quotes));
+    localStorage.setItem("alibooks-quote-customer-id", quoteCustomerId);
+    localStorage.setItem("alibooks-quote-service-id", quoteServiceId);
+    localStorage.setItem("alibooks-quote-quantity", quoteQuantity);
+    localStorage.setItem("alibooks-quote-valid-until", quoteValidUntil);
+    localStorage.setItem("alibooks-quote-note", quoteNote);
+  }, [quotes, quoteCustomerId, quoteServiceId, quoteQuantity, quoteValidUntil, quoteNote]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-expense-category", expenseCategory);
@@ -1935,6 +1961,226 @@ function App() {
       serviceId: selectedServiceId,
       quantity: invoiceQuantity
     });
+  }
+
+  function quoteStatusLabel(status) {
+    if (status === "sent") return language === "sv" ? "Skickad" : "Sent";
+    if (status === "accepted") return language === "sv" ? "Accepterad" : "Accepted";
+    if (status === "rejected") return language === "sv" ? "Avvisad" : "Rejected";
+    if (status === "invoiced") return language === "sv" ? "Fakturerad" : "Invoiced";
+    return language === "sv" ? "Utkast" : "Draft";
+  }
+
+  function quoteNumber(quote) {
+    return quote?.number || `O-${String(quote?.id || "").slice(-6)}`;
+  }
+
+  function handleCreateQuote(event) {
+    event.preventDefault();
+    setError("");
+    setQuoteMessage("");
+
+    const customer = customers.find((item) => String(item.id) === String(quoteCustomerId));
+    const service = services.find((item) => String(item.id) === String(quoteServiceId));
+    const preview = invoicePreviewFor(service, quoteQuantity);
+
+    if (!customer || !service || !preview) {
+      setQuoteMessage(language === "sv" ? "Valj kund, tjanst och antal for offerten." : "Choose customer, service and quantity for the quote.");
+      return;
+    }
+
+    const now = new Date();
+    const nextNumber = quotes.length + 1;
+    const newQuote = {
+      id: `quote-${Date.now()}`,
+      number: `OFF-${now.getFullYear()}-${String(nextNumber).padStart(4, "0")}`,
+      customerId: customer.id,
+      customerName: customer.name,
+      customerEmail: customer.email || "",
+      customerPersonalNumber: customer.personalNumber || "",
+      serviceId: service.id,
+      serviceName: service.name,
+      serviceDescription: service.description || "",
+      quantity: preview.quantity,
+      unitPrice: serviceEffectivePrice(service),
+      ordinaryPrice: preview.ordinaryPrice,
+      discountAmount: preview.discountAmount,
+      discountLabel: preview.discountLabel || "",
+      netAmount: preview.netAmount,
+      vatAmount: preview.vatAmount,
+      totalAmount: preview.totalAmount,
+      validUntil: quoteValidUntil,
+      note: quoteNote.trim(),
+      status: "draft",
+      createdAt: now.toISOString()
+    };
+
+    setQuotes((current) => [newQuote, ...current]);
+    setQuoteMessage(language === "sv" ? "Offerten skapades." : "Quote created.");
+  }
+
+  function updateQuoteStatus(quoteId, status) {
+    setQuotes((current) => current.map((quote) => (
+      quote.id === quoteId
+        ? { ...quote, status, updatedAt: new Date().toISOString() }
+        : quote
+    )));
+  }
+
+  function deleteQuote(quoteId) {
+    setQuotes((current) => current.filter((quote) => quote.id !== quoteId));
+  }
+
+  async function createInvoiceFromQuote(quote) {
+    setQuoteMessage("");
+    const createdInvoice = await createInvoiceRequest({
+      customerId: quote.customerId,
+      serviceId: quote.serviceId,
+      quantity: quote.quantity
+    });
+
+    if (!createdInvoice) return;
+
+    setQuotes((current) => current.map((item) => (
+      item.id === quote.id
+        ? {
+          ...item,
+          status: "invoiced",
+          invoiceId: createdInvoice.id,
+          invoicedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        : item
+    )));
+    setInvoiceSearch(invoiceNumber(createdInvoice));
+    setActiveView("invoices");
+    setQuoteMessage(language === "sv" ? "Offerten omvandlades till faktura." : "Quote converted to invoice.");
+  }
+
+  function prepareInvoiceFromQuote(quote) {
+    setSelectedCustomerId(String(quote.customerId || ""));
+    setSelectedServiceId(String(quote.serviceId || ""));
+    setInvoiceQuantity(String(quote.quantity || 1));
+    setActiveView("invoices");
+  }
+
+  function downloadQuotesCsv() {
+    const rows = [
+      ["Offerter / Quotes"],
+      ["Antal", quotes.length],
+      [],
+      ["Offertnummer", "Status", "Kund", "E-post", "Tjanst", "Antal", "Exkl moms", "Moms", "Totalt", "Giltig till", "Skapad"]
+    ];
+
+    quotes.forEach((quote) => {
+      rows.push([
+        quoteNumber(quote),
+        quoteStatusLabel(quote.status),
+        quote.customerName,
+        quote.customerEmail,
+        quote.serviceName,
+        quote.quantity,
+        quote.netAmount,
+        quote.vatAmount,
+        quote.totalAmount,
+        quote.validUntil,
+        formatDateOnly(quote.createdAt)
+      ]);
+    });
+
+    downloadLocalCsv("offerter.csv", rows);
+  }
+
+  function openQuoteDocument(quote) {
+    const quoteWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!quoteWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade offertfonstret." : "The browser blocked the quote window.");
+      return;
+    }
+
+    const companyName = settings?.companyName || "AliBooks";
+    const companySubtitle = settings?.companySubtitle || "Muscle&Focus";
+    const companyEmail = settings?.contactEmail || "ali.wafa17943@gmail.com";
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(quoteNumber(quote))}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #111827; background: #f6f8fb; }
+    .page { max-width: 840px; margin: 28px auto; padding: 36px; background: white; border-radius: 14px; box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12); }
+    .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 5px solid #155ee8; padding-bottom: 24px; }
+    h1 { margin: 0; color: #155ee8; font-size: 42px; }
+    h2 { margin: 0 0 8px; }
+    .yellow { color: #f2a900; font-weight: 800; }
+    .muted { color: #526173; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 28px 0; }
+    .box { border: 1px solid #dbe4ef; border-radius: 10px; padding: 18px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+    th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    th { background: #eef4ff; }
+    .totals { max-width: 330px; margin-left: auto; margin-top: 24px; }
+    .totals p { display: flex; justify-content: space-between; margin: 8px 0; }
+    .total { font-size: 22px; font-weight: 900; color: #155ee8; }
+    .note { margin-top: 28px; padding: 16px; background: #fff7d7; border-left: 5px solid #f2a900; }
+    .actions { margin: 22px auto; max-width: 840px; text-align: right; }
+    button { padding: 12px 18px; border: 0; border-radius: 8px; background: #155ee8; color: white; font-weight: 800; cursor: pointer; }
+    @media print { body { background: white; } .page { margin: 0; box-shadow: none; border-radius: 0; } .actions { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  <main class="page">
+    <section class="top">
+      <div>
+        <h1>${language === "sv" ? "Offert" : "Quote"}</h1>
+        <p class="yellow">${escapeHtml(companySubtitle)}</p>
+        <p class="muted">${escapeHtml(companyName)} | ${escapeHtml(companyEmail)}</p>
+      </div>
+      <div>
+        <h2>${escapeHtml(quoteNumber(quote))}</h2>
+        <p>${language === "sv" ? "Datum" : "Date"}: ${escapeHtml(formatDateOnly(quote.createdAt))}</p>
+        <p>${language === "sv" ? "Giltig till" : "Valid until"}: ${escapeHtml(formatDateOnly(quote.validUntil))}</p>
+        <p>${language === "sv" ? "Status" : "Status"}: ${escapeHtml(quoteStatusLabel(quote.status))}</p>
+      </div>
+    </section>
+    <section class="grid">
+      <div class="box">
+        <h2>${language === "sv" ? "Kund" : "Customer"}</h2>
+        <p><strong>${escapeHtml(quote.customerName)}</strong></p>
+        <p>${escapeHtml(quote.customerEmail || "-")}</p>
+        <p>${language === "sv" ? "Personnummer" : "Personal number"}: ${escapeHtml(quote.customerPersonalNumber || "-")}</p>
+      </div>
+      <div class="box">
+        <h2>${language === "sv" ? "Villkor" : "Terms"}</h2>
+        <p>${language === "sv" ? "Priser anges i SEK exklusive och inklusive 25 % moms." : "Prices are shown in SEK excluding and including 25% VAT."}</p>
+        <p>${language === "sv" ? "Offerten ar inte bokford forran den blir faktura." : "The quote is not booked until it becomes an invoice."}</p>
+      </div>
+    </section>
+    <table>
+      <thead><tr><th>${language === "sv" ? "Tjanst" : "Service"}</th><th>${language === "sv" ? "Antal" : "Qty"}</th><th>${language === "sv" ? "Pris" : "Price"}</th><th>${language === "sv" ? "Belopp" : "Amount"}</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>${escapeHtml(quote.serviceName)}</strong><br><span class="muted">${escapeHtml(quote.serviceDescription || "")}</span></td>
+          <td>${escapeHtml(String(quote.quantity))}</td>
+          <td>${quote.unitPrice} SEK</td>
+          <td>${quote.netAmount} SEK</td>
+        </tr>
+      </tbody>
+    </table>
+    <section class="totals">
+      ${quote.discountAmount > 0 ? `<p><span>${language === "sv" ? "Rabatt" : "Discount"}</span><strong>-${quote.discountAmount} SEK</strong></p>` : ""}
+      <p><span>${language === "sv" ? "Exkl. moms" : "Excl. VAT"}</span><strong>${quote.netAmount} SEK</strong></p>
+      <p><span>${language === "sv" ? "Moms 25 %" : "VAT 25%"}</span><strong>${quote.vatAmount} SEK</strong></p>
+      <p class="total"><span>${language === "sv" ? "Totalt" : "Total"}</span><strong>${quote.totalAmount} SEK</strong></p>
+    </section>
+    ${quote.note ? `<section class="note">${escapeHtml(quote.note)}</section>` : ""}
+  </main>
+</body>
+</html>`;
+
+    quoteWindow.document.write(html);
+    quoteWindow.document.close();
   }
 
   async function handleCreateContract(event) {
@@ -7583,6 +7829,7 @@ function App() {
       summary: {
         customers: customers.length,
         invoices: invoices.length,
+        quotes: quotes.length,
         paidInvoices,
         unpaidInvoices,
         expenses: expenses.length,
@@ -7611,6 +7858,7 @@ function App() {
       settings,
       customers,
       invoices,
+      quotes,
       expenses,
       accounts,
       journalEntries,
@@ -7630,6 +7878,7 @@ function App() {
         profitAndLoss,
         balanceReport,
         vatReport,
+        quotes,
         monthlyReportRows,
         customerLedgerRows,
         agingBuckets: agingBuckets.map((bucket) => ({
@@ -8651,6 +8900,12 @@ function App() {
         : `${answerIntro} Write a question, for example "how do I bookkeep an invoice?" or "how do I upload receipts?".`);
     }
 
+    if (normalizedQuestion.includes("offert") || normalizedQuestion.includes("quote")) {
+      return createAnswer(language === "sv"
+        ? `${answerIntro} For offerter: ga till Offerter, valj kund och tjanst, skapa offerten och skriv ut/spara PDF. En offert bokfors inte direkt. Nar kunden accepterar kan du klicka Skapa faktura, da skapas en riktig faktura med automatisk bokforing. Du har ${quotes.length} offerter, ${acceptedQuotes.length} accepterade och ${quotePipelineValue} SEK i aktiv pipeline.`
+        : `${answerIntro} For quotes: go to Quotes, choose customer and service, create the quote and print/save PDF. A quote is not booked directly. When the customer accepts it, click Create invoice to create a real invoice with automatic bookkeeping. You have ${quotes.length} quotes, ${acceptedQuotes.length} accepted and ${quotePipelineValue} SEK in active pipeline.`, "quotes");
+    }
+
     if (normalizedQuestion.includes("faktura") || normalizedQuestion.includes("invoice")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Nar fakturan skapas bokfors den automatiskt som 1510 debet, 3041 kredit och 2611 kredit. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
@@ -8744,6 +8999,9 @@ function App() {
     return JSON.stringify({
       activeView,
       openInvoices: invoices.filter((item) => invoiceRemainingAmount(item) > 0).length,
+      quotes: quotes.length,
+      acceptedQuotes: acceptedQuotes.length,
+      quotePipelineValue,
       totalOutstanding,
       vatToPay: vatReport?.vatToPay || 0,
       profitNet,
@@ -8849,6 +9107,7 @@ function App() {
   function aiTargetLabel(targetView) {
     const labels = {
       invoices: t.invoices,
+      quotes: t.quotes,
       bookkeeping: t.bookkeeping,
       uploaded: t.uploaded,
       activities: t.activities,
@@ -8890,6 +9149,9 @@ function App() {
       invoices: language === "sv"
         ? ["Hur skapar jag faktura?", "Hur skickar jag PDF?", "Hur skapar jag kreditfaktura?"]
         : ["How do I create an invoice?", "How do I send PDF?", "How do I create a credit invoice?"],
+      quotes: language === "sv"
+        ? ["Hur skapar jag offert?", "Nar bokfors en offert?", "Hur blir offert faktura?"]
+        : ["How do I create a quote?", "When is a quote booked?", "How does a quote become an invoice?"],
       payments: language === "sv"
         ? ["Hur registrerar jag betalning?", "Hur funkar bankimport?", "Hur gor jag delbetalning?"]
         : ["How do I register payment?", "How does bank import work?", "How do I make partial payment?"],
@@ -9127,6 +9389,15 @@ function App() {
   const customersWithOutstanding = customers.filter((customer) => customerOutstandingAmount(customer, invoices) > 0);
   const selectedService = services.find((service) => String(service.id) === String(selectedServiceId));
   const invoicePreview = invoicePreviewFor(selectedService, invoiceQuantity);
+  const selectedQuoteCustomer = customers.find((customer) => String(customer.id) === String(quoteCustomerId));
+  const selectedQuoteService = services.find((service) => String(service.id) === String(quoteServiceId));
+  const quotePreview = invoicePreviewFor(selectedQuoteService, quoteQuantity);
+  const activeQuotes = quotes.filter((quote) => !["rejected", "invoiced"].includes(quote.status));
+  const acceptedQuotes = quotes.filter((quote) => quote.status === "accepted");
+  const invoicedQuotes = quotes.filter((quote) => quote.status === "invoiced");
+  const quotePipelineValue = activeQuotes.reduce((sum, quote) => sum + (quote.totalAmount || 0), 0);
+  const acceptedQuoteValue = acceptedQuotes.reduce((sum, quote) => sum + (quote.totalAmount || 0), 0);
+  const expiredQuotes = quotes.filter((quote) => quote.validUntil && quote.validUntil < todayInput && !["accepted", "invoiced", "rejected"].includes(quote.status));
   const reminderPreviewInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0) || demoInvoiceForReminderPreview(settings);
   const sortedJournalEntries = [...journalEntries].sort((first, second) => {
     return new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0);
@@ -11399,6 +11670,7 @@ function App() {
   function viewTitle() {
     if (activeView === "customers") return t.customers;
     if (activeView === "invoices") return t.invoices;
+    if (activeView === "quotes") return t.quotes;
     if (activeView === "contracts") return t.contracts;
     if (activeView === "services") return t.services;
     if (activeView === "activities") return t.activities;
@@ -11441,7 +11713,7 @@ function App() {
       image: "https://picsum.photos/600/400?random=32",
       onClick: (event) => {
         event.preventDefault();
-        setActiveView("bank");
+        setActiveView("payments");
       }
     },
     {
@@ -11471,6 +11743,7 @@ function App() {
           {navButton("overview", t.overview)}
           {navButton("customers", t.customers)}
           {navButton("invoices", t.invoices)}
+          {navButton("quotes", t.quotes)}
           {navButton("contracts", t.contracts)}
           {navButton("services", t.services)}
           {navButton("activities", t.activities)}
@@ -12515,6 +12788,192 @@ function App() {
             )}
           </section>
         </div>
+
+        {activeView === "quotes" && (
+          <section className="orders-section quote-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.quotes}</h2>
+                <p className="muted-line">
+                  {language === "sv"
+                    ? "Skapa prisforslag innan faktura. Nar kunden accepterar kan offerten omvandlas till faktura."
+                    : "Create price proposals before invoicing. When the customer accepts, convert the quote to an invoice."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadQuotesCsv} disabled={quotes.length === 0}>
+                  {t.exportCsv}
+                </button>
+              </div>
+            </div>
+
+            <div className="quote-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Aktiva offerter" : "Active quotes"}</span>
+                <strong>{activeQuotes.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Pipeline" : "Pipeline"}</span>
+                <strong>{quotePipelineValue} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Accepterade" : "Accepted"}</span>
+                <strong>{acceptedQuotes.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Accepterat varde" : "Accepted value"}</span>
+                <strong>{acceptedQuoteValue} SEK</strong>
+              </article>
+              <article className={expiredQuotes.length > 0 ? "warning-summary" : ""}>
+                <span>{language === "sv" ? "Utgangna" : "Expired"}</span>
+                <strong>{expiredQuotes.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Fakturerade" : "Invoiced"}</span>
+                <strong>{invoicedQuotes.length}</strong>
+              </article>
+            </div>
+
+            <div className="quote-workspace">
+              <form className="form quote-form" onSubmit={handleCreateQuote}>
+                <label>
+                  {t.customers}
+                  <select value={quoteCustomerId} onChange={(event) => setQuoteCustomerId(event.target.value)}>
+                    <option value="">{t.chooseCustomer}</option>
+                    {activeCustomers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>{customer.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  {t.services}
+                  <select value={quoteServiceId} onChange={(event) => setQuoteServiceId(event.target.value)}>
+                    <option value="">{t.chooseService}</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id} disabled={!serviceHasInvoicePrice(service)}>
+                        {service.name} - {servicePriceLabel(service, language)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  {t.quantity}
+                  <input
+                    type="number"
+                    min="1"
+                    value={quoteQuantity}
+                    onChange={(event) => setQuoteQuantity(event.target.value)}
+                  />
+                </label>
+
+                <label>
+                  {language === "sv" ? "Giltig till" : "Valid until"}
+                  <input
+                    type="date"
+                    value={quoteValidUntil}
+                    onChange={(event) => setQuoteValidUntil(event.target.value)}
+                  />
+                </label>
+
+                <label className="quote-note-field">
+                  {language === "sv" ? "Meddelande till kund" : "Message to customer"}
+                  <textarea
+                    value={quoteNote}
+                    onChange={(event) => setQuoteNote(event.target.value)}
+                    rows="4"
+                    placeholder={language === "sv" ? "Tack for din forfragan. Offerten galler enligt villkoren ovan." : "Thank you for your request. This quote is valid according to the terms above."}
+                  />
+                </label>
+
+                {quotePreview && (
+                  <div className="invoice-preview quote-preview">
+                    <strong>{language === "sv" ? "Offertforhandsgranskning" : "Quote preview"}</strong>
+                    <p><span>{selectedQuoteCustomer?.name || "-"}</span><span>{selectedQuoteService?.name}</span></p>
+                    <p><span>{quotePreview.quantity} x {servicePriceLabel(selectedQuoteService, language)}</span><span>{quotePreview.netAmount} SEK</span></p>
+                    {quotePreview.discountAmount > 0 && (
+                      <p className="discount-line">
+                        <span>{language === "sv" ? "Rabatt" : "Discount"}</span>
+                        <span>-{quotePreview.discountAmount} SEK</span>
+                      </p>
+                    )}
+                    <p><span>{t.vat} 25%</span><span>{quotePreview.vatAmount} SEK</span></p>
+                    <p className="invoice-preview-total"><span>{t.total}</span><span>{quotePreview.totalAmount} SEK</span></p>
+                  </div>
+                )}
+
+                <button type="submit" disabled={!quoteCustomerId || !quoteServiceId || !quotePreview}>
+                  {language === "sv" ? "Skapa offert" : "Create quote"}
+                </button>
+                {quoteMessage && <p className="message success">{quoteMessage}</p>}
+              </form>
+
+              <div className="quote-help-card">
+                <strong>{language === "sv" ? "Sa fungerar flodet" : "How the flow works"}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Offerten bokfors inte. Bokforing skapas forst nar offerten blir en riktig faktura."
+                    : "The quote is not booked. Bookkeeping is created only when the quote becomes a real invoice."}
+                </p>
+                <ol>
+                  <li>{language === "sv" ? "Skapa offert och skicka/spara PDF." : "Create quote and send/save PDF."}</li>
+                  <li>{language === "sv" ? "Markera skickad och sedan accepterad." : "Mark as sent and then accepted."}</li>
+                  <li>{language === "sv" ? "Skapa faktura fran offerten." : "Create invoice from the quote."}</li>
+                </ol>
+              </div>
+            </div>
+
+            {quotes.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga offerter annu." : "No quotes yet."}</p>
+            ) : (
+              <div className="quote-list">
+                {quotes.map((quote) => (
+                  <article className={`quote-card quote-${quote.status || "draft"}`} key={quote.id}>
+                    <div>
+                      <span className="quote-status">{quoteStatusLabel(quote.status)}</span>
+                      <h3>{quoteNumber(quote)} - {quote.customerName}</h3>
+                      <p>{quote.serviceName} | {quote.quantity} x {quote.unitPrice} SEK</p>
+                      <small>
+                        {language === "sv" ? "Giltig till" : "Valid until"}: {formatDateOnly(quote.validUntil)}
+                        {" | "}
+                        {language === "sv" ? "Skapad" : "Created"}: {formatDateOnly(quote.createdAt)}
+                      </small>
+                    </div>
+                    <div className="quote-amount-box">
+                      <span>{t.total}</span>
+                      <strong>{quote.totalAmount} SEK</strong>
+                      <small>{t.net}: {quote.netAmount} SEK | {t.vat}: {quote.vatAmount} SEK</small>
+                    </div>
+                    <div className="quote-actions">
+                      <button type="button" className="secondary-button" onClick={() => openQuoteDocument(quote)}>
+                        {language === "sv" ? "PDF/utskrift" : "PDF/print"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateQuoteStatus(quote.id, "sent")}>
+                        {language === "sv" ? "Markera skickad" : "Mark sent"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => updateQuoteStatus(quote.id, "accepted")}>
+                        {language === "sv" ? "Accepterad" : "Accepted"}
+                      </button>
+                      <button type="button" className="primary-small-button" onClick={() => createInvoiceFromQuote(quote)} disabled={!token || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}>
+                        {language === "sv" ? "Skapa faktura" : "Create invoice"}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => prepareInvoiceFromQuote(quote)}>
+                        {language === "sv" ? "Fyll formularet" : "Fill form"}
+                      </button>
+                      <button type="button" className="danger-button" onClick={() => updateQuoteStatus(quote.id, "rejected")}>
+                        {language === "sv" ? "Avvisad" : "Rejected"}
+                      </button>
+                      <button type="button" className="danger-button soft" onClick={() => deleteQuote(quote.id)}>
+                        {language === "sv" ? "Ta bort" : "Delete"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {activeView === "contracts" && (
           <section className="orders-section">

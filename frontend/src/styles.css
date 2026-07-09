@@ -448,6 +448,149 @@ textarea {
   font-weight: 800;
 }
 
+.quote-section {
+  display: grid;
+  gap: 18px;
+}
+
+.quote-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-small);
+}
+
+.quote-summary-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.quote-summary-grid span,
+.quote-help-card p,
+.quote-help-card li,
+.quote-card p,
+.quote-card small,
+.quote-amount-box span,
+.quote-amount-box small {
+  color: #51606d;
+}
+
+.quote-summary-grid strong {
+  font-size: 24px;
+}
+
+.quote-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 560px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.quote-form {
+  margin: 0;
+}
+
+.quote-note-field {
+  grid-column: 1 / -1;
+}
+
+.quote-preview {
+  grid-column: 1 / -1;
+}
+
+.quote-help-card {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border-color: #cfe0ff;
+  background: linear-gradient(135deg, #f7fbff, #fffaf0);
+}
+
+.quote-help-card strong {
+  font-size: 20px;
+}
+
+.quote-help-card ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.quote-list {
+  display: grid;
+  gap: 12px;
+}
+
+.quote-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 260px) minmax(260px, 360px);
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+  border-left: 6px solid #8aa0b5;
+}
+
+.quote-card h3,
+.quote-card p {
+  margin: 6px 0;
+}
+
+.quote-sent {
+  border-left-color: #155ee8;
+}
+
+.quote-accepted {
+  border-left-color: #14966b;
+}
+
+.quote-rejected {
+  border-left-color: #d64045;
+  opacity: 0.82;
+}
+
+.quote-invoiced {
+  border-left-color: #f2a900;
+}
+
+.quote-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #155ee8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.quote-amount-box {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+}
+
+.quote-amount-box strong {
+  font-size: 26px;
+}
+
+.quote-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quote-actions button {
+  min-height: 40px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -6181,6 +6324,7 @@ button:focus-visible,
   .stats,
   .customer-stats,
   .invoice-summary-cards,
+  .quote-summary-grid,
   .business-insight-grid,
   .expense-summary-grid,
   .payroll-summary-grid,
@@ -6259,6 +6403,9 @@ button:focus-visible,
 
   .topbar,
   .stats,
+  .quote-summary-grid,
+  .quote-workspace,
+  .quote-card,
   .business-insight-hero,
   .business-insight-grid,
   .customer-360-hero,
@@ -6362,6 +6509,19 @@ button:focus-visible,
 
   .periodization-note-field {
     grid-column: auto;
+  }
+
+  .quote-note-field,
+  .quote-preview {
+    grid-column: auto;
+  }
+
+  .quote-amount-box {
+    text-align: left;
+  }
+
+  .quote-actions {
+    grid-template-columns: 1fr;
   }
 
   .journal-group-header {
