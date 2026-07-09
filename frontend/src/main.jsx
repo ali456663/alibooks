@@ -5154,6 +5154,133 @@ function App() {
     reportWindow.document.close();
   }
 
+  function downloadAccountReconciliationCsv() {
+    setError("");
+    const rows = [
+      ["AliBooks kontoavstamning"],
+      ["Ar", annualCloseYear],
+      ["Avstamningsdatum", annualCloseRange.to],
+      ["Foretag", settings?.companyName || "Muscle&Focus"],
+      ["Status", accountReconciliationStatusText],
+      [],
+      ["Konto", "Kontonamn", "Typ", "Bokfort", "Forvantat", "Differens", "Status", "Detalj"]
+    ];
+
+    accountReconciliationRows.forEach((row) => {
+      rows.push([
+        row.accountNumber,
+        row.accountName,
+        row.modeLabel,
+        row.actual,
+        row.expected === null ? "-" : row.expected,
+        row.difference === null ? "-" : row.difference,
+        row.statusLabel,
+        row.detail
+      ]);
+    });
+
+    downloadLocalCsv(`kontoavstamning-${annualCloseYear || "ar"}.csv`, rows);
+  }
+
+  function openAccountReconciliationReport() {
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setError(language === "sv" ? "Webblasaren blockerade kontoavstamningen." : "The browser blocked the account reconciliation report.");
+      return;
+    }
+
+    const reportTitle = language === "sv" ? "Kontoavstamning" : "Account reconciliation";
+    const companyName = settings?.companyName || "Muscle&Focus";
+    const rowsHtml = accountReconciliationRows.map((row) => `<tr>
+      <td>${escapeHtml(row.accountNumber)}</td>
+      <td>${escapeHtml(row.accountName)}</td>
+      <td>${escapeHtml(row.modeLabel)}</td>
+      <td>${row.actual} SEK</td>
+      <td>${row.expected === null ? "-" : `${row.expected} SEK`}</td>
+      <td>${row.difference === null ? "-" : `${row.difference} SEK`}</td>
+      <td>${escapeHtml(row.statusLabel)}</td>
+      <td>${escapeHtml(row.detail)}</td>
+    </tr>`).join("");
+
+    reportWindow.document.write(`<!doctype html>
+<html lang="${language === "sv" ? "sv" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportTitle)} - ${escapeHtml(annualCloseYear)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; color: #172033; background: #f6f8fc; }
+    main { max-width: 1120px; margin: 32px auto; background: #fff; border: 1px solid #dce5f2; border-radius: 14px; padding: 34px; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 4px solid #1d5cff; padding-bottom: 22px; }
+    h1 { margin: 0; color: #1d5cff; font-size: 34px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 5px 0; }
+    .muted { color: #516174; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
+    .summary span { display: block; color: #516174; font-weight: 700; }
+    .summary strong { display: block; margin-top: 6px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #dce5f2; padding: 10px 8px; text-align: left; vertical-align: top; }
+    .note { margin-top: 18px; padding: 14px; border: 1px solid #f1d28a; border-radius: 10px; background: #fff8e5; }
+    .actions { margin-top: 24px; }
+    button { background: #1d5cff; color: white; border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 700; cursor: pointer; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p class="muted">${escapeHtml(companyName)}</p>
+        <p class="muted">${escapeHtml(annualCloseRange.from)} - ${escapeHtml(annualCloseRange.to)}</p>
+      </div>
+      <div>
+        <p><strong>${language === "sv" ? "Status" : "Status"}:</strong> ${escapeHtml(accountReconciliationStatusText)}</p>
+        <p><strong>${language === "sv" ? "Kontroller" : "Checks"}:</strong> ${accountReconciliationReadyCount}/${accountReconciliationRows.length}</p>
+        <p><strong>${language === "sv" ? "Skapad" : "Created"}:</strong> ${escapeHtml(todayInput)}</p>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div><span>${language === "sv" ? "Bank 1930" : "Bank 1930"}</span><strong>${accountReconciliationBankBalance} SEK</strong></div>
+      <div><span>${language === "sv" ? "Kundfordringar" : "Receivables"}</span><strong>${annualCloseReceivables} SEK</strong></div>
+      <div><span>${language === "sv" ? "Stripe 1580" : "Stripe 1580"}</span><strong>${stripeReceivableBalance} SEK</strong></div>
+      <div><span>${language === "sv" ? "Avvikelser" : "Differences"}</span><strong>${accountReconciliationWarnings}</strong></div>
+    </section>
+
+    <h2>${language === "sv" ? "Konton att stamma av" : "Accounts to reconcile"}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>${language === "sv" ? "Konto" : "Account"}</th>
+          <th>${language === "sv" ? "Namn" : "Name"}</th>
+          <th>${language === "sv" ? "Typ" : "Type"}</th>
+          <th>${language === "sv" ? "Bokfort" : "Booked"}</th>
+          <th>${language === "sv" ? "Forvantat" : "Expected"}</th>
+          <th>${language === "sv" ? "Differens" : "Difference"}</th>
+          <th>Status</th>
+          <th>${language === "sv" ? "Detalj" : "Detail"}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    <div class="note">${language === "sv"
+      ? "Kontoavstamningen ar ett arbetsunderlag. Jamfor alltid bankkonto, Stripe, moms och skattekonto mot externa underlag innan bokslut eller deklaration skickas."
+      : "The account reconciliation is a working basis. Always compare bank, Stripe, VAT and tax account against external records before closing or filing."}</div>
+    <div class="actions"><button onclick="window.print()">${language === "sv" ? "Skriv ut / spara PDF" : "Print / save PDF"}</button></div>
+  </main>
+</body>
+</html>`);
+    reportWindow.document.close();
+  }
+
   function downloadCloseChecklistCsv() {
     setError("");
     const rows = [
@@ -9197,6 +9324,193 @@ function App() {
   const legalArchiveStatusText = legalArchiveWarnings === 0
     ? (language === "sv" ? "Arkivet ser redo ut" : "Archive looks ready")
     : `${legalArchiveWarnings} ${language === "sv" ? "arkivdelar behover kontroll" : "archive parts need review"}`;
+  const accountReconciliationClosingEntries = journalEntries.filter((entry) => {
+    const voucherDate = String(entry.voucherDate || entry.createdAt || "").slice(0, 10);
+    return voucherDate && voucherDate <= annualCloseRange.to;
+  });
+  const accountReconciliationCreditNaturePrefixes = ["2", "3"];
+  const accountReconciliationAmount = (accountNumber, entriesToUse) => {
+    const number = String(accountNumber || "");
+    const totals = entriesToUse
+      .filter((entry) => String(entry.accountNumber || "") === number)
+      .reduce((sum, entry) => ({
+        debit: sum.debit + (entry.debit || 0),
+        credit: sum.credit + (entry.credit || 0)
+      }), { debit: 0, credit: 0 });
+
+    return accountReconciliationCreditNaturePrefixes.some((prefix) => number.startsWith(prefix))
+      ? totals.credit - totals.debit
+      : totals.debit - totals.credit;
+  };
+  const accountReconciliationAnnualAmount = (accountNumber) => accountReconciliationAmount(accountNumber, annualCloseEntries);
+  const accountReconciliationClosingAmount = (accountNumber) => accountReconciliationAmount(accountNumber, accountReconciliationClosingEntries);
+  const accountReconciliationBankBalance = accountReconciliationClosingAmount("1930");
+  const createAccountReconciliationRow = ({
+    accountNumber,
+    accountName,
+    expected = null,
+    mode = "closing",
+    detail,
+    action,
+    exportLabel,
+    forcedStatus = null
+  }) => {
+    const actual = mode === "annual"
+      ? accountReconciliationAnnualAmount(accountNumber)
+      : accountReconciliationClosingAmount(accountNumber);
+    const difference = expected === null ? null : actual - expected;
+    const status = forcedStatus || (expected === null
+      ? "info"
+      : Math.abs(difference) <= 1
+        ? "ok"
+        : "warning");
+
+    return {
+      accountNumber,
+      accountName,
+      mode,
+      modeLabel: mode === "annual"
+        ? (language === "sv" ? "Arets rorelse" : "Year activity")
+        : (language === "sv" ? "Saldo vid arsslut" : "Year-end balance"),
+      actual,
+      expected,
+      difference,
+      status,
+      statusLabel: status === "ok"
+        ? "OK"
+        : status === "warning"
+          ? (language === "sv" ? "Stam av" : "Reconcile")
+          : "Info",
+      detail,
+      action,
+      exportLabel
+    };
+  };
+  const accountReconciliationRows = [
+    createAccountReconciliationRow({
+      accountNumber: "1930",
+      accountName: language === "sv" ? "Foretagskonto" : "Business bank account",
+      detail: language === "sv"
+        ? `Jamfor saldot mot bankens kontoutdrag per ${annualCloseRange.to}.`
+        : `Compare the balance against the bank statement on ${annualCloseRange.to}.`,
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("all");
+      },
+      exportLabel: language === "sv" ? "Bankutdrag" : "Bank statement"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "1510",
+      accountName: language === "sv" ? "Kundfordringar" : "Customer receivables",
+      expected: annualCloseReceivables,
+      detail: language === "sv"
+        ? "Ska stamma mot obetalda fakturor i kundreskontran."
+        : "Should match unpaid invoices in the customer ledger.",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter("open");
+      },
+      exportLabel: language === "sv" ? "Kundreskontra" : "Customer ledger"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "1580",
+      accountName: language === "sv" ? "Stripe fordran" : "Stripe receivable",
+      expected: stripeReceivableBalance,
+      detail: language === "sv"
+        ? "Jamfor mot Stripe-saldon och kommande utbetalningar."
+        : "Compare against Stripe balance and upcoming payouts.",
+      action: () => setActiveView("payments"),
+      exportLabel: language === "sv" ? "Stripe-avstamning" : "Stripe reconciliation"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "2611",
+      accountName: language === "sv" ? "Utgaende moms" : "Output VAT",
+      expected: annualCloseTotals.outputVat,
+      mode: "annual",
+      detail: language === "sv"
+        ? "Arets bokforda utgaende moms jamfort med momsrapporten."
+        : "Booked output VAT for the year compared with the VAT report.",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      },
+      exportLabel: language === "sv" ? "Momsrapport" : "VAT report"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "2641",
+      accountName: language === "sv" ? "Ingaende moms" : "Input VAT",
+      expected: annualCloseTotals.inputVat,
+      mode: "annual",
+      detail: language === "sv"
+        ? "Arets bokforda ingaende moms jamfort med kostnader och kvitton."
+        : "Booked input VAT for the year compared with expenses and receipts.",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      },
+      exportLabel: language === "sv" ? "Momsrapport" : "VAT report"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "2650",
+      accountName: language === "sv" ? "Redovisningskonto moms" : "VAT settlement account",
+      expected: annualCloseVatToPay,
+      detail: language === "sv"
+        ? "Visar om moms har flyttats till redovisningskonto eller fortfarande ligger pa 2611/2641."
+        : "Shows if VAT has been moved to the settlement account or remains on 2611/2641.",
+      action: () => {
+        setActiveView("vat");
+        setVatPeriodFrom(annualCloseRange.from);
+        setVatPeriodTo(annualCloseRange.to);
+      },
+      exportLabel: language === "sv" ? "Momsrapport" : "VAT report"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "2710",
+      accountName: language === "sv" ? "Personalskatt" : "Employee tax",
+      expected: annualClosePayrollTotals.tax,
+      mode: "annual",
+      detail: language === "sv"
+        ? "Jamfor bokford personalskatt mot lonemodulens skatteunderlag."
+        : "Compare booked employee tax against payroll tax basis.",
+      action: () => {
+        setActiveView("payroll");
+        setPayrollReportYear(annualCloseYear);
+      },
+      exportLabel: language === "sv" ? "Loneunderlag" : "Payroll basis"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: "2731",
+      accountName: language === "sv" ? "Arbetsgivaravgift" : "Employer contributions",
+      expected: annualClosePayrollTotals.employerFees,
+      mode: "annual",
+      detail: language === "sv"
+        ? "Jamfor bokford arbetsgivaravgift mot lonemodulens avgifter."
+        : "Compare booked employer contributions against payroll basis.",
+      action: () => {
+        setActiveView("payroll");
+        setPayrollReportYear(annualCloseYear);
+      },
+      exportLabel: language === "sv" ? "Loneunderlag" : "Payroll basis"
+    }),
+    createAccountReconciliationRow({
+      accountNumber: annualCloseResultAccount,
+      accountName: language === "sv" ? "Arets resultat" : "Year result",
+      expected: annualCloseResult,
+      detail: annualCloseNeedsResultVoucher
+        ? (language === "sv" ? "Resultatverifikat saknas eller behover kontrolleras." : "Result voucher is missing or needs review.")
+        : (language === "sv" ? "Resultatkonto finns i bokforingen." : "Result account exists in bookkeeping."),
+      action: prepareAnnualResultVoucher,
+      exportLabel: language === "sv" ? "Arsbokslut" : "Annual closing",
+      forcedStatus: annualCloseNeedsResultVoucher ? "warning" : null
+    })
+  ];
+  const accountReconciliationWarnings = accountReconciliationRows.filter((row) => row.status === "warning").length;
+  const accountReconciliationReadyCount = accountReconciliationRows.filter((row) => row.status === "ok").length;
+  const accountReconciliationStatusText = accountReconciliationWarnings === 0
+    ? (language === "sv" ? "Kontona ser redo ut for slutkontroll" : "Accounts look ready for final review")
+    : `${accountReconciliationWarnings} ${language === "sv" ? "konton behover avstamning" : "accounts need reconciliation"}`;
   const filteredJournalMonthlySummary = Object.values(filteredJournalGroups.reduce((summary, group) => {
     const voucherDate = group.voucherDate || String(group.createdAt || "").slice(0, 10);
     const monthKey = voucherDate ? voucherDate.slice(0, 7) : "unknown";
@@ -15828,6 +16142,95 @@ function App() {
               <button type="button" className="primary-small-button" onClick={downloadSieExport} disabled={!sieExportCanDownload}>
                 {language === "sv" ? "Ladda ner SIE" : "Download SIE"}
               </button>
+            </div>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Kontoavstamning" : "Account reconciliation"}</h2>
+            <div className="button-row">
+              <span className={accountReconciliationWarnings === 0 ? "status success-status" : "status warning-status"}>
+                {accountReconciliationReadyCount}/{accountReconciliationRows.length} {language === "sv" ? "stammer" : "matched"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadAccountReconciliationCsv}>
+                {t.exportCsv}
+              </button>
+              <button type="button" className="primary-small-button" onClick={openAccountReconciliationReport}>
+                {language === "sv" ? "Avstamningsrapport" : "Reconciliation report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="account-reconciliation-panel">
+            <div className="account-reconciliation-hero">
+              <div>
+                <span>{language === "sv" ? "Avstamningsdatum" : "Reconciliation date"}</span>
+                <strong>{annualCloseRange.to}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Kontrollera bank, kundfordringar, Stripe, moms, loneskatter och resultatkonto innan bokslut, deklaration eller overlamning."
+                    : "Review bank, receivables, Stripe, VAT, payroll taxes and result account before closing, filing or handoff."}
+                </p>
+              </div>
+              <div>
+                <span>{language === "sv" ? "Status" : "Status"}</span>
+                <strong>{accountReconciliationStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Raderna visar bokfort belopp, forvantat belopp och differens. Klicka pa en rad for att ga till ratt del i appen."
+                    : "Rows show booked amount, expected amount and difference. Click a row to open the right part of the app."}
+                </p>
+              </div>
+            </div>
+
+            <div className="expense-summary-grid account-reconciliation-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Bank 1930" : "Bank 1930"}</span>
+                <strong>{accountReconciliationBankBalance} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kundfordringar" : "Receivables"}</span>
+                <strong>{annualCloseReceivables} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Stripe 1580" : "Stripe 1580"}</span>
+                <strong>{stripeReceivableBalance} SEK</strong>
+              </article>
+              <article className={accountReconciliationWarnings === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Avvikelser" : "Differences"}</span>
+                <strong>{accountReconciliationWarnings}</strong>
+              </article>
+            </div>
+
+            <div className="account-reconciliation-list">
+              {accountReconciliationRows.map((row) => (
+                <button
+                  type="button"
+                  className={`account-reconciliation-row ${row.status}`}
+                  key={`${row.accountNumber}-${row.mode}`}
+                  onClick={row.action}
+                >
+                  <span>
+                    <strong>{row.accountNumber}</strong>
+                    <small>{row.accountName}</small>
+                  </span>
+                  <span>
+                    <strong>{row.actual} SEK</strong>
+                    <small>{row.modeLabel}</small>
+                  </span>
+                  <span>
+                    <strong>{row.expected === null ? "-" : `${row.expected} SEK`}</strong>
+                    <small>{language === "sv" ? "Forvantat" : "Expected"}</small>
+                  </span>
+                  <span>
+                    <strong>{row.difference === null ? "-" : `${row.difference} SEK`}</strong>
+                    <small>{language === "sv" ? "Differens" : "Difference"}</small>
+                  </span>
+                  <span>
+                    <strong>{row.statusLabel}</strong>
+                    <small>{row.detail}</small>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
