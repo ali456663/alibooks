@@ -562,6 +562,130 @@ h1 {
   letter-spacing: 0;
 }
 
+.business-insights-section {
+  border-color: #cfe0ff;
+  background:
+    linear-gradient(135deg, rgba(21, 94, 232, 0.08), rgba(242, 169, 0, 0.08)),
+    var(--color-surface);
+}
+
+.business-insight-hero {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-small);
+}
+
+.business-insight-score-card,
+.business-insight-main-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.business-insight-score-card {
+  border-left: 6px solid #155ee8;
+}
+
+.business-insight-hero.danger .business-insight-score-card {
+  border-left-color: #d64045;
+}
+
+.business-insight-hero.warning .business-insight-score-card {
+  border-left-color: #f2a900;
+}
+
+.business-insight-hero.good .business-insight-score-card {
+  border-left-color: #14966b;
+}
+
+.business-insight-score-card span,
+.business-insight-main-card span,
+.business-insight-card span {
+  color: #51606d;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.business-insight-score-card strong {
+  font-size: 42px;
+  line-height: 1;
+}
+
+.business-insight-score-card small,
+.business-insight-main-card p,
+.business-insight-card small,
+.business-insight-card p {
+  margin: 0;
+  color: #44515f;
+  line-height: 1.45;
+}
+
+.business-insight-main-card strong {
+  font-size: 24px;
+}
+
+.business-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.business-insight-card {
+  display: grid;
+  gap: 8px;
+  min-height: 190px;
+  padding: 16px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.business-insight-card:hover {
+  transform: translateY(-2px);
+  border-color: #155ee8;
+  box-shadow: 0 16px 38px rgba(21, 94, 232, 0.12);
+}
+
+.business-insight-card strong {
+  font-size: 18px;
+}
+
+.business-insight-card em {
+  color: #111827;
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.business-insight-card.good {
+  border-top: 5px solid #14966b;
+}
+
+.business-insight-card.warning {
+  border-top: 5px solid #f2a900;
+}
+
+.business-insight-card.danger {
+  border-top: 5px solid #d64045;
+}
+
+.business-insight-card.neutral {
+  border-top: 5px solid #8aa0b5;
+}
+
 .invoice-summary-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -6057,6 +6181,7 @@ button:focus-visible,
   .stats,
   .customer-stats,
   .invoice-summary-cards,
+  .business-insight-grid,
   .expense-summary-grid,
   .payroll-summary-grid,
   .payroll-report-summary,
@@ -6134,6 +6259,8 @@ button:focus-visible,
 
   .topbar,
   .stats,
+  .business-insight-hero,
+  .business-insight-grid,
   .customer-360-hero,
   .customer-insight-grid,
   .customer-activity-row,

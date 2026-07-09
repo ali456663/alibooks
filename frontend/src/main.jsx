@@ -5907,6 +5907,34 @@ function App() {
     downloadLocalCsv("budget-mal.csv", rows);
   }
 
+  function downloadBusinessInsightsCsv() {
+    setError("");
+    const rows = [
+      ["Affarsinsikter / Business insights"],
+      ["Skapad", new Date().toISOString()],
+      ["Intakter exkl. moms", revenueNet],
+      ["Kostnader exkl. moms", expenseNet],
+      ["Resultat", profitNet],
+      ["Utestaende kundfordringar", totalOutstanding],
+      ["Kassaprognos", cashflowProjectedBalance],
+      ["Datahalsa", `${dataQualityScore}%`],
+      [],
+      ["Omrade", "Status", "Belopp", "Rekommendation", "Detalj"]
+    ];
+
+    businessInsightRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.statusLabel,
+        row.amountLabel,
+        row.recommendation,
+        row.detail
+      ]);
+    });
+
+    downloadLocalCsv("affarsinsikter.csv", rows);
+  }
+
   function payrollCalculationFromValues(grossSalary, taxRate, employerRate) {
     const gross = Math.round(Number(grossSalary || 0));
     const tax = Math.max(0, Number(taxRate || 0));
@@ -11093,6 +11121,144 @@ function App() {
   const actionCenterCriticalCount = actionCenterItems.filter((item) => item.severity === "critical").length;
   const actionCenterWarningCount = actionCenterItems.filter((item) => item.severity === "warning").length;
   const actionCenterInfoCount = actionCenterItems.filter((item) => item.severity === "info").length;
+  const businessInsightRows = [
+    {
+      key: "receivables",
+      tone: overdueInvoices.length > 0 ? "danger" : totalOutstanding > 0 ? "warning" : "good",
+      title: language === "sv" ? "Pengar att fa in" : "Money to collect",
+      statusLabel: overdueInvoices.length > 0
+        ? (language === "sv" ? "Kravs uppfoljning" : "Needs follow-up")
+        : totalOutstanding > 0
+          ? (language === "sv" ? "Bevaka" : "Monitor")
+          : (language === "sv" ? "Klart" : "Clear"),
+      amountLabel: `${totalOutstanding} SEK`,
+      detail: overdueInvoices.length > 0
+        ? `${overdueInvoices.length} ${language === "sv" ? "forfallna fakturor" : "overdue invoices"}`
+        : `${unpaidInvoices.length} ${language === "sv" ? "obetald(a) fakturor" : "unpaid invoice(s)"}`,
+      recommendation: overdueInvoices.length > 0
+        ? (language === "sv" ? "Skicka paminnelse eller registrera betalning." : "Send reminders or register payment.")
+        : totalOutstanding > 0
+          ? (language === "sv" ? "Kontrollera kommande forfallodatum." : "Review upcoming due dates.")
+          : (language === "sv" ? "Inga oppna kundfordringar just nu." : "No open receivables right now."),
+      actionLabel: language === "sv" ? "Oppna betalningar" : "Open payments",
+      action: () => {
+        setActiveView("payments");
+        setPaymentOverviewFilter(overdueInvoices.length > 0 ? "overdue" : "open");
+      }
+    },
+    {
+      key: "cashflow",
+      tone: cashflowProjectedBalance < 0 ? "danger" : cashflowRunwayMonths !== null && cashflowRunwayMonths < 2 ? "warning" : "good",
+      title: language === "sv" ? "Likviditetsprognos" : "Cashflow forecast",
+      statusLabel: cashflowProjectedBalance < 0
+        ? (language === "sv" ? "Risk" : "Risk")
+        : cashflowRunwayMonths !== null && cashflowRunwayMonths < 2
+          ? (language === "sv" ? "Kort runway" : "Short runway")
+          : (language === "sv" ? "Stabil" : "Stable"),
+      amountLabel: `${cashflowProjectedBalance} SEK`,
+      detail: cashflowRunwayMonths === null
+        ? (language === "sv" ? "Inget kostnadssnitt annu" : "No spending average yet")
+        : `${cashflowRunwayMonths} ${language === "sv" ? "manader runway" : "months runway"}`,
+      recommendation: cashflowProjectedBalance < 0
+        ? (language === "sv" ? "Folj upp kundfordringar och planera utbetalningar." : "Follow up receivables and plan payouts.")
+        : (language === "sv" ? "Jamfor prognosen mot bankkontot varje vecka." : "Compare forecast with bank balance weekly."),
+      actionLabel: language === "sv" ? "Oppna likviditet" : "Open cashflow",
+      action: () => setActiveView("cashflow")
+    },
+    {
+      key: "budget",
+      tone: budgetCurrentRow?.status === "risk" ? "danger" : budgetCurrentRow?.status === "watch" ? "warning" : "good",
+      title: language === "sv" ? "Budget mot utfall" : "Budget vs actuals",
+      statusLabel: budgetCurrentRow?.statusLabel || (language === "sv" ? "Ingen data" : "No data"),
+      amountLabel: `${budgetCurrentRow?.afterReserve || 0} SEK`,
+      detail: budgetCurrentRow
+        ? `${formatMonthLabel(budgetCurrentRow.monthKey, language)} - ${budgetRevenueProgress}% ${language === "sv" ? "av intaktsmal" : "of revenue target"}`
+        : (language === "sv" ? "Ingen budgetperiod" : "No budget period"),
+      recommendation: budgetCurrentRow?.status === "risk"
+        ? (language === "sv" ? "Justera kostnader, pris eller fakturering for perioden." : "Adjust expenses, pricing or invoicing for the period.")
+        : (language === "sv" ? "Fortsatt folj intaktsmal, kostnadstak och reserv." : "Keep tracking revenue target, expense limit and reserve."),
+      actionLabel: language === "sv" ? "Oppna budget" : "Open budget",
+      action: () => setActiveView("budget")
+    },
+    {
+      key: "tax",
+      tone: vatPeriodToPay > 0 || taxPlanWarnings > 0 ? "warning" : "good",
+      title: language === "sv" ? "Moms och skatt" : "VAT and tax",
+      statusLabel: taxPlanWarnings > 0
+        ? (language === "sv" ? "Kontrollera" : "Review")
+        : vatPeriodToPay > 0
+          ? (language === "sv" ? "Att reservera" : "Reserve")
+          : (language === "sv" ? "Lugnt" : "Calm"),
+      amountLabel: `${vatPeriodToPay} SEK`,
+      detail: `${taxPlanWarnings} ${language === "sv" ? "varningar i skatteplanen" : "tax plan warning(s)"}`,
+      recommendation: vatPeriodToPay > 0
+        ? (language === "sv" ? "Reservera pengar och kontrollera datum hos Skatteverket." : "Reserve funds and verify dates with the tax authority.")
+        : (language === "sv" ? "Kontrollera momsperioden innan deklaration." : "Review the VAT period before filing."),
+      actionLabel: language === "sv" ? "Oppna momsrapport" : "Open VAT",
+      action: () => setActiveView("vat")
+    },
+    {
+      key: "bank",
+      tone: bankImportNeedsReviewCount > 0 ? "warning" : bankImportInvoiceReadyCount + bankImportExpenseReadyCount > 0 ? "good" : "neutral",
+      title: language === "sv" ? "Bank och matchning" : "Bank and matching",
+      statusLabel: bankImportNeedsReviewCount > 0
+        ? (language === "sv" ? "Behover granskning" : "Needs review")
+        : bankImportInvoiceReadyCount + bankImportExpenseReadyCount > 0
+          ? (language === "sv" ? "Redo att bokfora" : "Ready to book")
+          : (language === "sv" ? "Ingen ko" : "No queue"),
+      amountLabel: `${bankImportRows.length} ${language === "sv" ? "rader" : "rows"}`,
+      detail: `${bankImportInvoiceReadyCount + bankImportExpenseReadyCount} ${language === "sv" ? "redo" : "ready"}, ${bankImportNeedsReviewCount} ${language === "sv" ? "att granska" : "to review"}`,
+      recommendation: bankImportRows.length > 0
+        ? (language === "sv" ? "Bokfor matchade rader och skapa regler for aterkommande kostnader." : "Book matched rows and add rules for recurring expenses.")
+        : (language === "sv" ? "Importera bank-CSV nar kontoutdraget finns." : "Import bank CSV when the statement is available."),
+      actionLabel: language === "sv" ? "Oppna bankimport" : "Open bank import",
+      action: () => {
+        setActiveView("payments");
+        setBankImportFilter(bankImportNeedsReviewCount > 0 ? "review" : "ready");
+      }
+    },
+    {
+      key: "stripe",
+      tone: stripeReceivableBalance > 0 ? "warning" : "good",
+      title: "Stripe",
+      statusLabel: stripeReceivableBalance > 0
+        ? (language === "sv" ? "Fordran att stamma av" : "Receivable to reconcile")
+        : (language === "sv" ? "Avstamt" : "Reconciled"),
+      amountLabel: `${stripeReceivableBalance} SEK`,
+      detail: language === "sv" ? "Saldo pa 1580" : "Balance on 1580",
+      recommendation: stripeReceivableBalance > 0
+        ? (language === "sv" ? "Bokfor nasta Stripe-utbetalning och avgift." : "Book the next Stripe payout and fee.")
+        : (language === "sv" ? "Ingen oppen Stripe-fordran i nulaget." : "No open Stripe receivable right now."),
+      actionLabel: language === "sv" ? "Oppna Stripe" : "Open Stripe",
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "data-quality",
+      tone: dataQualityCriticalCount > 0 ? "danger" : dataQualityWarningCount > 0 ? "warning" : "good",
+      title: language === "sv" ? "Datahalsa" : "Data health",
+      statusLabel: `${dataQualityScore}%`,
+      amountLabel: `${dataQualityCriticalCount + dataQualityWarningCount} ${language === "sv" ? "fynd" : "findings"}`,
+      detail: `${dataQualityCriticalCount} ${language === "sv" ? "kritiska" : "critical"}, ${dataQualityWarningCount} ${language === "sv" ? "varningar" : "warnings"}`,
+      recommendation: dataQualityCriticalCount > 0
+        ? (language === "sv" ? "Ratta kritiska saker innan period stangs." : "Fix critical items before closing.")
+        : (language === "sv" ? "Hall kunddata, underlag och verifikat rena." : "Keep customer data, receipts and vouchers clean."),
+      actionLabel: language === "sv" ? "Oppna rapporter" : "Open reports",
+      action: () => setActiveView("reports")
+    }
+  ];
+  const businessInsightScore = Math.round(
+    businessInsightRows.reduce((sum, row) => {
+      if (row.tone === "good") return sum + 100;
+      if (row.tone === "neutral") return sum + 80;
+      if (row.tone === "warning") return sum + 55;
+      return sum + 25;
+    }, 0) / Math.max(businessInsightRows.length, 1)
+  );
+  const businessInsightDangerCount = businessInsightRows.filter((row) => row.tone === "danger").length;
+  const businessInsightWarningCount = businessInsightRows.filter((row) => row.tone === "warning").length;
+  const businessInsightPrimary = businessInsightRows.find((row) => row.tone === "danger")
+    || businessInsightRows.find((row) => row.tone === "warning")
+    || businessInsightRows[0];
   const matchesBookkeepingTypeFilter = (group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -11473,6 +11639,63 @@ function App() {
             <strong>{revenueTotal - expenseTotal} SEK</strong>
           </article>
         </section>}
+
+        {token && activeView === "overview" && (
+          <section className="orders-section business-insights-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{language === "sv" ? "Smarta insikter" : "Smart insights"}</p>
+                <h2>{language === "sv" ? "Foretagets kurs just nu" : "Business direction right now"}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "AliBooks laser din fakturering, bokforing, moms, bankimport, Stripe och budget for att visa vad som bor goras nast."
+                    : "AliBooks reads invoicing, bookkeeping, VAT, bank import, Stripe and budget to show what should happen next."}
+                </p>
+              </div>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={downloadBusinessInsightsCsv}>
+                  {language === "sv" ? "Exportera insikter" : "Export insights"}
+                </button>
+              </div>
+            </div>
+
+            <div className={`business-insight-hero ${businessInsightPrimary?.tone || "neutral"}`}>
+              <article className="business-insight-score-card">
+                <span>{language === "sv" ? "Affarshalsa" : "Business health"}</span>
+                <strong>{businessInsightScore}%</strong>
+                <small>
+                  {businessInsightDangerCount > 0
+                    ? `${businessInsightDangerCount} ${language === "sv" ? "kritiska omraden" : "critical areas"}`
+                    : businessInsightWarningCount > 0
+                      ? `${businessInsightWarningCount} ${language === "sv" ? "omraden att bevaka" : "areas to watch"}`
+                      : (language === "sv" ? "Inga stora varningar just nu" : "No major warnings right now")}
+                </small>
+              </article>
+              <article className="business-insight-main-card">
+                <span>{language === "sv" ? "Nasta basta steg" : "Next best action"}</span>
+                <strong>{businessInsightPrimary?.title}</strong>
+                <p>{businessInsightPrimary?.recommendation}</p>
+                {businessInsightPrimary && (
+                  <button type="button" className="primary-small-button" onClick={businessInsightPrimary.action}>
+                    {businessInsightPrimary.actionLabel}
+                  </button>
+                )}
+              </article>
+            </div>
+
+            <div className="business-insight-grid">
+              {businessInsightRows.map((row) => (
+                <button type="button" className={`business-insight-card ${row.tone}`} key={row.key} onClick={row.action}>
+                  <span>{row.statusLabel}</span>
+                  <strong>{row.title}</strong>
+                  <em>{row.amountLabel}</em>
+                  <small>{row.detail}</small>
+                  <p>{row.recommendation}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {token && activeView === "overview" && (
           <SafeRenderBoundary
