@@ -1295,6 +1295,9 @@ function App() {
   const [bankRuleVatRate, setBankRuleVatRate] = useState(25);
   const [bankRuleDescription, setBankRuleDescription] = useState("");
   const [bankReconciliationHistory, setBankReconciliationHistory] = useState([]);
+  const [bankStatementDate, setBankStatementDate] = useState(() => localStorage.getItem("alibooks-bank-statement-date") || new Date().toISOString().slice(0, 10));
+  const [bankStatementBalance, setBankStatementBalance] = useState(() => localStorage.getItem("alibooks-bank-statement-balance") || "");
+  const [bankStatementNote, setBankStatementNote] = useState(() => localStorage.getItem("alibooks-bank-statement-note") || "");
   const [stripePayoutDate, setStripePayoutDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripePayoutGrossAmount, setStripePayoutGrossAmount] = useState("");
   const [stripePayoutFeeAmount, setStripePayoutFeeAmount] = useState("");
@@ -1454,6 +1457,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem("alibooks-bank-import-rules", JSON.stringify(bankImportRules));
   }, [bankImportRules]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-bank-statement-date", bankStatementDate);
+    localStorage.setItem("alibooks-bank-statement-balance", bankStatementBalance);
+    localStorage.setItem("alibooks-bank-statement-note", bankStatementNote);
+  }, [bankStatementDate, bankStatementBalance, bankStatementNote]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-bokio-import-queue", JSON.stringify(bokioImportQueue));
@@ -4786,7 +4795,7 @@ function App() {
     h2 { margin-top: 28px; font-size: 18px; }
     p { margin: 5px 0; }
     .muted { color: #516174; }
-    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 22px 0; }
     .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
     .summary span { display: block; color: #516174; font-weight: 700; }
     .summary strong { display: block; margin-top: 6px; font-size: 19px; }
@@ -5162,6 +5171,11 @@ function App() {
       ["Avstamningsdatum", annualCloseRange.to],
       ["Foretag", settings?.companyName || "Muscle&Focus"],
       ["Status", accountReconciliationStatusText],
+      ["Bankutdrag datum", accountReconciliationBankDate],
+      ["Bankens saldo", bankStatementBalanceIsSet ? bankStatementBalanceNumber : "-"],
+      ["Bokfort saldo 1930", accountReconciliationBankBalance],
+      ["Bankdifferens", accountReconciliationBankDifference === null ? "-" : accountReconciliationBankDifference],
+      ["Banknotering", bankStatementNote || "-"],
       [],
       ["Konto", "Kontonamn", "Typ", "Bokfort", "Forvantat", "Differens", "Status", "Detalj"]
     ];
@@ -5216,7 +5230,7 @@ function App() {
     h2 { margin-top: 28px; font-size: 18px; }
     p { margin: 5px 0; }
     .muted { color: #516174; }
-    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 22px 0; }
     .summary div { border: 1px solid #dce5f2; border-radius: 10px; padding: 14px; background: #f9fbff; }
     .summary span { display: block; color: #516174; font-weight: 700; }
     .summary strong { display: block; margin-top: 6px; font-size: 19px; }
@@ -5249,9 +5263,10 @@ function App() {
 
     <section class="summary">
       <div><span>${language === "sv" ? "Bank 1930" : "Bank 1930"}</span><strong>${accountReconciliationBankBalance} SEK</strong></div>
+      <div><span>${language === "sv" ? "Bankens saldo" : "Statement balance"}</span><strong>${bankStatementBalanceIsSet ? `${bankStatementBalanceNumber} SEK` : "-"}</strong></div>
       <div><span>${language === "sv" ? "Kundfordringar" : "Receivables"}</span><strong>${annualCloseReceivables} SEK</strong></div>
       <div><span>${language === "sv" ? "Stripe 1580" : "Stripe 1580"}</span><strong>${stripeReceivableBalance} SEK</strong></div>
-      <div><span>${language === "sv" ? "Avvikelser" : "Differences"}</span><strong>${accountReconciliationWarnings}</strong></div>
+      <div><span>${language === "sv" ? "Bankdifferens" : "Bank difference"}</span><strong>${accountReconciliationBankDifference === null ? "-" : `${accountReconciliationBankDifference} SEK`}</strong></div>
     </section>
 
     <h2>${language === "sv" ? "Konton att stamma av" : "Accounts to reconcile"}</h2>
@@ -9344,18 +9359,31 @@ function App() {
   };
   const accountReconciliationAnnualAmount = (accountNumber) => accountReconciliationAmount(accountNumber, annualCloseEntries);
   const accountReconciliationClosingAmount = (accountNumber) => accountReconciliationAmount(accountNumber, accountReconciliationClosingEntries);
-  const accountReconciliationBankBalance = accountReconciliationClosingAmount("1930");
+  const parsedBankStatementBalance = Number(bankStatementBalance);
+  const bankStatementBalanceIsSet = String(bankStatementBalance).trim() !== "" && Number.isFinite(parsedBankStatementBalance);
+  const bankStatementBalanceNumber = bankStatementBalanceIsSet ? Math.round(parsedBankStatementBalance) : null;
+  const accountReconciliationBankDate = bankStatementDate || annualCloseRange.to;
+  const accountReconciliationBankEntries = journalEntries.filter((entry) => {
+    const voucherDate = String(entry.voucherDate || entry.createdAt || "").slice(0, 10);
+    return voucherDate && voucherDate <= accountReconciliationBankDate;
+  });
+  const accountReconciliationBankBalance = accountReconciliationAmount("1930", accountReconciliationBankEntries);
+  const accountReconciliationBankDifference = bankStatementBalanceIsSet
+    ? accountReconciliationBankBalance - bankStatementBalanceNumber
+    : null;
   const createAccountReconciliationRow = ({
     accountNumber,
     accountName,
     expected = null,
     mode = "closing",
+    actualOverride = null,
+    modeLabelOverride = "",
     detail,
     action,
     exportLabel,
     forcedStatus = null
   }) => {
-    const actual = mode === "annual"
+    const actual = actualOverride !== null ? actualOverride : mode === "annual"
       ? accountReconciliationAnnualAmount(accountNumber)
       : accountReconciliationClosingAmount(accountNumber);
     const difference = expected === null ? null : actual - expected;
@@ -9369,9 +9397,9 @@ function App() {
       accountNumber,
       accountName,
       mode,
-      modeLabel: mode === "annual"
+      modeLabel: modeLabelOverride || (mode === "annual"
         ? (language === "sv" ? "Arets rorelse" : "Year activity")
-        : (language === "sv" ? "Saldo vid arsslut" : "Year-end balance"),
+        : (language === "sv" ? "Saldo vid arsslut" : "Year-end balance")),
       actual,
       expected,
       difference,
@@ -9390,9 +9418,16 @@ function App() {
     createAccountReconciliationRow({
       accountNumber: "1930",
       accountName: language === "sv" ? "Foretagskonto" : "Business bank account",
+      expected: bankStatementBalanceNumber,
+      actualOverride: accountReconciliationBankBalance,
+      modeLabelOverride: `${language === "sv" ? "Bokfort saldo" : "Booked balance"} ${accountReconciliationBankDate}`,
       detail: language === "sv"
-        ? `Jamfor saldot mot bankens kontoutdrag per ${annualCloseRange.to}.`
-        : `Compare the balance against the bank statement on ${annualCloseRange.to}.`,
+        ? (bankStatementBalanceIsSet
+          ? `Jamfor mot bankens saldo ${bankStatementBalanceNumber} SEK per ${accountReconciliationBankDate}. ${bankStatementNote || ""}`.trim()
+          : "Fyll i bankens saldo fran kontoutdraget for att fa exakt differens.")
+        : (bankStatementBalanceIsSet
+          ? `Compare against bank statement balance ${bankStatementBalanceNumber} SEK on ${accountReconciliationBankDate}. ${bankStatementNote || ""}`.trim()
+          : "Enter the bank statement balance to get an exact difference."),
       action: () => {
         setActiveView("payments");
         setPaymentOverviewFilter("all");
@@ -16182,10 +16217,60 @@ function App() {
               </div>
             </div>
 
+            <div className="bank-statement-control">
+              <div>
+                <span>{language === "sv" ? "Bankutdrag" : "Bank statement"}</span>
+                <strong>
+                  {bankStatementBalanceIsSet
+                    ? `${language === "sv" ? "Differens" : "Difference"} ${accountReconciliationBankDifference} SEK`
+                    : (language === "sv" ? "Fyll i saldo" : "Enter balance")}
+                </strong>
+                <p>
+                  {language === "sv"
+                    ? "Skriv saldot fran bankens kontoutdrag. AliBooks jamfor det mot bokfort saldo pa 1930 fram till samma datum."
+                    : "Enter the balance from the bank statement. AliBooks compares it with booked account 1930 up to the same date."}
+                </p>
+              </div>
+              <label>
+                {language === "sv" ? "Datum pa kontoutdrag" : "Statement date"}
+                <input
+                  type="date"
+                  value={bankStatementDate}
+                  onChange={(event) => setBankStatementDate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Bankens saldo" : "Statement balance"}
+                <input
+                  type="number"
+                  step="1"
+                  value={bankStatementBalance}
+                  onChange={(event) => setBankStatementBalance(event.target.value)}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Anteckning" : "Note"}
+                <input
+                  value={bankStatementNote}
+                  onChange={(event) => setBankStatementNote(event.target.value)}
+                  placeholder={language === "sv" ? "Bank, konto, period..." : "Bank, account, period..."}
+                />
+              </label>
+            </div>
+
             <div className="expense-summary-grid account-reconciliation-summary-grid">
               <article>
                 <span>{language === "sv" ? "Bank 1930" : "Bank 1930"}</span>
                 <strong>{accountReconciliationBankBalance} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bankens saldo" : "Statement balance"}</span>
+                <strong>{bankStatementBalanceIsSet ? `${bankStatementBalanceNumber} SEK` : "-"}</strong>
+              </article>
+              <article className={accountReconciliationBankDifference === 0 ? "balanced-summary" : bankStatementBalanceIsSet ? "unbalanced-summary" : ""}>
+                <span>{language === "sv" ? "Bankdifferens" : "Bank difference"}</span>
+                <strong>{accountReconciliationBankDifference === null ? "-" : `${accountReconciliationBankDifference} SEK`}</strong>
               </article>
               <article>
                 <span>{language === "sv" ? "Kundfordringar" : "Receivables"}</span>

@@ -3482,6 +3482,51 @@ button:focus-visible,
   border-color: #d9e5f8;
 }
 
+.bank-statement-control {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.5fr) minmax(160px, 0.5fr) minmax(220px, 0.7fr);
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #d7e2f3;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.bank-statement-control > div {
+  display: grid;
+  gap: 5px;
+}
+
+.bank-statement-control span,
+.bank-statement-control p {
+  margin: 0;
+  color: #536274;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.bank-statement-control strong {
+  font-size: 20px;
+}
+
+.bank-statement-control label {
+  display: grid;
+  gap: 6px;
+  color: #303b4b;
+  font-weight: 900;
+}
+
+.bank-statement-control input {
+  min-height: 42px;
+  border: 1px solid #bfcede;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 800;
+  background: #ffffff;
+}
+
 .account-reconciliation-list {
   display: grid;
   gap: 8px;
@@ -5889,6 +5934,7 @@ button:focus-visible,
   .archive-package-grid,
   .account-reconciliation-hero,
   .account-reconciliation-summary-grid,
+  .bank-statement-control,
   .account-reconciliation-row,
   .legal-archive-hero,
   .legal-archive-grid,
