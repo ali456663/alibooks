@@ -27,6 +27,8 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - `npm run check:release -- --with-backend --with-docker-build`: passed
+- `npm run check:release`: passed 2026-08-09 18:19 +02:00
+- `npm run test:backend`: passed 2026-08-09 18:19 +02:00, 184 tests, 0 failures, 0 errors
 - `check:ready`: 52/52
 - `check:data-safety`: 55/55
 - `check:prod`: 37/37

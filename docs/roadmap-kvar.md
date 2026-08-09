@@ -4,8 +4,8 @@ Den har roadmapen ar for att komma igang snabbt och inte fastna i detaljer.
 
 ## Fokus just nu
 
-Målet just nu ar inte att bygga allt som Fortnox/Bokio har.
-Målet ar att fa AliBooks stabilt, begripligt och demo-klart.
+Malet just nu ar inte att bygga allt som Fortnox/Bokio har.
+Malet ar att fa AliBooks stabilt, begripligt och demo-klart.
 
 Prioritet:
 
