@@ -16,6 +16,7 @@
     "check:docs": "node ../scripts/docs-consistency-check.mjs",
     "check:docker": "node ../scripts/docker-config-check.mjs",
     "check:data-safety": "node ../scripts/data-safety-check.mjs",
+    "check:evidence": "node ../scripts/mvp-evidence-check.mjs",
     "check:git": "node ../scripts/git-release-status.mjs",
     "check:go-live-risks": "node ../scripts/go-live-risk-check.mjs",
     "check:prod": "node ../scripts/production-readiness-check.mjs",

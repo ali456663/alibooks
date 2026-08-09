@@ -22,6 +22,7 @@ const frontendSteps = [
   ["check:backup", "Check backup and restore readiness"],
   ["check:ci", "Check GitHub Actions pipeline"],
   ["check:docs", "Check docs consistency"],
+  ["check:evidence", "Check MVP release evidence"],
   ["check:secrets", "Check committed secrets"],
   ["check:data-safety", "Check destructive data safety"],
   ["check:docker", "Check Docker config"],

@@ -61,6 +61,7 @@ check(
     "check:docs",
     "check:docker",
     "check:data-safety",
+    "check:evidence",
     "check:git",
     "check:go-live-risks",
     "check:prod",
@@ -71,7 +72,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:git, check:go-live-risks, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -87,6 +88,7 @@ check("Release gate checks backend wiring", releaseGate.includes('"check:backend
 check("Release gate checks backup readiness", releaseGate.includes('"check:backup"'), "Release gate should run backup readiness check");
 check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Release gate should run GitHub Actions pipeline check");
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
+check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
 check("Release gate checks committed secrets", releaseGate.includes('"check:secrets"'), "Release gate should run secret placeholder check");
 check("Release gate checks destructive data safety", releaseGate.includes('"check:data-safety"'), "Release gate should run destructive data safety check");
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
