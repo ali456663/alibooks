@@ -40,6 +40,7 @@ Detta bevisar lokalt att:
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
+- Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
 
 ## Kvar fore riktig go-live
 

@@ -14,7 +14,8 @@ const docs = [
   "docs/professionell-bokforing-loop.md",
   "docs/roadmap-kvar.md",
   "docs/backup-restore-runbook.md",
-  "docs/release-evidence.md"
+  "docs/release-evidence.md",
+  "docs/go-live-riskregister.md"
 ];
 
 const failures = [];

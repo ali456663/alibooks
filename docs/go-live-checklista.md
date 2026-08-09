@@ -29,6 +29,7 @@ Dokument:
 docs/mvp-testprotokoll.md
 docs/dockerhub-release.md
 docs/aws-rds-ec2-checklista.md
+docs/go-live-riskregister.md
 ```
 
 ## 1. GitHub Actions CI
@@ -59,6 +60,7 @@ Innan du pushar kod:
 ```bash
 cd frontend
 npm run check:release -- --with-backend --with-docker-build
+npm run check:go-live-risks
 npm run check:git
 git add .
 git commit -m "Prepare AliBooks MVP release"

@@ -39,7 +39,8 @@ const requiredFiles = [
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/release-evidence.md",
-  "docs/backup-restore-runbook.md"
+  "docs/backup-restore-runbook.md",
+  "docs/go-live-riskregister.md"
 ];
 
 for (const file of requiredFiles) {
@@ -61,6 +62,7 @@ check(
     "check:docker",
     "check:data-safety",
     "check:git",
+    "check:go-live-risks",
     "check:prod",
     "smoke:runtime",
     "check:professional-loop",
@@ -69,7 +71,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:git, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:git, check:go-live-risks, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -89,6 +91,7 @@ check("Release gate checks committed secrets", releaseGate.includes('"check:secr
 check("Release gate checks destructive data safety", releaseGate.includes('"check:data-safety"'), "Release gate should run destructive data safety check");
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
+check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
 
@@ -149,12 +152,14 @@ for (const file of backendFiles) {
 
 const releaseEvidence = read("docs/release-evidence.md");
 const backupRunbook = read("docs/backup-restore-runbook.md");
-const docs = `${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${releaseEvidence}\n${backupRunbook}`;
+const riskRegister = read("docs/go-live-riskregister.md");
+const docs = `${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
 check("Docs include cash/card payment review", includesAll(docs, ["kort", "Swish", "Stripe"]), "Docs should remind about electronic payment review");
 check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release -- --with-backend --with-docker-build"), "Release evidence should document the full local verification command");
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");
+check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
 
 const failed = results.filter((result) => !result.ok && result.severity === "fail");
 const warnings = results.filter((result) => !result.ok && result.severity === "warn");
