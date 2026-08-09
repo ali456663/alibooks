@@ -33,6 +33,7 @@ function check(name, ok, detail) {
 }
 
 const allDocs = docs.map((file) => `${file}\n${read(file)}`).join("\n\n");
+const riskyGitStagePattern = /git\s+add\s+\./;
 const mojibakeMarkers = ["Ã", "Â", "ï¿½", "�"];
 
 check(
@@ -79,8 +80,14 @@ check(
 
 check(
   "Git release checks are documented",
-  allDocs.includes("npm run check:git") && allDocs.includes("npm run check:sync"),
-  "Docs should explain local git cleanliness and GitHub sync checks."
+  allDocs.includes("npm run check:git") && allDocs.includes("npm run check:sync") && allDocs.includes("git status -sb"),
+  "Docs should explain local git cleanliness, explicit status review and GitHub sync checks."
+);
+
+check(
+  "Docs avoid broad git add",
+  !riskyGitStagePattern.test(allDocs),
+  "Go-live docs should not recommend git add . because it can stage local exports, evidence or environment mistakes."
 );
 
 check(

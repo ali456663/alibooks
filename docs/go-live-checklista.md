@@ -63,7 +63,8 @@ npm run check:release -- --with-backend --with-docker-build
 npm run check:go-live-risks
 npm run check:prepush -- --allow-ahead
 npm run check:git
-git add .
+git status -sb
+git add <andrade AliBooks-filer>
 git commit -m "Prepare AliBooks MVP release"
 npm run check:git -- --strict
 git push
@@ -72,6 +73,7 @@ npm run check:sync
 
 Om `check:git -- --strict` failar efter commit betyder det att viktiga filer fortfarande ligger utanfor git.
 Om `check:sync` failar efter push betyder det att lokal branch och GitHub inte ar i samma lage.
+Anvand inte punkt-formen av `git add` fore go-live. Kontrollera forst `git status -sb` och stage:a bara de filer som hor till AliBooks-andringen, sa att lokala underlag, exporter eller miljo filer inte foljer med av misstag.
 
 ## 2. Dockerhub Secrets
 
