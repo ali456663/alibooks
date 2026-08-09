@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host :: --port 5157 --strictPort",
     "build": "vite build",
+    "check:acceptance": "node ../scripts/mvp-acceptance-check.mjs",
     "check:api-contract": "node ../scripts/api-contract-check.mjs",
     "check:release": "node ../scripts/release-gate.mjs",
     "preview": "vite preview --host :: --port 5157 --strictPort",

@@ -30,7 +30,8 @@ Detta bevisar lokalt att:
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 18:23 +02:00
 - `npm run check:release`: passed 2026-08-09 18:48 +02:00
 - `npm run test:backend`: passed 2026-08-09 18:49 +02:00, 184 tests, 0 failures, 0 errors
-- `check:ready`: 64/64
+- `check:ready`: 66/66
+- `check:acceptance`: 16/16
 - `check:data-safety`: 55/55
 - `check:prod`: 41/41
 - `check:ci`: 24/24
@@ -40,6 +41,7 @@ Detta bevisar lokalt att:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
 - CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten.
+- MVP-acceptans kontrolleras lokalt med `npm run check:acceptance` och skiljer automatiskt bevis fran manuella go-live-klicktester.
 - CI kor backendtester med explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update` sa schema-laget inte ar dolt i GitHub Actions.
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
 - Restore drill har skyddade script for Linux/EC2 och Windows som kraver `RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE`.

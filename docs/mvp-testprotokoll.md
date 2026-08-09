@@ -8,6 +8,28 @@ Markera varje rad som:
 OK / Fel / Ej testat
 ```
 
+## Automatiskt bevis
+
+Ej testat betyder att raden fortfarande ska klicktestas manuellt innan skarp drift eller demo med riktig data.
+Det betyder inte att AliBooks saknar automatiska skydd. Foljande kontroller bevisar delar av MVP-flodet varje gang release-gaten kors:
+
+- `npm run check:release` bygger frontend, kor vykontroll, releasekontroller och `smoke:runtime`.
+- `smoke:runtime` kontrollerar att AliBooks inte visar vit sida, inte hamnar i render recovery och att `?reset=1` landar pa oversikt.
+- `npm run test:backend` kor backendtester for auth, kunder, fakturor, betalningar, bokforing, moms, Stripe, PDF och rapportlogik.
+- `check:api-contract` kontrollerar kritiska frontend/backend-kontrakt for registrering, login, kunder, fakturor, bokforing, moms och rapporter.
+- `check:backup`, `check:prod` och `check:go-live-risks` kontrollerar backup/restore, produktionsmallar och go-live-risker.
+
+## Manuellt kvar fore go-live
+
+Detta ska fortfarande kontrolleras med riktig webblasare och testdata innan AliBooks anvands skarpt:
+
+- kunduppgifter pa faktura: namn, personnummer, adress, postnummer, stad, telefon och e-post
+- PDF visuellt: layout, betalningsinfo, F-skatt, OCR, PlusGiro och mottagare
+- Stripe-flode med testnycklar och webhook innan riktiga betalningar
+- underlag och kvitto/PDF: uppladdning, nedladdning och export
+- restore drill till separat test database
+- publik URL pa EC2/RDS och produktions-smoke mot `/api/health` och `/api/system/status`
+
 ## 1. Start och systemstatus
 
 | Test | Forvantat resultat | Status | Anteckning |

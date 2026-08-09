@@ -91,6 +91,12 @@ check(
 );
 
 check(
+  "Package exposes acceptance check",
+  packageJson.scripts?.["check:acceptance"] === "node ../scripts/mvp-acceptance-check.mjs",
+  "frontend/package.json should expose npm run check:acceptance."
+);
+
+check(
   "Package exposes pre-push gate",
   packageJson.scripts?.["check:prepush"] === "node ../scripts/pre-push-gate.mjs",
   "frontend/package.json should expose npm run check:prepush."
@@ -106,6 +112,12 @@ check(
   "Release gate runs evidence check",
   releaseGate.includes('"check:evidence"'),
   "The release gate should fail when MVP evidence becomes stale."
+);
+
+check(
+  "Release gate runs acceptance check",
+  releaseGate.includes('"check:acceptance"'),
+  "The release gate should fail when MVP acceptance coverage becomes stale."
 );
 
 check(

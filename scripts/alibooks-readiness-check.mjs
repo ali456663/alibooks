@@ -56,6 +56,7 @@ check(
   "Frontend scripts",
   includesAll(Object.keys(frontendPackage.scripts || {}).join("\n"), [
     "build",
+    "check:acceptance",
     "check:api-contract",
     "check:release",
     "check:ready",
@@ -78,7 +79,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -88,6 +89,7 @@ check("CI runs frontend release gate", ci.includes("npm run check:release"), "Gi
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");
 check("Release gate runs frontend smoke", releaseGate.includes('"smoke:runtime"'), "Release gate should run smoke:runtime");
 check("Release gate checks professional loop", releaseGate.includes('"check:professional-loop"'), "Release gate should run professional-loop check");
+check("Release gate checks MVP acceptance", releaseGate.includes('"check:acceptance"'), "Release gate should run MVP acceptance coverage check");
 check("Release gate checks API contract", releaseGate.includes('"check:api-contract"'), "Release gate should run API contract check");
 check("Release gate checks AliBooks readiness", releaseGate.includes('"check:ready"'), "Release gate should run check:ready");
 check("Release gate checks backend wiring", releaseGate.includes('"check:backend-wiring"'), "Release gate should run backend wiring check");
@@ -181,6 +183,13 @@ check(
   "Frontend smoke checks reset and blank page",
   includesAll(runtimeSmoke, ["alibooks-active-view", "bodyTextLength", "rootChildCount", "scrollHeight", "render recovery"]),
   "Runtime smoke should catch blank pages, render recovery and broken local UI reset."
+);
+
+const mvpAcceptance = read("scripts/mvp-acceptance-check.mjs");
+check(
+  "MVP acceptance check exists",
+  includesAll(mvpAcceptance, ["Automatiskt bevis", "Manuellt kvar fore go-live", "MVP acceptance check"]),
+  "MVP acceptance should separate automated release evidence from manual go-live checks."
 );
 
 const failed = results.filter((result) => !result.ok && result.severity === "fail");

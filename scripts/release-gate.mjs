@@ -16,6 +16,7 @@ const withDockerBuild = args.has("--with-docker-build");
 const frontendSteps = [
   ["build", "Build frontend"],
   ["check:professional-loop", "Check professional accounting loop"],
+  ["check:acceptance", "Check MVP acceptance coverage"],
   ["check:api-contract", "Check frontend/backend API contract"],
   ["check:ready", "Check AliBooks readiness"],
   ["check:backend-wiring", "Check backend constructor and record wiring"],
