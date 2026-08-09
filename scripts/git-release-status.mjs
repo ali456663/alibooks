@@ -48,7 +48,7 @@ function runGit(commandArgs) {
     process.exit(result.status || 1);
   }
 
-  return result.stdout.trim();
+  return result.stdout.trimEnd();
 }
 
 function normalizePath(value) {

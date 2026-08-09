@@ -183,6 +183,13 @@ check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub A
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");
 
+const gitReleaseStatus = read("scripts/git-release-status.mjs");
+check(
+  "Git release status preserves porcelain status columns",
+  gitReleaseStatus.includes("trimEnd()") && !gitReleaseStatus.includes("stdout.trim()"),
+  "Git status parser must preserve leading spaces from porcelain output so unstaged important files are not missed."
+);
+
 const schemaPolicy = read("scripts/schema-policy-check.mjs");
 check("Schema policy check exists", includesAll(schemaPolicy, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "schema drift"]), "Schema policy should guard against implicit database schema changes");
 
