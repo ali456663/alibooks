@@ -44,14 +44,34 @@ $env:PGPASSWORD="replace-with-rds-password"
 
 Do not restore into production first. Aterlas alltid forst till en separat test database.
 
-Exempel:
+Skapa eller valj en separat testdatabas, till exempel `alibooks_restore_test`.
+
+### Restore fran EC2/Linux
 
 ```bash
-docker run --rm \
-  -e PGPASSWORD="$PGPASSWORD" \
-  -v "$PWD/backups:/backups" \
-  postgres:16 \
-  pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d alibooks_restore_test --clean --if-exists "/backups/<backup-file>.dump"
+export PGHOST=your-rds-endpoint.eu-north-1.rds.amazonaws.com
+export PGPORT=5432
+export PGDATABASE=alibooks_restore_test
+export PGUSER=cloudshop
+export PGPASSWORD='replace-with-rds-password'
+export RESTORE_FILE='./backups/<backup-file>.dump'
+export RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE
+
+sh ./scripts/restore-postgres.sh
+```
+
+### Restore fran Windows/PowerShell
+
+```powershell
+$env:PGHOST="your-rds-endpoint.eu-north-1.rds.amazonaws.com"
+$env:PGPORT="5432"
+$env:PGDATABASE="alibooks_restore_test"
+$env:PGUSER="cloudshop"
+$env:PGPASSWORD="replace-with-rds-password"
+$env:RESTORE_FILE=".\backups\<backup-file>.dump"
+$env:RESTORE_CONFIRM="RESTORE_TO_TEST_DATABASE"
+
+.\scripts\restore-postgres.ps1
 ```
 
 Efter restore drill:

@@ -40,7 +40,11 @@ const requiredFiles = [
   "docs/professionell-bokforing-loop.md",
   "docs/release-evidence.md",
   "docs/backup-restore-runbook.md",
-  "docs/go-live-riskregister.md"
+  "docs/go-live-riskregister.md",
+  "scripts/backup-postgres.sh",
+  "scripts/backup-postgres.ps1",
+  "scripts/restore-postgres.sh",
+  "scripts/restore-postgres.ps1"
 ];
 
 for (const file of requiredFiles) {

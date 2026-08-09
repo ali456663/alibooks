@@ -89,6 +89,8 @@ const smokeSh = read("scripts/prod-smoke-test.sh");
 const smokePs = read("scripts/prod-smoke-test.ps1");
 const backupSh = read("scripts/backup-postgres.sh");
 const backupPs = read("scripts/backup-postgres.ps1");
+const restoreSh = read("scripts/restore-postgres.sh");
+const restorePs = read("scripts/restore-postgres.ps1");
 const envSource = readMaybe(envFile);
 
 check("Production env file exists", envSource !== null, envFile);
@@ -126,6 +128,8 @@ check("Shell smoke checks frontend/backend/database", ["FRONTEND_URL", "BACKEND_
 check("PowerShell smoke checks frontend/backend/database", ["FrontendUrl", "BackendUrl", "/health", "/system/status", "database.ok"].every((item) => smokePs.includes(item)), "prod-smoke-test.ps1 should verify frontend, backend and DB");
 check("Shell backup creates and verifies PostgreSQL dump", ["pg_dump", "-Fc", "pg_restore", "-l", "postgres:16"].every((item) => backupSh.includes(item)), "backup-postgres.sh should create and verify a PostgreSQL backup");
 check("PowerShell backup creates and verifies PostgreSQL dump", ["pg_dump", "-Fc", "pg_restore", "-l", "postgres:16"].every((item) => backupPs.includes(item)), "backup-postgres.ps1 should create and verify a PostgreSQL backup");
+check("Shell restore drill restores only with explicit confirmation", ["RESTORE_FILE", "RESTORE_CONFIRM", "RESTORE_TO_TEST_DATABASE", "pg_restore", "--clean", "--if-exists", "postgres:16"].every((item) => restoreSh.includes(item)), "restore-postgres.sh should restore a verified dump only after explicit test-database confirmation");
+check("PowerShell restore drill restores only with explicit confirmation", ["RestoreFile", "RestoreConfirm", "RESTORE_TO_TEST_DATABASE", "pg_restore", "--clean", "--if-exists", "postgres:16"].every((item) => restorePs.includes(item)), "restore-postgres.ps1 should restore a verified dump only after explicit test-database confirmation");
 
 const frontendUrl = value(env, "APP_FRONTEND_URL");
 const corsOrigins = value(env, "APP_CORS_ALLOWED_ORIGINS");

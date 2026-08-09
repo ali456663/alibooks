@@ -30,15 +30,16 @@ Detta bevisar lokalt att:
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 18:23 +02:00
 - `npm run check:release`: passed 2026-08-09 18:48 +02:00
 - `npm run test:backend`: passed 2026-08-09 18:49 +02:00, 184 tests, 0 failures, 0 errors
-- `check:ready`: 59/59
+- `check:ready`: 63/63
 - `check:data-safety`: 55/55
-- `check:prod`: 39/39
-- `npm run check:backup`: passed
+- `check:prod`: 41/41
+- `npm run check:backup`: passed, 17/17
 - Docker images skapade lokalt:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
 - CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten.
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
+- Restore drill har skyddade script for Linux/EC2 och Windows som kraver `RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE`.
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.

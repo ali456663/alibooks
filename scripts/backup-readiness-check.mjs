@@ -24,12 +24,16 @@ function includesAll(source, values) {
 
 const shellBackup = exists("scripts/backup-postgres.sh") ? read("scripts/backup-postgres.sh") : "";
 const psBackup = exists("scripts/backup-postgres.ps1") ? read("scripts/backup-postgres.ps1") : "";
+const shellRestore = exists("scripts/restore-postgres.sh") ? read("scripts/restore-postgres.sh") : "";
+const psRestore = exists("scripts/restore-postgres.ps1") ? read("scripts/restore-postgres.ps1") : "";
 const runbook = exists("docs/backup-restore-runbook.md") ? read("docs/backup-restore-runbook.md") : "";
 const gitignore = read(".gitignore");
 const releaseEvidence = read("docs/release-evidence.md");
 
 check("Shell backup script exists", exists("scripts/backup-postgres.sh"), "Linux/EC2 backup script should exist.");
 check("PowerShell backup script exists", exists("scripts/backup-postgres.ps1"), "Windows backup script should exist.");
+check("Shell restore script exists", exists("scripts/restore-postgres.sh"), "Linux/EC2 restore drill script should exist.");
+check("PowerShell restore script exists", exists("scripts/restore-postgres.ps1"), "Windows restore drill script should exist.");
 check("Backup runbook exists", exists("docs/backup-restore-runbook.md"), "Backup and restore runbook should exist.");
 
 check(
@@ -53,13 +57,33 @@ check(
   "PowerShell backup should verify the archive catalog after creating it."
 );
 check(
+  "Shell restore verifies catalog before restore",
+  includesAll(shellRestore, ["RESTORE_FILE", "RESTORE_CONFIRM", "pg_restore", "-l", "--clean", "--if-exists"]),
+  "Shell restore should require a dump file, explicit confirmation and catalog verification."
+);
+check(
+  "Shell restore blocks production-looking targets",
+  includesAll(shellRestore, ["Do not restore into production first", "*test*|*restore*|*drill*", "Refusing restore"]),
+  "Shell restore should default to separate test/restore/drill databases."
+);
+check(
+  "PowerShell restore verifies catalog before restore",
+  includesAll(psRestore, ["RestoreFile", "RestoreConfirm", "pg_restore", "-l", "--clean", "--if-exists"]),
+  "PowerShell restore should require a dump file, explicit confirmation and catalog verification."
+);
+check(
+  "PowerShell restore blocks production-looking targets",
+  includesAll(psRestore, ["test|restore|drill", "Refusing restore", "separate database"]),
+  "PowerShell restore should default to separate test/restore/drill databases."
+);
+check(
   "Backup files are ignored by git",
   includesAll(gitignore, ["backups/", "*.dump"]),
   "Database backup files must not be committed."
 );
 check(
   "Runbook covers restore drill",
-  includesAll(runbook, ["restore drill", "pg_restore", "test database", "Do not restore into production first"]),
+  includesAll(runbook, ["restore drill", "restore-postgres.sh", "restore-postgres.ps1", "test database", "Do not restore into production first"]),
   "Runbook should explain how to test restore away from production."
 );
 check(
