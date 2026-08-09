@@ -32,6 +32,7 @@ function check(name, ok, detail) {
 }
 
 const allDocs = docs.map((file) => `${file}\n${read(file)}`).join("\n\n");
+const mojibakeMarkers = ["Ã", "Â", "ï¿½", "�"];
 
 check(
   "Local frontend port is 5157",
@@ -83,7 +84,7 @@ check(
 
 check(
   "No mojibake in Swedish docs",
-  !/[ÃÂ�]/.test(allDocs),
+  !mojibakeMarkers.some((marker) => allDocs.includes(marker)),
   "Docs should not contain broken encoding characters."
 );
 

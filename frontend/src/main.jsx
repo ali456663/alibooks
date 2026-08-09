@@ -14890,7 +14890,7 @@ function App() {
         : `${answerIntro} To see whether AliBooks is ready: go to Go-live. It shows a readiness score of ${goLiveScore}%, status ${goLiveStatusText}, ${goLiveRemainingCount} remaining steps, ${goLiveCriticalCount} critical items and ${goLiveWarningCount} warnings. Start with critical items before using the app in production.`, "goLive");
     }
 
-    if (normalizedQuestion.includes("testflode") || normalizedQuestion.includes("testflÃ¶de") || normalizedQuestion.includes("hela flodet") || normalizedQuestion.includes("hela flÃ¶det") || normalizedQuestion.includes("end-to-end") || normalizedQuestion.includes("e2e") || normalizedQuestion.includes("test flow")) {
+    if (normalizedQuestion.includes("testflode") || normalizedQuestion.includes("testflode") || normalizedQuestion.includes("hela flodet") || normalizedQuestion.includes("hela flodet") || normalizedQuestion.includes("end-to-end") || normalizedQuestion.includes("e2e") || normalizedQuestion.includes("test flow")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For att testa AliBooks pa riktigt: ga till Testflode. Dar gar du steg for steg genom system, foretagsuppgifter, kund, tjanst, faktura, PDF/e-post, betalning, bokforing, moms/rapport och backup. Testscore ar ${testFlowScore}% med ${testFlowRemainingCount} steg kvar.`
         : `${answerIntro} To test AliBooks properly: go to Test flow. It walks through system, company details, customer, service, invoice, PDF/email, payment, bookkeeping, VAT/report and backup. Test score is ${testFlowScore}% with ${testFlowRemainingCount} steps remaining.`, "testFlow");
@@ -14908,7 +14908,7 @@ function App() {
         : `${answerIntro} Go to Payment reconciliation. It checks unpaid invoices, partial payments, overpayments, bank CSV, Stripe 1580, bank difference and unbalanced vouchers. Current score is ${paymentReconciliationScore}% with ${paymentReconciliationCriticalCount} critical items and ${paymentReconciliationWarningCount} warnings.`, "paymentReconciliation");
     }
 
-    if (normalizedQuestion.includes("idag") || normalizedQuestion.includes("daglig") || normalizedQuestion.includes("att gora") || normalizedQuestion.includes("att gÃ¶ra") || normalizedQuestion.includes("prioritet") || normalizedQuestion.includes("today") || normalizedQuestion.includes("daily") || normalizedQuestion.includes("todo") || normalizedQuestion.includes("priority")) {
+    if (normalizedQuestion.includes("idag") || normalizedQuestion.includes("daglig") || normalizedQuestion.includes("att gora") || normalizedQuestion.includes("att gora") || normalizedQuestion.includes("prioritet") || normalizedQuestion.includes("today") || normalizedQuestion.includes("daily") || normalizedQuestion.includes("todo") || normalizedQuestion.includes("priority")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} Ga till Daglig rutin. Den visar vad du ska gora idag: forfallna fakturor, bankrader, saknade underlag, moms/skatt, backup och kritiska kontroller. Just nu ar score ${dailyRoutineScore}%, ${dailyRoutineTodoCount} punkter att gora och ${dailyRoutineCriticalCount} kritiska.`
         : `${answerIntro} Go to Daily routine. It shows what to do today: overdue invoices, bank rows, missing receipts, VAT/tax, backup and critical checks. Current score is ${dailyRoutineScore}%, ${dailyRoutineTodoCount} items to do and ${dailyRoutineCriticalCount} critical.`, "dailyRoutine");
@@ -14968,7 +14968,7 @@ function App() {
         : `${answerIntro} For budget: go to Budget & goals. Set revenue target, expense limit and reserve percentage. AliBooks compares each month against plan and shows whether you are on track, should watch, or have risk. The latest period shows ${budgetCurrentRow?.revenue || 0} SEK revenue, ${budgetCurrentRow?.expenses || 0} SEK expenses and ${budgetCurrentRow?.afterReserve || 0} SEK after reserve.`, "budget");
     }
 
-    if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lÃ¶n") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
+    if (normalizedQuestion.includes("lon") || normalizedQuestion.includes("lon") || normalizedQuestion.includes("payroll") || normalizedQuestion.includes("salary")) {
       return createAnswer(language === "sv"
         ? `${answerIntro} For lon: ga till Lon. Dar kan du spara anstallda, skapa loneutkast, oppna lonebesked, kontrollera manadens loneunderlag, markera lonebetalningar, bokfora lonen, hantera skattekonto och spara/ladda lonedatan i databasen. Kontrollera alltid exakta skatter innan riktig utbetalning.`
         : `${answerIntro} For payroll: go to Payroll. Save employees, create payroll drafts, open payslips, review the monthly payroll report, mark payroll payments, book payroll, handle tax account settlement and save/load payroll data in the database. Always verify exact taxes before real payment.`, "payroll");

@@ -45,6 +45,7 @@ npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
 npm run check:secrets
+npm run check:git
 npm run check:views
 npm run smoke:runtime
 npm run test:backend
@@ -56,6 +57,7 @@ npm run test:backend
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
 `npm run check:secrets` stoppar riktiga Stripe-, AI-, AWS- eller private-key-liknande hemligheter fran att hamna i GitHub.
+`npm run check:git` visar om viktiga filer ligger lokalt utan att vara commitade. Efter release-commit ska `npm run check:git -- --strict` vara gron.
 `npm run check:views` kontrollerar att varje menyknapp har en faktisk renderad vy, sa appen inte blir vit av en trasig navigation.
 `npm run test:backend` kor backendtester med lokal Maven om den finns, annars via Docker med Java 21.
 
