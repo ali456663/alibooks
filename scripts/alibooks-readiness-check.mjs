@@ -141,6 +141,14 @@ check(
   "Use placeholders in .env.example files, not real keys"
 );
 
+const gitignore = read(".gitignore");
+const secretCheck = read("scripts/secret-placeholder-check.mjs");
+check(
+  "Secret scan skips local caches and backups",
+  includesAll(gitignore, [".m2-cache/", "backups/"]) && includesAll(secretCheck, ['".m2-cache"', '"backups"']),
+  "Secret scan and gitignore should agree that local Maven cache and database backups are not release artifacts."
+);
+
 const mainSource = read("frontend/src/main.jsx");
 check("Professional 20-step plan exists", mainSource.includes("const professionalActionPlanRows = ["), "Frontend should expose the professional action plan");
 check("Go-live view exists", mainSource.includes('activeView === "goLive"'), "Frontend should expose Startklar/Go-live");

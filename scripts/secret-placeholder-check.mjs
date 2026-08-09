@@ -10,6 +10,8 @@ const ignoredDirectories = new Set([
   ".idea",
   ".agents",
   ".codex",
+  ".m2-cache",
+  "backups",
   "node_modules",
   "target",
   "dist",
