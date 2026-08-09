@@ -54,6 +54,14 @@ public class StripePaymentService {
     Order invoice = orderRepository.findById(invoiceId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if (invoice.isCreditInvoice() || "CREDITED".equals(invoice.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe checkout cannot be created for credit invoices or credited invoices.");
+    }
+
+    if (!invoice.hasRemainingAmount()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice has no remaining amount to pay.");
+    }
+
     Stripe.apiKey = stripeSecretKey;
 
     SessionCreateParams params = SessionCreateParams.builder()
@@ -68,7 +76,7 @@ public class StripePaymentService {
                 .setPriceData(
                     SessionCreateParams.LineItem.PriceData.builder()
                         .setCurrency("sek")
-                        .setUnitAmount((long) invoice.getTotalAmount() * 100)
+                        .setUnitAmount((long) invoice.getRemainingAmount() * 100)
                         .setProductData(
                             SessionCreateParams.LineItem.PriceData.ProductData.builder()
                                 .setName("Invoice #" + invoice.getId() + " - " + invoice.getProduct().getName())
@@ -123,9 +131,10 @@ public class StripePaymentService {
         Order invoice = orderRepository.findById(Long.valueOf(invoiceId))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
-        if (!"PAID".equals(invoice.getStatus())) {
-          accountingService.createPaymentEntries(invoice);
-          invoice.setStatus("PAID");
+        if (!invoice.isCreditInvoice() && !"CREDITED".equals(invoice.getStatus()) && invoice.hasRemainingAmount()) {
+          int paidAmount = invoice.getRemainingAmount();
+          accountingService.createPaymentEntries(invoice, LocalDate.now(), paidAmount);
+          invoice.registerPayment(LocalDate.now(), paidAmount, "Stripe " + event.getId());
           orderRepository.save(invoice);
         }
       } else {

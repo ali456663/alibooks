@@ -2,7 +2,9 @@ package se.cloudshop.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -19,7 +21,13 @@ class UserServiceTest {
 
   @Test
   void rejectsShortPasswordDuringRegistration() {
-    assertThatThrownBy(() -> userService.register("demo@example.com", "123"))
+    assertThatThrownBy(() -> userService.register("demo@example.com", "1234567"))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void rejectsInvalidEmailDuringRegistration() {
+    assertThatThrownBy(() -> userService.register("not-an-email", "secret123"))
         .isInstanceOf(ResponseStatusException.class);
   }
 
@@ -30,5 +38,20 @@ class UserServiceTest {
     when(userRepository.findByEmail("demo@example.com")).thenReturn(Optional.of(user));
 
     assertThat(userService.login("demo@example.com", "secret123")).contains(user);
+  }
+
+  @Test
+  void normalizesEmailDuringRegistrationAndLogin() {
+    when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    User registered = userService.register("  DEMO@EXAMPLE.COM  ", "secret123");
+
+    assertThat(registered.getEmail()).isEqualTo("demo@example.com");
+    verify(userRepository).existsByEmail("demo@example.com");
+
+    User user = new User("demo@example.com", passwordEncoder.encode("secret123"));
+    when(userRepository.findByEmail("demo@example.com")).thenReturn(Optional.of(user));
+
+    assertThat(userService.login("  DEMO@EXAMPLE.COM  ", "secret123")).contains(user);
   }
 }

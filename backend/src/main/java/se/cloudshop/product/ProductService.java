@@ -41,14 +41,22 @@ public class ProductService {
   }
 
   private void applyValues(Product product, Product request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service data is required.");
+    }
+
     String name = request.getName() == null ? "" : request.getName().trim();
 
     if (name.length() < 2) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service name must contain at least 2 characters.");
     }
 
-    if (request.getPrice() < 0 || request.getDiscountPrice() < 0) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Price cannot be negative.");
+    if (request.getPrice() <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Price must be greater than 0.");
+    }
+
+    if (request.getDiscountPrice() < 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount price cannot be negative.");
     }
 
     if (request.getDiscountPrice() > 0 && request.getDiscountPrice() >= request.getPrice()) {
@@ -56,10 +64,19 @@ public class ProductService {
     }
 
     product.setName(name);
-    product.setDescription(request.getDescription());
+    product.setDescription(cleanOptionalText(request.getDescription()));
     product.setPrice(request.getPrice());
     product.setDiscountPrice(request.getDiscountPrice());
-    product.setDiscountLabel(request.getDiscountLabel());
+    product.setDiscountLabel(cleanOptionalText(request.getDiscountLabel()));
     product.setActive(request.isActive());
+  }
+
+  private String cleanOptionalText(String value) {
+    if (value == null) {
+      return null;
+    }
+
+    String trimmed = value.trim();
+    return trimmed.isEmpty() ? null : trimmed;
   }
 }

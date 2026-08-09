@@ -38,6 +38,9 @@ public class Order {
   private LocalDate paidDate;
   private int paidAmount;
   private String paymentReference;
+  private LocalDate refundDate;
+  private int refundedAmount;
+  private String refundReference;
   private LocalDate reminderSentDate;
 
   @ManyToOne
@@ -179,6 +182,18 @@ public class Order {
     return paymentReference;
   }
 
+  public LocalDate getRefundDate() {
+    return refundDate;
+  }
+
+  public int getRefundedAmount() {
+    return refundedAmount;
+  }
+
+  public String getRefundReference() {
+    return refundReference;
+  }
+
   public LocalDate getReminderSentDate() {
     return reminderSentDate;
   }
@@ -202,11 +217,23 @@ public class Order {
   }
 
   public int getRemainingAmount() {
+    if ("DRAFT".equals(status) || "CREDITED".equals(status) || creditInvoice) {
+      return 0;
+    }
+
     return Math.max(totalAmount - paidAmount, 0);
   }
 
   public boolean hasRemainingAmount() {
     return getRemainingAmount() > 0;
+  }
+
+  public int getRefundableAmount() {
+    if (!"CREDITED".equals(status)) {
+      return 0;
+    }
+
+    return Math.max(paidAmount - refundedAmount, 0);
   }
 
   public void registerPayment(LocalDate paidDate, int paymentAmount, String paymentReference) {
@@ -215,6 +242,25 @@ public class Order {
     this.paymentReference = paymentReference;
     this.status = this.paidAmount >= this.totalAmount ? "PAID" : "PARTIALLY_PAID";
     this.payments.add(new InvoicePayment(this, paidDate, paymentAmount, paymentReference));
+  }
+
+  public boolean hasPayment(LocalDate paymentDate, int paymentAmount, String paymentReference) {
+    String normalizedReference = normalizePaymentReference(paymentReference);
+    if (normalizedReference.isBlank()) {
+      return false;
+    }
+
+    return this.payments.stream()
+        .anyMatch(payment -> payment.getPaymentDate() != null
+            && payment.getPaymentDate().equals(paymentDate)
+            && payment.getAmount() == paymentAmount
+            && normalizePaymentReference(payment.getReference()).equals(normalizedReference));
+  }
+
+  public void registerRefund(LocalDate refundDate, int refundAmount, String refundReference) {
+    this.refundDate = refundDate;
+    this.refundedAmount += refundAmount;
+    this.refundReference = refundReference;
   }
 
   public List<InvoicePayment> getPayments() {
@@ -290,6 +336,16 @@ public class Order {
   }
 
   public void setAmounts(int netAmount, int vatAmount, int totalAmount) {
+    if (netAmount + vatAmount != totalAmount) {
+      throw new IllegalArgumentException("Invoice total must equal net amount plus VAT amount.");
+    }
+
+    boolean hasPositiveAmount = netAmount > 0 || vatAmount > 0 || totalAmount > 0;
+    boolean hasNegativeAmount = netAmount < 0 || vatAmount < 0 || totalAmount < 0;
+    if (hasPositiveAmount && hasNegativeAmount) {
+      throw new IllegalArgumentException("Invoice amounts must not mix positive and negative values.");
+    }
+
     this.netAmount = netAmount;
     this.vatAmount = vatAmount;
     this.totalAmount = totalAmount;
@@ -315,5 +371,9 @@ public class Order {
 
   private int normalizeQuantity(int quantity) {
     return quantity <= 0 ? 1 : quantity;
+  }
+
+  private String normalizePaymentReference(String reference) {
+    return reference == null ? "" : reference.trim().toLowerCase();
   }
 }

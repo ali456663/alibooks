@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LiquidMetal, liquidMetalPresets } from "@paper-design/shaders-react";
 import { motion } from "framer-motion";
 import { Badge } from "./badge.jsx";

@@ -1,14 +1,21 @@
 package se.cloudshop.settings;
 
+import java.time.LocalDate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import se.cloudshop.accounting.JournalEntryRepository;
 
 @Service
 public class SettingsService {
 
   private final AppSettingsRepository appSettingsRepository;
+  private final JournalEntryRepository journalEntryRepository;
 
-  public SettingsService(AppSettingsRepository appSettingsRepository) {
+  public SettingsService(AppSettingsRepository appSettingsRepository, JournalEntryRepository journalEntryRepository) {
     this.appSettingsRepository = appSettingsRepository;
+    this.journalEntryRepository = journalEntryRepository;
   }
 
   public AppSettings getSettings() {
@@ -16,14 +23,26 @@ public class SettingsService {
         .orElseGet(() -> appSettingsRepository.save(AppSettings.defaults()));
   }
 
+  @Transactional
   public AppSettings updateSettings(AppSettings updatedSettings) {
+    if (updatedSettings == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Settings payload is required.");
+    }
+
     AppSettings settings = getSettings();
+    LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
+    validateAccountingLockChange(currentLockedThroughDate, updatedSettings.getAccountingLockedThroughDate());
+    validateAccountingPolicyChange(settings, updatedSettings);
     settings.setCompanyName(updatedSettings.getCompanyName());
     settings.setContactEmail(updatedSettings.getContactEmail());
     settings.setPlusGiro(updatedSettings.getPlusGiro());
     settings.setDefaultOcr(updatedSettings.getDefaultOcr());
     settings.setPaymentRecipient(updatedSettings.getPaymentRecipient());
     settings.setCompanyType(normalizeCompanyType(updatedSettings.getCompanyType()));
+    settings.setAccountingMethod(normalizeAccountingMethod(updatedSettings.getAccountingMethod()));
+    settings.setVatReportingPeriod(normalizeVatReportingPeriod(updatedSettings.getVatReportingPeriod()));
+    settings.setFiscalYearStartMonth(normalizeMonth(updatedSettings.getFiscalYearStartMonth(), 1));
+    settings.setFiscalYearEndMonth(normalizeMonth(updatedSettings.getFiscalYearEndMonth(), 12));
     settings.setVatPercent(updatedSettings.getVatPercent());
     settings.setPaymentTermsDays(updatedSettings.getPaymentTermsDays() <= 0 ? 30 : updatedSettings.getPaymentTermsDays());
     settings.setFTaxApproved(updatedSettings.isFTaxApproved());
@@ -34,8 +53,65 @@ public class SettingsService {
     settings.setOverdueInvoiceRemindersEnabled(updatedSettings.isOverdueInvoiceRemindersEnabled());
     settings.setOverdueInvoiceReminderDaysAfterDue(normalizeReminderDays(updatedSettings.getOverdueInvoiceReminderDaysAfterDue()));
     settings.setOverdueInvoiceReminderTemplate(normalizeOverdueReminderTemplate(updatedSettings.getOverdueInvoiceReminderTemplate()));
-    settings.setAccountingLockedThroughDate(updatedSettings.getAccountingLockedThroughDate());
+    settings.setAccountingLockedThroughDate(currentLockedThroughDate);
     return appSettingsRepository.save(settings);
+  }
+
+  @Transactional
+  public AppSettings lockAccountingThroughDate(LocalDate lockedThroughDate) {
+    if (lockedThroughDate == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Accounting lock date is required.");
+    }
+
+    AppSettings settings = getSettings();
+    LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
+    if (currentLockedThroughDate != null && lockedThroughDate.isBefore(currentLockedThroughDate)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Accounting lock date cannot be moved backwards."
+      );
+    }
+
+    settings.setAccountingLockedThroughDate(lockedThroughDate);
+    return appSettingsRepository.save(settings);
+  }
+
+  private void validateAccountingLockChange(LocalDate currentLockedThroughDate, LocalDate requestedLockedThroughDate) {
+    if (currentLockedThroughDate == null && requestedLockedThroughDate == null) {
+      return;
+    }
+
+    if (currentLockedThroughDate == null || requestedLockedThroughDate == null || !currentLockedThroughDate.equals(requestedLockedThroughDate)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Accounting lock date must be changed from Period lock, not regular settings."
+      );
+    }
+  }
+
+  private void validateAccountingPolicyChange(AppSettings currentSettings, AppSettings requestedSettings) {
+    if (journalEntryRepository.count() == 0) {
+      return;
+    }
+
+    String currentCompanyType = normalizeCompanyType(currentSettings.getCompanyType());
+    String requestedCompanyType = normalizeCompanyType(requestedSettings.getCompanyType());
+    String currentAccountingMethod = normalizeAccountingMethod(currentSettings.getAccountingMethod());
+    String requestedAccountingMethod = normalizeAccountingMethod(requestedSettings.getAccountingMethod());
+
+    if (!currentCompanyType.equals(requestedCompanyType)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Company type cannot be changed after bookkeeping has been created. Create a migration note or a new company setup instead."
+      );
+    }
+
+    if (!currentAccountingMethod.equals(requestedAccountingMethod)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Accounting method cannot be changed after bookkeeping has been created. Create a controlled migration instead."
+      );
+    }
   }
 
   private String normalizeCompanyType(String companyType) {
@@ -44,6 +120,30 @@ public class SettingsService {
     }
 
     return "SOLE_TRADER";
+  }
+
+  private String normalizeAccountingMethod(String accountingMethod) {
+    if ("CASH_METHOD".equals(accountingMethod)) {
+      return "CASH_METHOD";
+    }
+
+    return "INVOICE_METHOD";
+  }
+
+  private String normalizeVatReportingPeriod(String vatReportingPeriod) {
+    if ("MONTHLY".equals(vatReportingPeriod) || "YEARLY".equals(vatReportingPeriod)) {
+      return vatReportingPeriod;
+    }
+
+    return "QUARTERLY";
+  }
+
+  private int normalizeMonth(int month, int fallback) {
+    if (month < 1 || month > 12) {
+      return fallback;
+    }
+
+    return month;
   }
 
   private int normalizeReminderDays(int days) {

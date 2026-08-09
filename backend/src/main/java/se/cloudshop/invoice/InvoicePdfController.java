@@ -1,6 +1,9 @@
 package se.cloudshop.invoice;
 
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,7 +11,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.order.Order;
 import se.cloudshop.order.OrderRepository;
@@ -40,11 +42,22 @@ public class InvoicePdfController {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
     byte[] pdf = invoicePdfService.createInvoicePdf(invoice);
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
+    ContentDisposition contentDisposition = ContentDisposition.inline()
+        .filename(safeDownloadFilename(filename), StandardCharsets.UTF_8)
+        .build();
 
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=" + filename)
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
         .contentType(MediaType.APPLICATION_PDF)
         .body(pdf);
   }
-}
 
+  private String safeDownloadFilename(String filename) {
+    String clean = filename == null ? "" : filename.trim()
+        .replace('\r', '_')
+        .replace('\n', '_')
+        .replace('\\', '_')
+        .replace('/', '_');
+    return clean.isBlank() ? "invoice.pdf" : clean;
+  }
+}

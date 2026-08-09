@@ -18,11 +18,10 @@ public class UserService {
   }
 
   public User register(String email, String password) {
-    if (email == null || email.isBlank() || password == null || password.length() < 6) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email and password with at least 6 characters are required.");
+    String normalizedEmail = normalizeEmail(email);
+    if (!isValidEmail(normalizedEmail) || password == null || password.length() < 8) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid email and password with at least 8 characters are required.");
     }
-
-    String normalizedEmail = email.toLowerCase();
 
     if (userRepository.existsByEmail(normalizedEmail)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "User already exists.");
@@ -36,7 +35,15 @@ public class UserService {
       return Optional.empty();
     }
 
-    return userRepository.findByEmail(email.toLowerCase())
+    return userRepository.findByEmail(normalizeEmail(email))
         .filter(user -> passwordEncoder.matches(password, user.getPassword()));
+  }
+
+  private String normalizeEmail(String email) {
+    return email == null ? "" : email.trim().toLowerCase();
+  }
+
+  private boolean isValidEmail(String email) {
+    return email != null && email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
   }
 }

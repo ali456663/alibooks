@@ -7,17 +7,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
+import se.cloudshop.export.CsvEscaper;
 
 @RestController
 public class CustomerExportController {
 
   private final CustomerRepository customerRepository;
   private final AuthHeader authHeader;
+  private final AuditService auditService;
 
-  public CustomerExportController(CustomerRepository customerRepository, AuthHeader authHeader) {
+  public CustomerExportController(CustomerRepository customerRepository, AuthHeader authHeader, AuditService auditService) {
     this.customerRepository = customerRepository;
     this.authHeader = authHeader;
+    this.auditService = auditService;
   }
 
   @GetMapping("/customers/export")
@@ -29,6 +33,7 @@ public class CustomerExportController {
     StringBuilder csv = new StringBuilder();
     csv.append("Id,Namn,E-post,Personnummer,Adress,Postnummer,Stad,Telefon,Arkiverad\n");
 
+    int exportedCount = 0;
     for (Customer customer : customerRepository.findAll()) {
       csv.append(customer.getId()).append(",");
       csv.append(escape(customer.getName())).append(",");
@@ -39,7 +44,19 @@ public class CustomerExportController {
       csv.append(escape(customer.getCity())).append(",");
       csv.append(escape(customer.getPhone())).append(",");
       csv.append(customer.isArchived()).append("\n");
+      exportedCount++;
     }
+
+    auditService.record(
+        "export",
+        "customers",
+        "customers",
+        "customers_exported",
+        "customers",
+        "Customers exported. Rows: " + exportedCount + ".",
+        exportedCount,
+        authorizationHeader
+    );
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=customers.csv")
@@ -48,10 +65,6 @@ public class CustomerExportController {
   }
 
   private String escape(String value) {
-    if (value == null) {
-      return "";
-    }
-
-    return "\"" + value.replace("\"", "\"\"") + "\"";
+    return CsvEscaper.escape(value);
   }
 }

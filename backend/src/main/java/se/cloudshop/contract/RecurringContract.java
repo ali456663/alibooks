@@ -26,8 +26,10 @@ public class RecurringContract {
   private String interval;
   private LocalDate nextInvoiceDate;
   private boolean active;
+  private boolean archived;
   private String lastInvoiceNumber;
   private Instant createdAt;
+  private Instant archivedAt;
 
   public RecurringContract() {
   }
@@ -88,12 +90,20 @@ public class RecurringContract {
     return active;
   }
 
+  public boolean isArchived() {
+    return archived;
+  }
+
   public String getLastInvoiceNumber() {
     return lastInvoiceNumber;
   }
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public Instant getArchivedAt() {
+    return archivedAt;
   }
 
   public void setActive(boolean active) {
@@ -106,5 +116,11 @@ public class RecurringContract {
 
   public void setLastInvoiceNumber(String lastInvoiceNumber) {
     this.lastInvoiceNumber = lastInvoiceNumber;
+  }
+
+  public void archive() {
+    this.active = false;
+    this.archived = true;
+    this.archivedAt = Instant.now();
   }
 }

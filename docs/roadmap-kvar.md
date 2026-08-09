@@ -25,13 +25,39 @@ Klart nar:
 - `docker compose up db` startar PostgreSQL.
 - IntelliJ startar `CloudShopApplication`.
 - Frontend startar med `npm run dev`.
-- `http://localhost:5173` visar appen.
+- `http://localhost:5157` visar appen.
 - `Installningar > Systemstatus` visar att backend och databas fungerar.
 
 Dokument:
 
 - [kom-igang-snabbt.md](kom-igang-snabbt.md)
 - [mvp-testprotokoll.md](mvp-testprotokoll.md)
+- [professionell-bokforing-loop.md](professionell-bokforing-loop.md)
+
+Efter stor frontend-andring:
+
+```bash
+cd frontend
+npm run check:release
+npm run build
+npm run check:ready
+npm run check:backend-wiring
+npm run check:docker
+npm run check:prod
+npm run check:secrets
+npm run check:views
+npm run smoke:runtime
+npm run test:backend
+```
+
+`npm run check:release` kor releasegrinden: frontend build, professionell loop, API-kontrakt, readiness, backend-wiring, dokumentation, secrets, Docker-konfig, vykontroll och runtime-smoke i en fast ordning.
+`npm run check:ready` ar en snabb statisk kontroll for att se att projektet fortfarande har de viktigaste byggstenarna for skarp MVP: CI, Docker, env-mallar, professionell 20-stegsplan, regelkontroll, Startklar, Stripe/SMTP/JWT-punkter och dokumentation.
+`npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
+`npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
+`npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
+`npm run check:secrets` stoppar riktiga Stripe-, AI-, AWS- eller private-key-liknande hemligheter fran att hamna i GitHub.
+`npm run check:views` kontrollerar att varje menyknapp har en faktisk renderad vy, sa appen inte blir vit av en trasig navigation.
+`npm run test:backend` kor backendtester med lokal Maven om den finns, annars via Docker med Java 21.
 
 ## Steg 2: MVP-flode
 
@@ -68,6 +94,7 @@ Det som finns:
 - historik for Stripe-utbetalningar
 - avstamning av konto `1580 Fordran hos Stripe`
 - CSV-export
+- regelvarning i `Regelkontroll` och `Startklar` for kort/Swish/Stripe innan skarp anvandning
 
 Nasta riktiga steg:
 
@@ -75,6 +102,7 @@ Nasta riktiga steg:
 2. Testa `checkout.session.completed`.
 3. Koppla `musclefocusfitness.com` sa Stripe skickar signal till AliBooks.
 4. Kontrollera att AliBooks bokfor utan manuell fallback.
+5. Kontrollera om hemsidebetalningar via kort/Apple Pay/Swish ska hanteras med certifierat kassaregister eller tydlig kontantfaktura-rutin.
 
 Snabb vag:
 
@@ -134,6 +162,7 @@ Bra extra tester:
 - Stripe-utbetalning
 - delbetalning
 - kundvalidering
+- frontend runtime smoke test som oppnar AliBooks i Chrome
 
 ## Steg 6: Presentation
 

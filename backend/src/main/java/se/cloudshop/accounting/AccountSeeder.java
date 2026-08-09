@@ -18,10 +18,12 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("1630", "Skattekonto", "BOTH");
     upsert("1580", "Fordran hos Stripe", "BOTH");
     upsert("1510", "Kundfordringar", "BOTH");
+    upsert("1650", "Momsfordran", "BOTH");
     upsert("1220", "Inventarier och verktyg", "BOTH");
     upsert("1229", "Ackumulerade avskrivningar pa inventarier", "BOTH");
     upsert("2611", "Utgaende moms", "BOTH");
     upsert("2641", "Ingaende moms", "BOTH");
+    upsert("2650", "Redovisningskonto for moms", "BOTH");
     upsert("3041", "Forsaljning tjanster 25 procent", "BOTH");
     upsert("4010", "Inkop", "BOTH");
     upsert("5410", "Forbrukningsinventarier", "BOTH");
@@ -41,11 +43,12 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("2012", "Avrakning skatter och avgifter", "SOLE_TRADER");
     upsert("2013", "Egna uttag", "SOLE_TRADER");
     upsert("2018", "Egna insattningar", "SOLE_TRADER");
+    upsert("2019", "Arets resultat", "SOLE_TRADER");
 
     upsert("2081", "Aktiekapital", "LIMITED_COMPANY");
     upsert("2091", "Balanserad vinst eller forlust", "LIMITED_COMPANY");
     upsert("2099", "Arets resultat", "LIMITED_COMPANY");
-    upsert("2440", "Leverantorsskulder", "LIMITED_COMPANY");
+    upsert("2440", "Leverantorsskulder", "BOTH");
     upsert("2510", "Skatteskulder", "LIMITED_COMPANY");
     upsert("2710", "Personalskatt", "LIMITED_COMPANY");
     upsert("2731", "Avrakning sociala avgifter", "LIMITED_COMPANY");

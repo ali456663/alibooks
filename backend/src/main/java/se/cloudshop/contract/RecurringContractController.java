@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.AccountingService;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.customer.Customer;
 import se.cloudshop.customer.CustomerRepository;
@@ -35,6 +36,7 @@ public class RecurringContractController {
   private final OrderRepository orderRepository;
   private final AccountingService accountingService;
   private final SettingsService settingsService;
+  private final AuditService auditService;
 
   public RecurringContractController(
       AuthHeader authHeader,
@@ -43,7 +45,8 @@ public class RecurringContractController {
       ProductService productService,
       OrderRepository orderRepository,
       AccountingService accountingService,
-      SettingsService settingsService
+      SettingsService settingsService,
+      AuditService auditService
   ) {
     this.authHeader = authHeader;
     this.recurringContractRepository = recurringContractRepository;
@@ -52,6 +55,7 @@ public class RecurringContractController {
     this.orderRepository = orderRepository;
     this.accountingService = accountingService;
     this.settingsService = settingsService;
+    this.auditService = auditService;
   }
 
   @GetMapping("/contracts")
@@ -59,7 +63,7 @@ public class RecurringContractController {
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    return recurringContractRepository.findAll();
+    return recurringContractRepository.findByArchivedFalseOrderByNextInvoiceDateAscIdAsc();
   }
 
   @PostMapping("/contracts")
@@ -83,7 +87,7 @@ public class RecurringContractController {
     String interval = normalizeInterval(request.interval());
     LocalDate nextInvoiceDate = request.nextInvoiceDate() == null ? LocalDate.now() : request.nextInvoiceDate();
 
-    return recurringContractRepository.save(new RecurringContract(
+    RecurringContract contract = recurringContractRepository.save(new RecurringContract(
         customer.getId(),
         customer.getName(),
         product.getId(),
@@ -92,6 +96,8 @@ public class RecurringContractController {
         interval,
         nextInvoiceDate
     ));
+    auditService.record("contract", "recurring_contract", contract.getId(), "created", contract.getCustomerName(), "Recurring contract created", product.getEffectivePrice() * quantity, authorizationHeader);
+    return contract;
   }
 
   @PutMapping("/contracts/{id}/status")
@@ -104,8 +110,13 @@ public class RecurringContractController {
 
     RecurringContract contract = recurringContractRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found."));
+    if (contract.isArchived()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived contracts cannot be changed.");
+    }
     contract.setActive(request.active());
-    return recurringContractRepository.save(contract);
+    RecurringContract savedContract = recurringContractRepository.save(contract);
+    auditService.record("contract", "recurring_contract", savedContract.getId(), request.active() ? "activated" : "paused", savedContract.getCustomerName(), "Recurring contract status updated", 0, authorizationHeader);
+    return savedContract;
   }
 
   @DeleteMapping("/contracts/{id}")
@@ -115,7 +126,11 @@ public class RecurringContractController {
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    recurringContractRepository.deleteById(id);
+    RecurringContract contract = recurringContractRepository.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found."));
+    contract.archive();
+    recurringContractRepository.save(contract);
+    auditService.record("contract", "recurring_contract", id, "archived", contract.getCustomerName(), "Recurring contract archived instead of deleted", 0, authorizationHeader);
   }
 
   @PostMapping("/contracts/{id}/invoice")
@@ -127,6 +142,10 @@ public class RecurringContractController {
 
     RecurringContract contract = recurringContractRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found."));
+
+    if (contract.isArchived()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived contracts cannot be invoiced.");
+    }
 
     if (!contract.isActive()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contract is paused.");
@@ -148,7 +167,6 @@ public class RecurringContractController {
     savedOrder.setPlusGiro(settings.getPlusGiro());
     savedOrder.setPaymentRecipient(settings.getPaymentRecipient());
     savedOrder = orderRepository.save(savedOrder);
-    accountingService.createInvoiceEntries(savedOrder);
 
     contract.setLastInvoiceNumber(savedOrder.getInvoiceNumber());
     contract.setNextInvoiceDate(nextDate(contract.getNextInvoiceDate(), contract.getInterval()));

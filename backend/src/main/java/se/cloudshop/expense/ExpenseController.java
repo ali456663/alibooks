@@ -1,14 +1,20 @@
 package se.cloudshop.expense;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -24,25 +30,35 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 import se.cloudshop.accounting.AccountingService;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 
 @RestController
 public class ExpenseController {
 
   private static final Path RECEIPT_DIRECTORY = Path.of("uploads", "receipts");
+  private static final List<String> ALLOWED_RECEIPT_CONTENT_TYPES = List.of(
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+  );
 
   private final AuthHeader authHeader;
   private final ExpenseRepository expenseRepository;
   private final AccountingService accountingService;
+  private final AuditService auditService;
 
   public ExpenseController(
       AuthHeader authHeader,
       ExpenseRepository expenseRepository,
-      AccountingService accountingService
+      AccountingService accountingService,
+      AuditService auditService
   ) {
     this.authHeader = authHeader;
     this.expenseRepository = expenseRepository;
     this.accountingService = accountingService;
+    this.auditService = auditService;
   }
 
   @GetMapping("/expenses")
@@ -82,6 +98,7 @@ public class ExpenseController {
     ));
 
     accountingService.createExpenseEntries(expense);
+    auditService.record("expense", "expense", expense.getId(), "created", expense.getDescription(), "Expense created and booked", expense.getTotalAmount(), authorizationHeader);
     return expense;
   }
 
@@ -101,22 +118,112 @@ public class ExpenseController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receipt file can be max 10 MB.");
     }
 
+    String contentType = clean(file.getContentType()).toLowerCase();
+    String originalFilename = file.getOriginalFilename() == null ? "receipt" : file.getOriginalFilename();
+    if (!isAllowedReceiptFile(contentType, originalFilename)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receipt file must be PDF, JPG, PNG or WebP.");
+    }
+
     Expense expense = expenseRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Expense not found."));
 
+    if (expense.hasReceipt()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receipt already exists. Create a new correction/evidence record instead of replacing archived evidence.");
+    }
+
     try {
+      byte[] fileBytes = file.getBytes();
+      String receiptSha256 = sha256(fileBytes);
       Path receiptDirectory = RECEIPT_DIRECTORY.toAbsolutePath().normalize();
       Files.createDirectories(receiptDirectory);
-      String originalFilename = file.getOriginalFilename() == null ? "receipt" : file.getOriginalFilename();
       String safeFilename = originalFilename.replaceAll("[^A-Za-z0-9._-]", "_");
       Path target = receiptDirectory.resolve(id + "-" + UUID.randomUUID() + "-" + safeFilename).normalize();
-      Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+      Files.write(target, fileBytes);
 
-      expense.setReceipt(originalFilename, file.getContentType(), target.toString());
-      return expenseRepository.save(expense);
+      expense.setReceipt(originalFilename, file.getContentType(), target.toString(), receiptSha256, Instant.now());
+      Expense savedExpense = expenseRepository.save(expense);
+      auditService.record("expense", "expense", savedExpense.getId(), "receipt_uploaded", savedExpense.getReceiptFileName(), "Receipt uploaded. SHA-256: " + receiptSha256, savedExpense.getTotalAmount(), authorizationHeader);
+      return savedExpense;
     } catch (IOException exception) {
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not save receipt.");
     }
+  }
+
+  @PostMapping("/expenses/receipt-hashes/repair")
+  public ReceiptHashRepairResult repairReceiptHashes(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
+
+    int scannedCount = 0;
+    int repairedCount = 0;
+    int alreadyHasHashCount = 0;
+    int noReceiptCount = 0;
+    int missingFileCount = 0;
+    int lockedSkippedCount = 0;
+    int failedCount = 0;
+
+    for (Expense expense : expenseRepository.findAll()) {
+      scannedCount++;
+
+      if (!expense.hasReceipt()) {
+        noReceiptCount++;
+        continue;
+      }
+
+      if (expense.getReceiptSha256() != null && !expense.getReceiptSha256().isBlank()) {
+        alreadyHasHashCount++;
+        continue;
+      }
+
+      try {
+        accountingService.requireUnlockedAccountingDate(expense.getExpenseDate());
+      } catch (ResponseStatusException exception) {
+        lockedSkippedCount++;
+        continue;
+      }
+
+      try {
+        Path receiptPath = Path.of(expense.getReceiptStoragePath()).toAbsolutePath().normalize();
+        if (!Files.exists(receiptPath)) {
+          missingFileCount++;
+          continue;
+        }
+
+        String receiptSha256 = sha256(Files.readAllBytes(receiptPath));
+        expense.setReceipt(
+            expense.getReceiptFileName(),
+            expense.getReceiptContentType(),
+            expense.getReceiptStoragePath(),
+            receiptSha256,
+            expense.getReceiptUploadedAt()
+        );
+        Expense savedExpense = expenseRepository.save(expense);
+        repairedCount++;
+        auditService.record(
+            "expense",
+            "expense",
+            savedExpense.getId(),
+            "receipt_hash_repaired",
+            savedExpense.getReceiptFileName(),
+            "Receipt SHA-256 repaired from archived file. SHA-256: " + receiptSha256,
+            savedExpense.getTotalAmount(),
+            authorizationHeader
+        );
+      } catch (IOException | InvalidPathException exception) {
+        failedCount++;
+      }
+    }
+
+    return new ReceiptHashRepairResult(
+        scannedCount,
+        repairedCount,
+        alreadyHasHashCount,
+        noReceiptCount,
+        missingFileCount,
+        lockedSkippedCount,
+        failedCount
+    );
   }
 
   @GetMapping("/expenses/{id}/receipt")
@@ -145,9 +252,45 @@ public class ExpenseController {
       mediaType = MediaType.parseMediaType(expense.getReceiptContentType());
     }
 
+    ContentDisposition contentDisposition = ContentDisposition.inline()
+        .filename(receiptDownloadFilename(expense.getReceiptFileName()), StandardCharsets.UTF_8)
+        .build();
+
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + expense.getReceiptFileName() + "\"")
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
         .contentType(mediaType)
         .body(resource);
+  }
+
+  private boolean isAllowedReceiptFile(String contentType, String originalFilename) {
+    String filename = clean(originalFilename).toLowerCase();
+    boolean allowedContentType = ALLOWED_RECEIPT_CONTENT_TYPES.contains(contentType);
+    boolean allowedExtension = filename.endsWith(".pdf")
+        || filename.endsWith(".jpg")
+        || filename.endsWith(".jpeg")
+        || filename.endsWith(".png")
+        || filename.endsWith(".webp");
+
+    return allowedContentType && allowedExtension;
+  }
+
+  private String receiptDownloadFilename(String filename) {
+    String cleanFilename = clean(filename)
+        .replaceAll("[\\r\\n\\\\/]", "_");
+
+    return cleanFilename.isBlank() ? "receipt" : cleanFilename;
+  }
+
+  private String clean(String value) {
+    return value == null ? "" : value.trim();
+  }
+
+  private String sha256(byte[] content) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(content));
+    } catch (NoSuchAlgorithmException exception) {
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not calculate receipt checksum.");
+    }
   }
 }

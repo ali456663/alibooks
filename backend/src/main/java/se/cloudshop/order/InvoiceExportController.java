@@ -7,17 +7,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
+import se.cloudshop.export.CsvEscaper;
 
 @RestController
 public class InvoiceExportController {
 
   private final OrderRepository orderRepository;
   private final AuthHeader authHeader;
+  private final AuditService auditService;
 
-  public InvoiceExportController(OrderRepository orderRepository, AuthHeader authHeader) {
+  public InvoiceExportController(OrderRepository orderRepository, AuthHeader authHeader, AuditService auditService) {
     this.orderRepository = orderRepository;
     this.authHeader = authHeader;
+    this.auditService = auditService;
   }
 
   @GetMapping("/invoices/export")
@@ -29,6 +33,8 @@ public class InvoiceExportController {
     StringBuilder csv = new StringBuilder();
     csv.append("Id,Fakturanummer,Fakturadatum,Forfallodatum,Kund,Status,Antal,Netto,Moms,Totalt,OCR,PlusGiro,Kreditfaktura,Krediterar faktura\n");
 
+    int exportedCount = 0;
+    int totalAmount = 0;
     for (Order invoice : orderRepository.findAll()) {
       csv.append(invoice.getId()).append(",");
       csv.append(escape(invoice.getInvoiceNumber())).append(",");
@@ -44,7 +50,20 @@ public class InvoiceExportController {
       csv.append(escape(invoice.getPlusGiro())).append(",");
       csv.append(invoice.isCreditInvoice()).append(",");
       csv.append(invoice.getCreditedInvoiceId() == null ? "" : invoice.getCreditedInvoiceId()).append("\n");
+      exportedCount++;
+      totalAmount += invoice.getTotalAmount();
     }
+
+    auditService.record(
+        "export",
+        "invoices",
+        "invoices",
+        "invoices_exported",
+        "invoices",
+        "Invoices exported. Rows: " + exportedCount + ".",
+        totalAmount,
+        authorizationHeader
+    );
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=invoices.csv")
@@ -53,10 +72,6 @@ public class InvoiceExportController {
   }
 
   private String escape(String value) {
-    if (value == null) {
-      return "";
-    }
-
-    return "\"" + value.replace("\"", "\"\"") + "\"";
+    return CsvEscaper.escape(value);
   }
 }

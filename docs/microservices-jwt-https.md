@@ -94,7 +94,7 @@ HTTP + TLS = HTTPS
 Local development can use:
 
 ```text
-http://localhost:5173
+http://localhost:5157
 http://localhost:3000
 ```
 
@@ -116,4 +116,3 @@ When a user logs in, the auth service creates a JWT. The frontend sends that JWT
 in the Authorization header when creating orders. The order service validates the
 token before saving the order.
 ```
-

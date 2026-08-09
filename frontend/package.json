@@ -4,9 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host :: --port 5157 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "check:api-contract": "node ../scripts/api-contract-check.mjs",
+    "check:release": "node ../scripts/release-gate.mjs",
+    "preview": "vite preview --host :: --port 5157 --strictPort",
+    "check:ready": "node ../scripts/alibooks-readiness-check.mjs",
+    "check:backend-wiring": "node ../scripts/backend-wiring-check.mjs",
+    "check:backup": "node ../scripts/backup-readiness-check.mjs",
+    "check:ci": "node ../scripts/ci-pipeline-check.mjs",
+    "check:docs": "node ../scripts/docs-consistency-check.mjs",
+    "check:docker": "node ../scripts/docker-config-check.mjs",
+    "check:data-safety": "node ../scripts/data-safety-check.mjs",
+    "check:git": "node ../scripts/git-release-status.mjs",
+    "check:prod": "node ../scripts/production-readiness-check.mjs",
+    "check:professional-loop": "node ../scripts/professional-loop-check.mjs",
+    "check:secrets": "node ../scripts/secret-placeholder-check.mjs",
+    "check:views": "node ../scripts/frontend-view-route-check.mjs",
+    "test:backend": "node ../scripts/backend-test.mjs",
+    "smoke:runtime": "node ../scripts/frontend-runtime-smoke.mjs"
   },
   "dependencies": {
     "@paper-design/shaders-react": "^0.0.76",

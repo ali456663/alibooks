@@ -44,10 +44,10 @@ npm run dev
 Frontend ska starta pa:
 
 ```text
-http://localhost:5173
+http://localhost:5157
 ```
 
-Om port `5173` ar upptagen kan Vite starta pa `5174`. Anvand den URL som terminalen visar.
+Om port `5157` ar upptagen stoppar Vite direkt, eftersom projektet anvander `--strictPort`. Stoppa den gamla frontend-terminalen och kor `npm run dev` igen.
 
 ## 4. Snabb systemkontroll
 
@@ -140,7 +140,7 @@ Starta Docker Desktop och kor:
 docker compose up db
 ```
 
-`Port 8080/3000/5173 already in use`
+`Port 8080/3000/5157 already in use`
 
 En gammal process kor redan. Stoppa den, eller anvand den nya porten som terminalen visar.
 
@@ -155,4 +155,48 @@ Oppna webblasarkonsolen och kontrollera fel. Kor ocksa:
 ```bash
 cd frontend
 npm run build
+npm run check:views
+npm run smoke:runtime
 ```
+
+## Lokal kvalitetskontroll innan push
+
+Kor detta nar du har gjort storre andringar:
+
+```bash
+cd frontend
+npm run check:release
+```
+
+Kor detta innan push eller release:
+
+```bash
+cd frontend
+npm run check:release -- --with-backend
+```
+
+Kor detta innan deploy om Docker Desktop ar igang:
+
+```bash
+cd frontend
+npm run check:release -- --with-backend --with-docker-build
+```
+
+Du kan ocksa kora kontrollerna separat om du vill se exakt vilket steg som failar:
+
+```bash
+cd frontend
+npm run build
+npm run check:api-contract
+npm run check:ready
+npm run check:backend-wiring
+npm run check:docs
+npm run check:docker
+npm run check:prod
+npm run check:secrets
+npm run check:views
+npm run smoke:runtime
+npm run test:backend
+```
+
+Om Maven inte finns pa datorn forsoker `npm run test:backend` anvanda Docker och en Maven Java 21-image. Det kan ta lite tid forsta gangen eftersom Docker kan behova hamta imagen.

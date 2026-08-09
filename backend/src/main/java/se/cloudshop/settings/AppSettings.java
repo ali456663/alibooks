@@ -19,6 +19,10 @@ public class AppSettings {
   private String defaultOcr;
   private String paymentRecipient;
   private String companyType;
+  private String accountingMethod;
+  private String vatReportingPeriod;
+  private int fiscalYearStartMonth;
+  private int fiscalYearEndMonth;
   private int vatPercent;
   private int paymentTermsDays;
   private boolean fTaxApproved;
@@ -45,6 +49,10 @@ public class AppSettings {
     settings.defaultOcr = "1055065900139";
     settings.paymentRecipient = "Bank Norwegian";
     settings.companyType = "SOLE_TRADER";
+    settings.accountingMethod = "INVOICE_METHOD";
+    settings.vatReportingPeriod = "QUARTERLY";
+    settings.fiscalYearStartMonth = 1;
+    settings.fiscalYearEndMonth = 12;
     settings.vatPercent = 25;
     settings.paymentTermsDays = 30;
     settings.fTaxApproved = true;
@@ -161,6 +169,38 @@ public class AppSettings {
 
   public void setCompanyType(String companyType) {
     this.companyType = companyType;
+  }
+
+  public String getAccountingMethod() {
+    return accountingMethod;
+  }
+
+  public void setAccountingMethod(String accountingMethod) {
+    this.accountingMethod = accountingMethod;
+  }
+
+  public String getVatReportingPeriod() {
+    return vatReportingPeriod;
+  }
+
+  public void setVatReportingPeriod(String vatReportingPeriod) {
+    this.vatReportingPeriod = vatReportingPeriod;
+  }
+
+  public int getFiscalYearStartMonth() {
+    return fiscalYearStartMonth;
+  }
+
+  public void setFiscalYearStartMonth(int fiscalYearStartMonth) {
+    this.fiscalYearStartMonth = fiscalYearStartMonth;
+  }
+
+  public int getFiscalYearEndMonth() {
+    return fiscalYearEndMonth;
+  }
+
+  public void setFiscalYearEndMonth(int fiscalYearEndMonth) {
+    this.fiscalYearEndMonth = fiscalYearEndMonth;
   }
 
   public int getVatPercent() {

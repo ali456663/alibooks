@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 
 @RestController
@@ -15,10 +16,12 @@ public class ProductController {
 
   private final ProductService productService;
   private final AuthHeader authHeader;
+  private final AuditService auditService;
 
-  public ProductController(ProductService productService, AuthHeader authHeader) {
+  public ProductController(ProductService productService, AuthHeader authHeader, AuditService auditService) {
     this.productService = productService;
     this.authHeader = authHeader;
+    this.auditService = auditService;
   }
 
   @GetMapping("/products")
@@ -43,7 +46,9 @@ public class ProductController {
       @RequestBody Product product
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    return productService.create(product);
+    Product createdProduct = productService.create(product);
+    auditProduct("service_created", createdProduct, "Service created.", authorizationHeader);
+    return createdProduct;
   }
 
   @PutMapping("/products/{id}")
@@ -53,6 +58,21 @@ public class ProductController {
       @RequestBody Product product
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    return productService.update(id, product);
+    Product updatedProduct = productService.update(id, product);
+    auditProduct("service_updated", updatedProduct, "Service updated.", authorizationHeader);
+    return updatedProduct;
+  }
+
+  private void auditProduct(String action, Product product, String message, String authorizationHeader) {
+    auditService.record(
+        "service",
+        "product",
+        product.getId(),
+        action,
+        product.getName(),
+        message,
+        product.getEffectivePrice(),
+        authorizationHeader
+    );
   }
 }

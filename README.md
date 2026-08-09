@@ -48,6 +48,7 @@ For a step-by-step local startup and MVP test flow, see [docs/kom-igang-snabbt.m
 For manual MVP testing, see [docs/mvp-testprotokoll.md](docs/mvp-testprotokoll.md).
 For the remaining big steps and priorities, see [docs/roadmap-kvar.md](docs/roadmap-kvar.md).
 For the first cloud go-live flow, see [docs/go-live-checklista.md](docs/go-live-checklista.md).
+For the professional 20-step accounting control loop, see [docs/professionell-bokforing-loop.md](docs/professionell-bokforing-loop.md).
 
 Backend in IntelliJ:
 
@@ -63,13 +64,60 @@ npm install
 npm run dev
 ```
 
-The frontend starts on `http://localhost:5173`.
+The frontend starts on `http://localhost:5157`.
+
+After larger changes, run the local release gate:
+
+```bash
+npm run check:release
+```
+
+Before push or release, include backend tests:
+
+```bash
+npm run check:release -- --with-backend
+```
+
+Before deploy, include local Docker image builds too:
+
+```bash
+npm run check:release -- --with-backend --with-docker-build
+```
+
+The release gate runs the main static checks, frontend build and runtime smoke test in the same order every time.
+The `--with-backend` flag runs backend tests through Maven or Docker.
+The `--with-docker-build` flag also builds backend and frontend Docker images locally.
+
+Individual checks:
+
+```bash
+npm run build
+npm run check:api-contract
+npm run check:ready
+npm run check:backend-wiring
+npm run check:docs
+npm run check:docker
+npm run check:prod
+npm run check:secrets
+npm run check:views
+npm run smoke:runtime
+npm run test:backend
+```
+
+The runtime smoke test opens AliBooks in Chrome and fails if the app renders the root crash fallback.
+The readiness check verifies the practical go-live foundation: CI, Docker, env templates, docs, professional 20-step loop, Stripe/SMTP/JWT configuration points and key backend/frontend capabilities.
+The backend wiring check catches constructor and request-record mismatches that would otherwise show up as Java compilation errors in GitHub Actions.
+The Docker check makes sure the local and production Docker setup stays aligned with the app ports, Node version, backend port and `/api` proxy.
+The production readiness check verifies the EC2/RDS `.env` shape, same-origin `/api`, CORS, disabled test reset flags, JWT settings, production compose and smoke scripts.
+The secrets check fails if real-looking Stripe, AI, AWS or private key material is accidentally committed.
+The view check makes sure every left-menu view has a rendered screen, which reduces the risk of a blank page after navigation.
+The backend test command uses Maven if available, or Docker with a Maven Java 21 image if Maven is not installed locally.
 
 ## Demo Flow
 
 1. Start the Spring Boot backend in IntelliJ.
 2. Start the React frontend with `npm run dev`.
-3. Open `http://localhost:5173`.
+3. Open `http://localhost:5157`.
 4. Register a user.
 5. Log in.
 6. View products.
@@ -108,6 +156,7 @@ cp .env.example .env
 ```
 
 Then edit `.env` and replace the example Stripe, SMTP and JWT values. The real `.env` file is ignored by Git.
+Real environment files such as `.env`, `.env.local`, `.env.production` and `.env.staging` are ignored by Git. Only safe templates like `.env.example` and `.env.production.example` should be committed.
 Use a long unique `JWT_SECRET` for login security, preferably at least 32 characters.
 
 For IntelliJ:
@@ -139,7 +188,7 @@ Set a Stripe test secret key before starting the backend:
 
 ```bash
 STRIPE_SECRET_KEY=sk_test_...
-APP_FRONTEND_URL=http://localhost:5173
+APP_FRONTEND_URL=http://localhost:5157
 ```
 
 Then create an invoice and click `Stripe` in the invoice list.
@@ -188,7 +237,8 @@ If a Stripe payout reference is reused, AliBooks blocks it to reduce the risk of
 ## AI Assistant
 
 The AI assistant is called through the Spring Boot backend, so AI API keys are never exposed in React.
-AliBooks tries Gemini first when `GEMINI_API_KEY` is set. If Gemini is not configured, it can use Hugging Face. If no external AI key works, it falls back to a local rule-based assistant.
+AliBooks can use an OpenAI-compatible provider such as FreeLLMAPI, then Gemini, then Hugging Face. If no external AI key works, it falls back to a local rule-based assistant.
+Before external AI calls, AliBooks minimizes the context and masks direct identifiers such as emails, personnummer, phone numbers and addresses.
 
 Optional environment variables:
 
@@ -199,6 +249,10 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 HF_TOKEN=hf_...
 HF_MODEL=moonshotai/Kimi-K2-Instruct-0905
 HF_BASE_URL=https://router.huggingface.co/v1
+AI_OPENAI_API_KEY=your-router-key
+AI_OPENAI_MODEL=moonshotai/Kimi-K2-Instruct-0905
+AI_OPENAI_BASE_URL=http://localhost:8000/v1
+AI_OPENAI_PROVIDER_NAME=freellmapi
 ```
 
 If external AI is unavailable, AliBooks falls back to a local rule-based assistant for invoices, bookkeeping, VAT, receipts, payments, reports and settings.
@@ -213,7 +267,7 @@ docker compose up --build
 
 This starts:
 
-- React frontend on `http://localhost:5173`
+- React frontend on `http://localhost:5157`
 - Spring Boot backend on `http://localhost:3000`
 - PostgreSQL database on `localhost:5432`
 
@@ -248,15 +302,51 @@ From Windows PowerShell:
 .\scripts\prod-smoke-test.ps1 -FrontendUrl http://your-ec2-public-ip -BackendUrl http://your-ec2-public-ip/api
 ```
 
+Before starting production containers on EC2, validate the real `.env` without printing secrets:
+
+```bash
+cd frontend
+npm run check:prod -- --env-file ../.env --strict
+```
+
 ## CI/CD
 
 GitHub Actions has two workflows:
 
-- `CI`: builds the frontend, tests the backend, and builds Docker images.
+- `CI`: runs the frontend release gate, tests the backend, and builds Docker images.
 - `Dockerhub`: builds and pushes Docker images to Dockerhub.
 
 The CI backend job starts a PostgreSQL service container so Spring Boot context tests can connect to a real database during the pipeline.
+The CI frontend job runs `npm run check:release`, so GitHub Actions uses the same frontend release gate that you can run locally before push.
+The CI Docker job builds the frontend with `frontend/Dockerfile.prod`, the same production Dockerfile used by the Dockerhub release workflow.
+Both workflows use read-only repository permissions and concurrency groups, so repeated pushes do not leave stale CI runs for the same branch.
 The CI workflow can also be started manually from GitHub Actions with `Run workflow`.
+
+## Audit trail and protected history
+
+AliBooks records important actions in the backend audit trail, including invoices, payments, corrections, period locks and exports.
+Period close-check, journal entries, general ledger, profit/loss, balance, trial balance, VAT control, voucher-control, journal-integrity, account sign-control, bank reconciliation, receivables, payables, invoice, customer, supplier-invoice, VAT-filing and payroll exports are also logged with blocker, warning, late-voucher, fingerprint, entry, result, balance-difference, row and issue counts, so exported closing evidence and sensitive data exports are traceable.
+Customer create/update/archive/restore/delete actions and bank reconciliation create/clear/remove-skipped actions are also logged, with messages that avoid personal numbers, addresses and phone numbers.
+Service create/update actions are logged with effective invoice price, so price list changes are traceable before invoices, reports and closing evidence are reviewed.
+The app can export both the full backend audit log (`/audit-events/export`) and an integrity chain (`/audit-events/integrity/export`) with hashes that can be saved with closing evidence or accountant handoff.
+The accountant package includes voucher approval counts for approved, missing, pending and blocked approvals, so an accountant can see whether period vouchers have been reviewed before handoff.
+The yearly archive control includes the same voucher approval counts and warns before final SIE/CSV handoff if annual vouchers are missing approval, pending approval or blocked.
+
+## Professional bookkeeping controls
+
+AliBooks has a backend period-lock control at `/accounting-period/close-check`.
+It checks balance report, trial balance, voucher balance, VAT control, VAT filing evidence, bank reconciliation, receivables, payables, voucher approvals, account sign control and journal integrity before a period can be locked.
+Manual multi-line vouchers and opening-balance vouchers are validated before booking: every line must have one account, either debit or credit, no negative amounts, no debit and credit on the same line, and total debit must equal total credit.
+Voucher control also flags malformed historic/imported journal rows with negative amounts, zero rows or debit and credit on the same row, so old data can be reviewed before closing or SIE export.
+Invoice amount changes are guarded in the domain model: total must equal net plus VAT, and credit invoices must use consistent negative amounts instead of mixed signs.
+Service prices are validated in the backend before they can be used for invoices: service name is required, ordinary price must be greater than 0, discount price cannot be negative, and an active discount must be lower than the ordinary price.
+VAT control flags missing output VAT on sales and warns when purchases or expenses are booked without input VAT, so VAT-free, reverse-charge and non-deductible purchases can be reviewed before filing.
+Voucher control also checks evidence traceability, including missing receipts, missing receipt hashes, unclear sources and invoice numbers.
+It also flags reused voucher numbers when the same voucher number points to different dates or different source references.
+Account sign control uses closing balances through the selected period end, so negative balance-sheet accounts from earlier months are still caught before closing.
+It covers common balance-sheet risk accounts such as bank, customer receivables, fixed assets, accumulated depreciation, supplier debt, tax debt, payroll tax, employer contributions, Stripe receivables and VAT accounts.
+The control also warns when vouchers appear to be booked more than 35 days after the voucher date, so late bookkeeping can be reviewed before month close, VAT reporting or accountant handoff.
+That warning is also surfaced in Compliance, Accounting quality, Risk center and Go-live readiness so late bookkeeping affects the same professional decision views used before production use.
 
 For Dockerhub publishing, add these GitHub repository secrets:
 

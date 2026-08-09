@@ -14,6 +14,9 @@ Kontrollera lokalt:
 
 ```text
 Frontend bygger med npm run build
+Releasegrind gar igenom med npm run check:release -- --with-backend
+Produktionskontroll gar igenom med npm run check:prod
+Gitstatus ar kontrollerad med npm run check:git
 Backend startar i IntelliJ
 Docker Desktop fungerar
 MVP-flodet fungerar lokalt
@@ -39,7 +42,7 @@ Klart nar:
 
 ```text
 Backend build and test = green
-Frontend build = green
+Frontend release gate = green
 Docker build = green
 ```
 
@@ -49,6 +52,20 @@ Om CI failar:
 Fixa CI innan du gar vidare till Dockerhub.
 Annars riskerar du att pusha trasiga images.
 ```
+
+Innan du pushar kod:
+
+```bash
+cd frontend
+npm run check:release -- --with-backend --with-docker-build
+npm run check:git
+git add .
+git commit -m "Prepare AliBooks MVP release"
+npm run check:git -- --strict
+git push
+```
+
+Om `check:git -- --strict` failar efter commit betyder det att viktiga filer fortfarande ligger utanfor git.
 
 ## 2. Dockerhub Secrets
 
@@ -206,6 +223,15 @@ SPRING_DATASOURCE_PASSWORD=<rds-password>
 JWT_SECRET=<long-random-secret-at-least-32-chars>
 ```
 
+Kontrollera sedan `.env` utan att skriva ut hemligheter:
+
+```bash
+cd frontend
+npm run check:prod -- --env-file ../.env --strict
+```
+
+Om kontrollen failar ska du fixa `.env`, `docker-compose.prod.yml` eller Nginx innan du startar produktion.
+
 Om du vill testa e-post och Stripe:
 
 ```text
@@ -228,6 +254,7 @@ HF_BASE_URL=https://router.huggingface.co/v1
 ```
 
 Visa aldrig `.env` med hemligheter i presentationen.
+Committa aldrig riktiga `.env`-filer. Git ignorerar `.env` och `.env.*`, men mallarna `.env.example` och `.env.production.example` ska finnas kvar i repo.
 
 ## 9. Deploy Pa EC2
 

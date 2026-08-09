@@ -24,6 +24,10 @@ public class AiAssistantService {
   private final String hfToken;
   private final String hfModel;
   private final String hfBaseUrl;
+  private final String openAiCompatibleApiKey;
+  private final String openAiCompatibleModel;
+  private final String openAiCompatibleBaseUrl;
+  private final String openAiCompatibleProviderName;
 
   public AiAssistantService(
       ObjectMapper objectMapper,
@@ -32,7 +36,11 @@ public class AiAssistantService {
       @Value("${ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl,
       @Value("${ai.huggingface.token:}") String hfToken,
       @Value("${ai.huggingface.model:moonshotai/Kimi-K2-Instruct-0905}") String hfModel,
-      @Value("${ai.huggingface.base-url:https://router.huggingface.co/v1}") String hfBaseUrl
+      @Value("${ai.huggingface.base-url:https://router.huggingface.co/v1}") String hfBaseUrl,
+      @Value("${ai.openai-compatible.api-key:}") String openAiCompatibleApiKey,
+      @Value("${ai.openai-compatible.model:}") String openAiCompatibleModel,
+      @Value("${ai.openai-compatible.base-url:}") String openAiCompatibleBaseUrl,
+      @Value("${ai.openai-compatible.provider-name:openai-compatible}") String openAiCompatibleProviderName
   ) {
     this.objectMapper = objectMapper;
     this.httpClient = HttpClient.newBuilder()
@@ -44,6 +52,10 @@ public class AiAssistantService {
     this.hfToken = hfToken;
     this.hfModel = hfModel;
     this.hfBaseUrl = hfBaseUrl;
+    this.openAiCompatibleApiKey = openAiCompatibleApiKey;
+    this.openAiCompatibleModel = openAiCompatibleModel;
+    this.openAiCompatibleBaseUrl = openAiCompatibleBaseUrl;
+    this.openAiCompatibleProviderName = openAiCompatibleProviderName;
   }
 
   public AiAssistantResponse answer(AiAssistantRequest request) {
@@ -55,11 +67,23 @@ public class AiAssistantService {
       return new AiAssistantResponse(emptyQuestionAnswer(language), "", "local");
     }
 
-    String context = clean(request == null ? "" : request.context());
+    String safeQuestion = sanitizeForExternalAi(question);
+    String context = sanitizeForExternalAi(clean(request == null ? "" : request.context()));
 
-    if (geminiApiKey != null && !geminiApiKey.isBlank()) {
+    if (hasText(openAiCompatibleApiKey) && hasText(openAiCompatibleBaseUrl) && hasText(openAiCompatibleModel)) {
       try {
-        String aiAnswer = requestGemini(question, language, context);
+        String aiAnswer = requestOpenAiCompatible(safeQuestion, language, context);
+        if (aiAnswer != null && !aiAnswer.isBlank()) {
+          return new AiAssistantResponse(aiAnswer, targetView, providerName());
+        }
+      } catch (Exception exception) {
+        // Try the next configured provider before falling back to local rules.
+      }
+    }
+
+    if (hasText(geminiApiKey)) {
+      try {
+        String aiAnswer = requestGemini(safeQuestion, language, context);
         if (aiAnswer != null && !aiAnswer.isBlank()) {
           return new AiAssistantResponse(aiAnswer, targetView, "gemini");
         }
@@ -68,9 +92,9 @@ public class AiAssistantService {
       }
     }
 
-    if (hfToken != null && !hfToken.isBlank()) {
+    if (hasText(hfToken)) {
       try {
-        String aiAnswer = requestHuggingFace(question, language, context);
+        String aiAnswer = requestHuggingFace(safeQuestion, language, context);
         if (aiAnswer != null && !aiAnswer.isBlank()) {
           return new AiAssistantResponse(aiAnswer, targetView, "huggingface");
         }
@@ -80,6 +104,35 @@ public class AiAssistantService {
     }
 
     return new AiAssistantResponse(localAnswer(question, language), targetView, "local");
+  }
+
+  private String requestOpenAiCompatible(String question, String language, String context) throws Exception {
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("model", openAiCompatibleModel);
+
+    ArrayNode messages = body.putArray("messages");
+    messages.addObject()
+        .put("role", "system")
+        .put("content", systemPrompt(language));
+    messages.addObject()
+        .put("role", "user")
+        .put("content", "Question: " + question + "\n\nAliBooks safe context: " + context);
+
+    HttpRequest httpRequest = HttpRequest.newBuilder()
+        .uri(URI.create(normalizedBaseUrl(openAiCompatibleBaseUrl) + "/chat/completions"))
+        .timeout(Duration.ofSeconds(25))
+        .header("Authorization", "Bearer " + openAiCompatibleApiKey)
+        .header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+        .build();
+
+    HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      return "";
+    }
+
+    JsonNode root = objectMapper.readTree(response.body());
+    return root.path("choices").path(0).path("message").path("content").asText("");
   }
 
   private String requestGemini(String question, String language, String context) throws Exception {
@@ -143,17 +196,37 @@ public class AiAssistantService {
         Keep answers short, concrete and step-by-step.
         Mention that exact tax and legal dates should be verified with Skatteverket when relevant.
         Do not claim to replace a certified accountant or legal advisor.
+        The provided AliBooks context is intentionally anonymized and minimized.
         Never ask the user to reveal API keys, passwords, personnummer lists or other secrets.
+        If the user asks about a specific person, answer using the visible app workflow instead of requesting private data.
         """.formatted(responseLanguage);
   }
 
   private String localAnswer(String question, String language) {
     String normalized = normalizedQuestion(question);
 
+    if (isTraceabilityQuestion(normalized)) {
+      return "sv".equals(language)
+          ? "AliBooks-assistenten: Ga till Resultat- och balansdiagnos och oppna Verifikationskedja. Dar kan du klicka pa ett rapportkonto for att se huvudbok, verifikat, faktura, betalning eller underlag bakom beloppet. Exportera verifikationskedja.csv nar du vill kontrollera sparbarheten."
+          : "AliBooks assistant: Go to Financial diagnostics and open the audit trail. There you can click a report account to see the ledger, vouchers, invoice, payment or evidence behind the amount. Export verifikationskedja.csv when you want to review traceability.";
+    }
+
+    if (isFinancialDiagnosticsQuestion(normalized)) {
+      return "sv".equals(language)
+          ? "AliBooks-assistenten: Ga till Resultat- och balansdiagnos. Dar ser du resultat, balans, risker, konton som paverkar siffrorna och om nagot bor kontrolleras innan bokslut."
+          : "AliBooks assistant: Go to Financial diagnostics. There you can review profit, balance, risks, accounts that affect the numbers and anything that should be checked before closing.";
+    }
+
+    if (isServiceJobQuestion(normalized)) {
+      return "sv".equals(language)
+          ? "AliBooks-assistenten: Ga till Servicejobb. Dar kan du planera jobb, bekrafta bokningar, skriva ut arbetsorder och dagsschema, se schemakrockar, rakna preliminart RUT/ROT pa arbetsdelen, skapa faktura, exportera redo ansokningar och oppna utskrivbart RUT/ROT-underlag. Kontrollera alltid aktuella villkor hos Skatteverket innan riktig RUT/ROT-ansokan."
+          : "AliBooks assistant: Go to Service jobs. There you can plan jobs, confirm bookings, print work orders and daily schedules, see schedule conflicts, calculate preliminary RUT/ROT on the labor part, create an invoice, export ready claims and open printable RUT/ROT evidence. Always verify current rules with Skatteverket before a real RUT/ROT claim.";
+    }
+
     if (normalized.contains("faktura") || normalized.contains("invoice")) {
       return "sv".equals(language)
-          ? "AliBooks-assistenten: Skapa eller valj kund, valj tjanst och skapa faktura. Nar fakturan skapas bokfors den normalt automatiskt: 1510 debet, 3041 kredit och 2611 kredit. Nar kunden betalar bokas 1930 debet och 1510 kredit."
-          : "AliBooks assistant: Create or choose a customer, choose a service and create the invoice. When it is created it is normally booked automatically: 1510 debit, 3041 credit and 2611 credit. When the customer pays, book 1930 debit and 1510 credit.";
+          ? "AliBooks-assistenten: Skapa eller valj kund, valj tjanst och skapa faktura. Vid faktureringsmetoden bokas fakturan normalt som 1510 debet, 3041 kredit och 2611 kredit nar den skapas, och betalningen som 1930 debet och 1510 kredit. Vid kontantmetoden bokas forsaljning och moms forst nar betalningen registreras: 1930 debet, 3041 kredit och 2611 kredit."
+          : "AliBooks assistant: Create or choose a customer, choose a service and create the invoice. With invoice method, the invoice is normally booked as 1510 debit, 3041 credit and 2611 credit when created, and payment as 1930 debit and 1510 credit. With cash method, sales and VAT are booked when payment is registered: 1930 debit, 3041 credit and 2611 credit.";
     }
 
     if (normalized.contains("moms") || normalized.contains("vat")) {
@@ -187,6 +260,8 @@ public class AiAssistantService {
 
   private String targetView(String question) {
     String normalized = normalizedQuestion(question);
+    if (isTraceabilityQuestion(normalized) || isFinancialDiagnosticsQuestion(normalized)) return "financialDiagnostics";
+    if (isServiceJobQuestion(normalized)) return "serviceJobs";
     if (normalized.contains("faktura") || normalized.contains("invoice")) return "invoices";
     if (normalized.contains("bokfor") || normalized.contains("verifikat") || normalized.contains("journal")) return "bookkeeping";
     if (normalized.contains("kvitto") || normalized.contains("underlag") || normalized.contains("receipt")) return "uploaded";
@@ -197,6 +272,36 @@ public class AiAssistantService {
     return "";
   }
 
+  private boolean isTraceabilityQuestion(String normalized) {
+    return normalized.contains("verifikationskedja")
+        || normalized.contains("sparbarhet")
+        || normalized.contains("varifran kommer")
+        || normalized.contains("vilka verifikat")
+        || normalized.contains("rapportbelopp")
+        || normalized.contains("audit trail")
+        || normalized.contains("drilldown")
+        || normalized.contains("where does this amount")
+        || normalized.contains("which vouchers");
+  }
+
+  private boolean isFinancialDiagnosticsQuestion(String normalized) {
+    return normalized.contains("resultatdiagnos")
+        || normalized.contains("balansdiagnos")
+        || normalized.contains("financial diagnostics")
+        || normalized.contains("profit diagnosis")
+        || normalized.contains("balance diagnosis")
+        || normalized.contains("bokslutskontroll");
+  }
+
+  private boolean isServiceJobQuestion(String normalized) {
+    return normalized.contains("servicejobb")
+        || normalized.contains("schema")
+        || normalized.contains("rut")
+        || normalized.contains("rot")
+        || normalized.contains("service job")
+        || normalized.contains("schedule");
+  }
+
   private String emptyQuestionAnswer(String language) {
     return "sv".equals(language)
         ? "AliBooks-assistenten: Skriv en fraga, till exempel hur du bokfor en faktura eller laddar upp underlag."
@@ -205,6 +310,33 @@ public class AiAssistantService {
 
   private String clean(String value) {
     return value == null ? "" : value.trim();
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
+  }
+
+  private String normalizedBaseUrl(String value) {
+    String cleaned = clean(value);
+    while (cleaned.endsWith("/")) {
+      cleaned = cleaned.substring(0, cleaned.length() - 1);
+    }
+    return cleaned;
+  }
+
+  private String providerName() {
+    String cleaned = clean(openAiCompatibleProviderName).toLowerCase();
+    return cleaned.isBlank() ? "openai-compatible" : cleaned;
+  }
+
+  private String sanitizeForExternalAi(String value) {
+    return clean(value)
+        .replaceAll("(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}", "[redacted-email]")
+        .replaceAll("\\b\\d{6,8}[-+]?\\d{4}\\b", "[redacted-personnummer]")
+        .replaceAll("(?i)\\b(personnummer|pnr)\\s*[:=]?\\s*[^,;\\n]+", "$1: [redacted-personnummer]")
+        .replaceAll("(?i)\\b(adress|address)\\s*[:=]?\\s*[^,;\\n]+", "$1: [redacted-address]")
+        .replaceAll("(?i)\\b(tel|telefon|phone)\\s*[:=]?\\s*[+\\d][+\\d\\s()-]{6,}", "$1: [redacted-phone]")
+        .replaceAll("\\+?\\d[\\d\\s()-]{7,}\\d", "[redacted-phone]");
   }
 
   private String normalizedQuestion(String value) {

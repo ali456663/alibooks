@@ -6,6 +6,13 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   push-images:
     name: Build and push Docker images

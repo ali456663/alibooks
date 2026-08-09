@@ -197,3 +197,4 @@ export default function LiquidEther({
 
   return <div ref={mountRef} className={`liquid-ether-container ${className || ""}`} style={style} />;
 }
+import React from "react";

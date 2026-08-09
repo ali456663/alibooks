@@ -17,10 +17,19 @@ public class HealthController {
   private final String stripeWebhookSecret;
   private final String geminiApiKey;
   private final String hfToken;
+  private final String openAiCompatibleApiKey;
+  private final String openAiCompatibleModel;
+  private final String openAiCompatibleBaseUrl;
+  private final String openAiCompatibleProviderName;
   private final String frontendUrl;
   private final String jwtSecret;
+  private final int jwtExpirationMinutes;
   private final String reminderCron;
   private final String timeZone;
+  private final String corsAllowedOrigins;
+  private final boolean corsLocalDevEnabled;
+  private final int authMaxFailedLoginAttempts;
+  private final int authLoginLockMinutes;
 
   public HealthController(
       JdbcTemplate jdbcTemplate,
@@ -30,10 +39,19 @@ public class HealthController {
       @Value("${stripe.webhook-secret:}") String stripeWebhookSecret,
       @Value("${ai.gemini.api-key:}") String geminiApiKey,
       @Value("${ai.huggingface.token:}") String hfToken,
+      @Value("${ai.openai-compatible.api-key:}") String openAiCompatibleApiKey,
+      @Value("${ai.openai-compatible.model:}") String openAiCompatibleModel,
+      @Value("${ai.openai-compatible.base-url:}") String openAiCompatibleBaseUrl,
+      @Value("${ai.openai-compatible.provider-name:openai-compatible}") String openAiCompatibleProviderName,
       @Value("${app.frontend-url:}") String frontendUrl,
       @Value("${jwt.secret:}") String jwtSecret,
+      @Value("${jwt.expiration-minutes:60}") int jwtExpirationMinutes,
       @Value("${app.invoice-reminders.cron:}") String reminderCron,
-      @Value("${app.time-zone:}") String timeZone
+      @Value("${app.time-zone:}") String timeZone,
+      @Value("${app.cors.allowed-origins:}") String corsAllowedOrigins,
+      @Value("${app.cors.local-dev-enabled:true}") boolean corsLocalDevEnabled,
+      @Value("${app.auth.max-failed-login-attempts:5}") int authMaxFailedLoginAttempts,
+      @Value("${app.auth.login-lock-minutes:15}") int authLoginLockMinutes
   ) {
     this.jdbcTemplate = jdbcTemplate;
     this.mailHost = mailHost;
@@ -42,10 +60,19 @@ public class HealthController {
     this.stripeWebhookSecret = stripeWebhookSecret;
     this.geminiApiKey = geminiApiKey;
     this.hfToken = hfToken;
+    this.openAiCompatibleApiKey = openAiCompatibleApiKey;
+    this.openAiCompatibleModel = openAiCompatibleModel;
+    this.openAiCompatibleBaseUrl = openAiCompatibleBaseUrl;
+    this.openAiCompatibleProviderName = openAiCompatibleProviderName;
     this.frontendUrl = frontendUrl;
     this.jwtSecret = jwtSecret;
+    this.jwtExpirationMinutes = jwtExpirationMinutes;
     this.reminderCron = reminderCron;
     this.timeZone = timeZone;
+    this.corsAllowedOrigins = corsAllowedOrigins;
+    this.corsLocalDevEnabled = corsLocalDevEnabled;
+    this.authMaxFailedLoginAttempts = authMaxFailedLoginAttempts;
+    this.authLoginLockMinutes = authLoginLockMinutes;
   }
 
   @GetMapping("/health")
@@ -72,8 +99,13 @@ public class HealthController {
         "webhookConfigured", hasText(stripeWebhookSecret)
     ));
     status.put("ai", Map.of(
-        "configured", hasText(geminiApiKey) || hasText(hfToken),
+        "configured", openAiCompatibleIsConfigured() || hasText(geminiApiKey) || hasText(hfToken),
         "provider", aiProvider(),
+        "safeMode", true,
+        "contextPolicy", "anonymized-minimized",
+        "openAiCompatibleConfigured", openAiCompatibleIsConfigured(),
+        "openAiCompatibleBaseUrlConfigured", hasText(openAiCompatibleBaseUrl),
+        "openAiCompatibleModelConfigured", hasText(openAiCompatibleModel),
         "geminiConfigured", hasText(geminiApiKey),
         "huggingFaceConfigured", hasText(hfToken)
     ));
@@ -81,9 +113,21 @@ public class HealthController {
         "configured", hasText(frontendUrl),
         "url", hasText(frontendUrl) ? frontendUrl : ""
     ));
+    status.put("cors", Map.of(
+        "configured", hasText(corsAllowedOrigins),
+        "allowedOrigins", hasText(corsAllowedOrigins) ? corsAllowedOrigins : "",
+        "localDevEnabled", corsLocalDevEnabled,
+        "productionReady", hasText(corsAllowedOrigins) && !corsLocalDevEnabled
+    ));
     status.put("security", Map.of(
         "jwtConfigured", jwtIsConfigured(),
-        "jwtStrong", jwtIsConfigured() && jwtSecret.length() >= 32
+        "jwtStrong", jwtIsConfigured() && jwtSecret.length() >= 32,
+        "jwtExpirationMinutes", jwtExpirationMinutes
+    ));
+    status.put("auth", Map.of(
+        "loginAttemptLockEnabled", authMaxFailedLoginAttempts > 0 && authLoginLockMinutes > 0,
+        "maxFailedLoginAttempts", authMaxFailedLoginAttempts,
+        "loginLockMinutes", authLoginLockMinutes
     ));
     status.put("automation", Map.of(
         "invoiceRemindersConfigured", hasText(reminderCron),
@@ -111,6 +155,10 @@ public class HealthController {
   }
 
   private String aiProvider() {
+    if (openAiCompatibleIsConfigured()) {
+      return hasText(openAiCompatibleProviderName) ? openAiCompatibleProviderName : "openai-compatible";
+    }
+
     if (hasText(geminiApiKey)) {
       return "gemini";
     }
@@ -120,5 +168,9 @@ public class HealthController {
     }
 
     return "local";
+  }
+
+  private boolean openAiCompatibleIsConfigured() {
+    return hasText(openAiCompatibleApiKey) && hasText(openAiCompatibleBaseUrl) && hasText(openAiCompatibleModel);
   }
 }

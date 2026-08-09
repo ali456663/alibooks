@@ -8,6 +8,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend build and test
@@ -31,7 +38,7 @@ jobs:
       SPRING_DATASOURCE_USERNAME: cloudshop
       SPRING_DATASOURCE_PASSWORD: cloudshop
       JWT_SECRET: ci_test_secret_must_be_long_enough_for_demo
-      APP_FRONTEND_URL: http://localhost:5173
+      APP_FRONTEND_URL: http://localhost:5157
       STRIPE_SECRET_KEY: ""
       STRIPE_WEBHOOK_SECRET: ""
 
@@ -51,7 +58,7 @@ jobs:
         run: mvn test
 
   frontend:
-    name: Frontend build
+    name: Frontend release gate
     runs-on: ubuntu-latest
 
     steps:
@@ -61,7 +68,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -69,9 +76,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build frontend
+      - name: Run frontend release gate
         working-directory: frontend
-        run: npm run build
+        run: npm run check:release
 
   docker:
     name: Docker build
@@ -88,4 +95,4 @@ jobs:
         run: docker build -t cloudshop-backend:ci ./backend
 
       - name: Build frontend image
-        run: docker build -t cloudshop-frontend:ci ./frontend
+        run: docker build -f ./frontend/Dockerfile.prod -t cloudshop-frontend:ci ./frontend

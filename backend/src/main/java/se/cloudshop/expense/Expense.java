@@ -26,6 +26,8 @@ public class Expense {
   private String receiptFileName;
   private String receiptContentType;
   private String receiptStoragePath;
+  private String receiptSha256;
+  private Instant receiptUploadedAt;
   private Instant createdAt;
 
   public Expense() {
@@ -86,6 +88,14 @@ public class Expense {
     return receiptStoragePath;
   }
 
+  public String getReceiptSha256() {
+    return receiptSha256;
+  }
+
+  public Instant getReceiptUploadedAt() {
+    return receiptUploadedAt;
+  }
+
   public boolean hasReceipt() {
     return receiptStoragePath != null && !receiptStoragePath.isBlank();
   }
@@ -95,9 +105,15 @@ public class Expense {
   }
 
   public void setReceipt(String receiptFileName, String receiptContentType, String receiptStoragePath) {
+    setReceipt(receiptFileName, receiptContentType, receiptStoragePath, "", Instant.now());
+  }
+
+  public void setReceipt(String receiptFileName, String receiptContentType, String receiptStoragePath, String receiptSha256, Instant receiptUploadedAt) {
     this.receiptFileName = receiptFileName;
     this.receiptContentType = receiptContentType;
     this.receiptStoragePath = receiptStoragePath;
+    this.receiptSha256 = receiptSha256;
+    this.receiptUploadedAt = receiptUploadedAt == null ? Instant.now() : receiptUploadedAt;
   }
 
   public Instant getCreatedAt() {

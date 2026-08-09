@@ -1,0 +1,49 @@
+package se.cloudshop.accounting;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public record PeriodCloseCheckResult(
+    LocalDate lockedThroughDate,
+    boolean locked,
+    List<String> blockers,
+    List<String> warnings,
+    int voucherCount,
+    int unbalancedVoucherCount,
+    int draftInvoiceCount,
+    int expensesMissingReceiptCount,
+    int lateBookedVoucherCount,
+    int longestBookingLagDays,
+    List<LateBookedVoucher> lateBookedVouchers,
+    int balanceDifference,
+    int trialBalanceDifference,
+    int voucherCriticalIssueCount,
+    int voucherWarningIssueCount,
+    int vatCriticalIssueCount,
+    int vatWarningIssueCount,
+    int vatProofIncompleteCount,
+    int vatProofSettlementMissingCount,
+    int vatProofPaymentMissingCount,
+    int journalIntegrityDifference,
+    int journalIntegrityMissingEvidenceCount,
+    int bankReconciliationDifference,
+    int bankReconciliationCriticalIssueCount,
+    int bankReconciliationWarningIssueCount,
+    int receivablesInvoiceCount,
+    int receivablesTotalOutstanding,
+    int receivablesOverdueOutstanding,
+    int receivablesDueSoonOutstanding,
+    int payablesInvoiceCount,
+    int payablesTotalOutstanding,
+    int payablesOverdueOutstanding,
+    int payablesDueSoonOutstanding,
+    int voucherApprovedCount,
+    int voucherMissingApprovalCount,
+    int voucherPendingApprovalCount,
+    int voucherBlockedApprovalCount,
+    String periodFingerprint,
+    String finalChainHash,
+    boolean sieExportReady,
+    boolean readyToLock
+) {
+}

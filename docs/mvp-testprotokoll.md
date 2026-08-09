@@ -15,7 +15,7 @@ OK / Fel / Ej testat
 | Starta Docker Desktop | Docker ar igang | Ej testat | |
 | Kor `docker compose up db` | PostgreSQL lyssnar pa `5432` | Ej testat | |
 | Starta backend i IntelliJ | Backend startar pa `3000` | Ej testat | |
-| Starta frontend med `npm run dev` | Frontend visas pa `5173` eller den port Vite visar | Ej testat | |
+| Starta frontend med `npm run dev` | Frontend visas pa `5157` | Ej testat | |
 | Oppna `Installningar > Systemstatus` | Backend och databas ar OK | Ej testat | |
 
 ## 2. Konto och inloggning
@@ -96,7 +96,7 @@ OK / Fel / Ej testat
 | Samma Stripe-referens igen | Appen stoppar dubbelbokforing | Ej testat | |
 | Bokfor Stripe-utbetalning | `1930` debet, `6570` debet, `1580` kredit | Ej testat | |
 | Saldo 1580 | Visar kvarvarande fordran hos Stripe | Ej testat | |
-| Exportera Stripe CSV | CSV innehaller forsäljningar och utbetalningar | Ej testat | |
+| Exportera Stripe CSV | CSV innehaller forsaljningar och utbetalningar | Ej testat | |
 
 ## 10. Redo for moln
 
@@ -107,7 +107,9 @@ Du ar redo att ga till moln/deployment nar:
 - inga backend-fel visas i IntelliJ
 - `npm run build` gar igenom
 - backendtester gar igenom i IntelliJ eller med `mvn test`
+- backendtester gar igenom med `npm run test:backend` om Maven saknas lokalt
 - Docker-databasen startar rent
+- JSON-backup har laddats ner och kontrollerats med `Kontrollera backupfil`
 - demo-checklistan kanns trygg
 
 Viktiga backendtester:

@@ -3,6 +3,7 @@ package se.cloudshop.order;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import se.cloudshop.audit.AuditService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,6 +36,7 @@ public class OrderController {
   private final SettingsService settingsService;
   private final InvoiceReminderEmailService invoiceReminderEmailService;
   private final InvoiceEmailService invoiceEmailService;
+  private final AuditService auditService;
 
   public OrderController(
       ProductService productService,
@@ -44,7 +46,8 @@ public class OrderController {
       AccountingService accountingService,
       SettingsService settingsService,
       InvoiceReminderEmailService invoiceReminderEmailService,
-      InvoiceEmailService invoiceEmailService
+      InvoiceEmailService invoiceEmailService,
+      AuditService auditService
   ) {
     this.productService = productService;
     this.authHeader = authHeader;
@@ -54,6 +57,7 @@ public class OrderController {
     this.settingsService = settingsService;
     this.invoiceReminderEmailService = invoiceReminderEmailService;
     this.invoiceEmailService = invoiceEmailService;
+    this.auditService = auditService;
   }
 
   @GetMapping("/orders")
@@ -112,7 +116,7 @@ public class OrderController {
     savedOrder.setPlusGiro(settings.getPlusGiro());
     savedOrder.setPaymentRecipient(settings.getPaymentRecipient());
     savedOrder = orderRepository.save(savedOrder);
-    accountingService.createInvoiceEntries(savedOrder);
+    auditService.record("invoice", "invoice", savedOrder.getId(), "created", savedOrder.getInvoiceNumber(), "Invoice created", savedOrder.getTotalAmount(), authorizationHeader);
     return savedOrder;
   }
 
@@ -134,9 +138,20 @@ public class OrderController {
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if (order.isCreditInvoice() || "CREDITED".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credited invoices cannot be marked as sent from the original invoice flow.");
+    }
+
+    if ("PAID".equals(order.getStatus()) || "PARTIALLY_PAID".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid invoices keep their payment status.");
+    }
+
+    accountingService.createInvoiceEntries(order);
     order.setStatus("SENT");
     order.addReminderHistory("INVOICE_MARKED_SENT", "SAVED", order.getCustomer() == null ? null : order.getCustomer().getEmail());
-    return orderRepository.save(order);
+    Order savedOrder = orderRepository.save(order);
+    auditService.record("invoice", "invoice", savedOrder.getId(), "marked_sent", savedOrder.getInvoiceNumber(), "Invoice marked as sent", savedOrder.getTotalAmount(), authorizationHeader);
+    return savedOrder;
   }
 
   @PostMapping("/invoices/{id}/paid")
@@ -149,7 +164,23 @@ public class OrderController {
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if (order.isCreditInvoice() || "CREDITED".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit invoices and credited invoices cannot receive normal customer payments.");
+    }
+
+    if ("DRAFT".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Draft invoices must be marked as sent before payment can be registered.");
+    }
+
+    if (!order.hasRemainingAmount()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice is already fully paid.");
+    }
+
     LocalDate paymentDate = request == null || request.paymentDate() == null ? LocalDate.now() : request.paymentDate();
+    if (order.getInvoiceDate() != null && paymentDate.isBefore(order.getInvoiceDate())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be before invoice date.");
+    }
+
     int paidAmount = request == null || request.paidAmount() == null || request.paidAmount() <= 0
         ? order.getRemainingAmount()
         : request.paidAmount();
@@ -159,9 +190,53 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount cannot be greater than remaining amount.");
     }
 
+    if (order.hasPayment(paymentDate, paidAmount, paymentReference)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This payment is already registered on the invoice.");
+    }
+
     accountingService.createPaymentEntries(order, paymentDate, paidAmount);
     order.registerPayment(paymentDate, paidAmount, paymentReference);
     Order savedOrder = orderRepository.save(order);
+    auditService.record("payment", "invoice", savedOrder.getId(), "payment_registered", savedOrder.getInvoiceNumber(), "Invoice payment registered", paidAmount, authorizationHeader);
+    return savedOrder;
+  }
+
+  @PostMapping("/invoices/{id}/refund")
+  public Order markInvoiceRefunded(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @PathVariable Long id,
+      @RequestBody(required = false) MarkInvoiceRefundRequest request
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
+    Order order = orderRepository.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
+
+    if (!"CREDITED".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only credited invoices can be refunded.");
+    }
+
+    if (order.getRefundableAmount() <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice has no refundable amount left.");
+    }
+
+    LocalDate refundDate = request == null || request.refundDate() == null ? LocalDate.now() : request.refundDate();
+    if (order.getInvoiceDate() != null && refundDate.isBefore(order.getInvoiceDate())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund date cannot be before invoice date.");
+    }
+
+    int refundAmount = request == null || request.refundAmount() == null || request.refundAmount() <= 0
+        ? order.getRefundableAmount()
+        : request.refundAmount();
+    String refundReference = request == null ? null : request.refundReference();
+
+    if (refundAmount > order.getRefundableAmount()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund amount cannot be greater than refundable amount.");
+    }
+
+    accountingService.createRefundEntries(order, refundDate, refundAmount);
+    order.registerRefund(refundDate, refundAmount, refundReference);
+    Order savedOrder = orderRepository.save(order);
+    auditService.record("refund", "invoice", savedOrder.getId(), "refund_registered", savedOrder.getInvoiceNumber(), "Customer refund registered", refundAmount, authorizationHeader);
     return savedOrder;
   }
 
@@ -187,10 +262,23 @@ public class OrderController {
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if ("CREDITED".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credited original invoice cannot be sent. Send the credit invoice instead.");
+    }
+
+    if (!"PAID".equals(order.getStatus()) && !"PARTIALLY_PAID".equals(order.getStatus())) {
+      accountingService.requireUnlockedAccountingDate(order.getInvoiceDate());
+    }
+
     invoiceEmailService.sendInvoice(order);
-    order.setStatus("SENT");
+    if (!"PAID".equals(order.getStatus()) && !"PARTIALLY_PAID".equals(order.getStatus())) {
+      accountingService.createInvoiceEntries(order);
+      order.setStatus("SENT");
+    }
     order.addReminderHistory("INVOICE_EMAIL", "SENT", order.getCustomer() == null ? null : order.getCustomer().getEmail());
-    return orderRepository.save(order);
+    Order savedOrder = orderRepository.save(order);
+    auditService.record("invoice", "invoice", savedOrder.getId(), "email_sent", savedOrder.getInvoiceNumber(), "Invoice email sent", savedOrder.getTotalAmount(), authorizationHeader);
+    return savedOrder;
   }
 
   @PostMapping("/invoices/{id}/reminder-draft")
@@ -217,7 +305,9 @@ public class OrderController {
 
     invoiceReminderEmailService.sendReminder(order);
     order.addReminder("EMAIL", "SENT", order.getCustomer() == null ? null : order.getCustomer().getEmail());
-    return orderRepository.save(order);
+    Order savedOrder = orderRepository.save(order);
+    auditService.record("reminder", "invoice", savedOrder.getId(), "reminder_email_sent", savedOrder.getInvoiceNumber(), "Invoice reminder email sent", savedOrder.getRemainingAmount(), authorizationHeader);
+    return savedOrder;
   }
 
   @DeleteMapping("/invoices/{id}")
@@ -229,7 +319,19 @@ public class OrderController {
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if (!"DRAFT".equals(order.getStatus())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Only draft invoices can be deleted. Use a credit invoice or correction for sent, paid or booked invoices."
+      );
+    }
+
+    if (order.getInvoiceDate() != null) {
+      accountingService.requireUnlockedAccountingDate(order.getInvoiceDate());
+    }
+
     accountingService.deleteEntriesForInvoice(order);
+    auditService.record("invoice", "invoice", order.getId(), "draft_deleted", order.getInvoiceNumber(), "Draft invoice deleted", order.getTotalAmount(), authorizationHeader);
     orderRepository.delete(order);
   }
 
@@ -248,6 +350,10 @@ public class OrderController {
 
     if ("CREDITED".equals(original.getStatus())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice is already credited.");
+    }
+
+    if (original.isCreditInvoice()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit invoices cannot be credited again.");
     }
 
     accountingService.requireUnlockedAccountingDate(LocalDate.now());
@@ -276,6 +382,7 @@ public class OrderController {
     original.setStatus("CREDITED");
     orderRepository.save(original);
     accountingService.createCreditInvoiceEntries(savedCreditInvoice);
+    auditService.record("invoice", "invoice", savedCreditInvoice.getId(), "credited", savedCreditInvoice.getInvoiceNumber(), "Credit invoice created for " + original.getInvoiceNumber(), Math.abs(savedCreditInvoice.getTotalAmount()), authorizationHeader);
 
     return savedCreditInvoice;
   }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.order.OrderRepository;
 
@@ -21,11 +22,18 @@ public class CustomerController {
   private final CustomerRepository customerRepository;
   private final AuthHeader authHeader;
   private final OrderRepository orderRepository;
+  private final AuditService auditService;
 
-  public CustomerController(CustomerRepository customerRepository, AuthHeader authHeader, OrderRepository orderRepository) {
+  public CustomerController(
+      CustomerRepository customerRepository,
+      AuthHeader authHeader,
+      OrderRepository orderRepository,
+      AuditService auditService
+  ) {
     this.customerRepository = customerRepository;
     this.authHeader = authHeader;
     this.orderRepository = orderRepository;
+    this.auditService = auditService;
   }
 
   @GetMapping("/customers")
@@ -45,8 +53,9 @@ public class CustomerController {
     authHeader.requireValidToken(authorizationHeader);
 
     validateCustomer(request);
+    requireUniqueCustomer(request, null);
 
-    return customerRepository.save(new Customer(
+    Customer customer = customerRepository.save(new Customer(
         request.name(),
         request.email(),
         request.personalNumber(),
@@ -55,6 +64,9 @@ public class CustomerController {
         request.postalCode(),
         request.city()
     ));
+
+    auditCustomer("customer_created", customer, "Customer created.", authorizationHeader);
+    return customer;
   }
 
   @PutMapping("/customers/{id}")
@@ -68,8 +80,11 @@ public class CustomerController {
 
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found."));
+    requireUniqueCustomer(request, id);
     customer.updateFrom(request);
-    return customerRepository.save(customer);
+    Customer savedCustomer = customerRepository.save(customer);
+    auditCustomer("customer_updated", savedCustomer, "Customer updated.", authorizationHeader);
+    return savedCustomer;
   }
 
   @PostMapping("/customers/{id}/archive")
@@ -81,7 +96,9 @@ public class CustomerController {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found."));
     customer.setArchived(true);
-    return customerRepository.save(customer);
+    Customer savedCustomer = customerRepository.save(customer);
+    auditCustomer("customer_archived", savedCustomer, "Customer archived instead of deleted.", authorizationHeader);
+    return savedCustomer;
   }
 
   @PostMapping("/customers/{id}/restore")
@@ -93,7 +110,9 @@ public class CustomerController {
     Customer customer = customerRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found."));
     customer.setArchived(false);
-    return customerRepository.save(customer);
+    Customer savedCustomer = customerRepository.save(customer);
+    auditCustomer("customer_restored", savedCustomer, "Customer restored.", authorizationHeader);
+    return savedCustomer;
   }
 
   @DeleteMapping("/customers/{id}")
@@ -110,6 +129,20 @@ public class CustomerController {
     }
 
     customerRepository.delete(customer);
+    auditCustomer("customer_deleted", customer, "Customer deleted because no invoices were connected.", authorizationHeader);
+  }
+
+  private void auditCustomer(String action, Customer customer, String message, String authorizationHeader) {
+    auditService.record(
+        "customer",
+        "customer",
+        customer.getId(),
+        action,
+        customer.getName(),
+        message,
+        0,
+        authorizationHeader
+    );
   }
 
   private void validateCustomer(CreateCustomerRequest request) {
@@ -153,6 +186,25 @@ public class CustomerController {
 
     if (request.phone() != null && !request.phone().isBlank() && !request.phone().matches("^[+\\d][\\d\\s-]{6,}$")) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid phone number.");
+    }
+  }
+
+  private void requireUniqueCustomer(CreateCustomerRequest request, Long currentCustomerId) {
+    String email = request.email().trim();
+    String personalNumber = request.personalNumber().trim();
+
+    boolean emailExists = currentCustomerId == null
+        ? customerRepository.existsByEmailIgnoreCase(email)
+        : customerRepository.existsByEmailIgnoreCaseAndIdNot(email, currentCustomerId);
+    if (emailExists) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "A customer with this email already exists.");
+    }
+
+    boolean personalNumberExists = currentCustomerId == null
+        ? customerRepository.existsByPersonalNumber(personalNumber)
+        : customerRepository.existsByPersonalNumberAndIdNot(personalNumber, currentCustomerId);
+    if (personalNumberExists) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "A customer with this personal number already exists.");
     }
   }
 

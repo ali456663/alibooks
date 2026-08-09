@@ -1,0 +1,51 @@
+package se.cloudshop.accounting;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public record AccountantPackageReport(
+    LocalDate periodFrom,
+    LocalDate periodTo,
+    String companyName,
+    int totalRevenue,
+    int totalExpenses,
+    int result,
+    int totalAssets,
+    int totalLiabilitiesAndEquity,
+    int balanceDifference,
+    int outputVat,
+    int inputVat,
+    int vatToPay,
+    int voucherCount,
+    int journalEntryCount,
+    int trialBalanceDifference,
+    int voucherCriticalIssues,
+    int vatCriticalIssues,
+    int accountSignCriticalIssues,
+    int accountSignWarningIssues,
+    int bankReconciliationDifference,
+    int bankReconciliationCriticalIssues,
+    int bankReconciliationWarningIssues,
+    int receivablesInvoiceCount,
+    int receivablesTotalOutstanding,
+    int receivablesOverdueOutstanding,
+    int receivablesDueSoonOutstanding,
+    int payablesInvoiceCount,
+    int payablesTotalOutstanding,
+    int payablesOverdueOutstanding,
+    int payablesDueSoonOutstanding,
+    int journalIntegrityDifference,
+    int journalIntegrityMissingEvidenceCount,
+    String journalIntegrityPeriodFingerprint,
+    String journalIntegrityFinalChainHash,
+    int voucherApprovedCount,
+    int voucherMissingApprovalCount,
+    int voucherPendingApprovalCount,
+    int voucherBlockedApprovalCount,
+    boolean sieExportReady,
+    int readyItemCount,
+    int warningItemCount,
+    int criticalItemCount,
+    List<AccountantPackageItem> items
+) {
+}

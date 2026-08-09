@@ -142,3 +142,4 @@ function MenuItem({ link = "#", text, image, onClick, speed, textColor, marqueeB
 }
 
 export default FlowingMenu;
+import React from "react";
