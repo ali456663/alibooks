@@ -61,6 +61,7 @@ Innan du pushar kod:
 cd frontend
 npm run check:release -- --with-backend --with-docker-build
 npm run check:go-live-risks
+npm run check:prepush -- --allow-ahead
 npm run check:git
 git add .
 git commit -m "Prepare AliBooks MVP release"

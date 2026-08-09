@@ -65,6 +65,7 @@ check(
     "check:git",
     "check:go-live-risks",
     "check:prod",
+    "check:prepush",
     "smoke:runtime",
     "check:professional-loop",
     "check:secrets",
@@ -72,7 +73,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -162,6 +163,9 @@ check("Docs include cash/card payment review", includesAll(docs, ["kort", "Swish
 check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release -- --with-backend --with-docker-build"), "Release evidence should document the full local verification command");
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");
 check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
+
+const prePushGate = read("scripts/pre-push-gate.mjs");
+check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");
 
 const failed = results.filter((result) => !result.ok && result.severity === "fail");
 const warnings = results.filter((result) => !result.ok && result.severity === "warn");

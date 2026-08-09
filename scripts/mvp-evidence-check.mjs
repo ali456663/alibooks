@@ -23,6 +23,7 @@ const evidence = read("docs/release-evidence.md");
 const riskRegister = read("docs/go-live-riskregister.md");
 const packageJson = JSON.parse(read("frontend/package.json"));
 const releaseGate = read("scripts/release-gate.mjs");
+const prePushGate = read("scripts/pre-push-gate.mjs");
 
 const readinessResult = spawnSync(process.execPath, ["scripts/alibooks-readiness-check.mjs"], {
   cwd: repoRoot,
@@ -90,9 +91,21 @@ check(
 );
 
 check(
+  "Package exposes pre-push gate",
+  packageJson.scripts?.["check:prepush"] === "node ../scripts/pre-push-gate.mjs",
+  "frontend/package.json should expose npm run check:prepush."
+);
+
+check(
   "Release gate runs evidence check",
   releaseGate.includes('"check:evidence"'),
   "The release gate should fail when MVP evidence becomes stale."
+);
+
+check(
+  "Pre-push gate runs release, git and sync checks",
+  ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build"].every((term) => prePushGate.includes(term)),
+  "The pre-push gate should combine full local release evidence and GitHub sync protection."
 );
 
 const failures = checks.filter((result) => !result.ok);

@@ -10,6 +10,7 @@ Kor fran `frontend`:
 npm run check:release -- --with-backend --with-docker-build
 npm run check:git
 npm run check:sync
+npm run check:prepush -- --allow-ahead
 ```
 
 Detta bevisar lokalt att:
@@ -29,7 +30,7 @@ Detta bevisar lokalt att:
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 18:23 +02:00
 - `npm run check:release`: passed 2026-08-09 18:19 +02:00
 - `npm run test:backend`: passed 2026-08-09 18:19 +02:00, 184 tests, 0 failures, 0 errors
-- `check:ready`: 56/56
+- `check:ready`: 57/57
 - `check:data-safety`: 55/55
 - `check:prod`: 37/37
 - `npm run check:backup`: passed
@@ -41,6 +42,7 @@ Detta bevisar lokalt att:
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
+- Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
 
 ## Kvar fore riktig go-live
 
