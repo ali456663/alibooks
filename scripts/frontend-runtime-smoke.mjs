@@ -146,7 +146,14 @@ async function main() {
       hasCrashFallback: Boolean(document.querySelector('.app-crash-fallback')) || document.body.innerText.includes('kunde inte visa sidan'),
       hasAliBooks: document.body.innerText.includes('AliBooks'),
       hasLogin: document.body.innerText.includes('Logga in') || document.body.innerText.includes('Login'),
-      lastRenderError: sessionStorage.getItem('alibooks-last-render-error')
+      activeView: localStorage.getItem('alibooks-active-view'),
+      hasRenderRecoveryAttempt: localStorage.getItem('alibooks-render-recovery-attempted') === 'true',
+      lastRenderError: sessionStorage.getItem('alibooks-last-render-error'),
+      bodyTextLength: document.body.innerText.trim().length,
+      rootChildCount: document.getElementById('root')?.childElementCount || 0,
+      viewportWidth: document.documentElement.clientWidth,
+      viewportHeight: document.documentElement.clientHeight,
+      scrollHeight: document.documentElement.scrollHeight
     })`;
     const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
     ws.close();
@@ -155,8 +162,17 @@ async function main() {
     if (value.hasCrashFallback) {
       throw new Error(`AliBooks render crash: ${value.lastRenderError || value.text}`);
     }
+    if (value.lastRenderError || value.hasRenderRecoveryAttempt) {
+      throw new Error(`AliBooks render recovery was triggered during smoke test: ${value.lastRenderError || "-"}`);
+    }
+    if (value.activeView !== "overview") {
+      throw new Error(`AliBooks reset did not land on overview. Active view: ${value.activeView || "-"}`);
+    }
     if (!value.hasAliBooks || !value.hasLogin) {
       throw new Error(`AliBooks did not render the expected shell. Text: ${value.text || "-"}`);
+    }
+    if (value.bodyTextLength < 80 || value.rootChildCount < 1 || value.viewportWidth < 320 || value.viewportHeight < 300 || value.scrollHeight < 300) {
+      throw new Error(`AliBooks rendered an unexpectedly small or blank page: ${JSON.stringify(value)}`);
     }
 
     console.log("AliBooks frontend smoke test passed.");

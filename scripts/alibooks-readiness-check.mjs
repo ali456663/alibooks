@@ -176,6 +176,13 @@ check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:
 const schemaPolicy = read("scripts/schema-policy-check.mjs");
 check("Schema policy check exists", includesAll(schemaPolicy, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "schema drift"]), "Schema policy should guard against implicit database schema changes");
 
+const runtimeSmoke = read("scripts/frontend-runtime-smoke.mjs");
+check(
+  "Frontend smoke checks reset and blank page",
+  includesAll(runtimeSmoke, ["alibooks-active-view", "bodyTextLength", "rootChildCount", "scrollHeight", "render recovery"]),
+  "Runtime smoke should catch blank pages, render recovery and broken local UI reset."
+);
+
 const failed = results.filter((result) => !result.ok && result.severity === "fail");
 const warnings = results.filter((result) => !result.ok && result.severity === "warn");
 

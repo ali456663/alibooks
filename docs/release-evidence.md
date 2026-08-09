@@ -30,7 +30,7 @@ Detta bevisar lokalt att:
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 18:23 +02:00
 - `npm run check:release`: passed 2026-08-09 18:48 +02:00
 - `npm run test:backend`: passed 2026-08-09 18:49 +02:00, 184 tests, 0 failures, 0 errors
-- `check:ready`: 63/63
+- `check:ready`: 64/64
 - `check:data-safety`: 55/55
 - `check:prod`: 41/41
 - `check:ci`: 24/24
