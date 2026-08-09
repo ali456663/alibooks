@@ -28,11 +28,11 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 18:23 +02:00
-- `npm run check:release`: passed 2026-08-09 18:19 +02:00
-- `npm run test:backend`: passed 2026-08-09 18:19 +02:00, 184 tests, 0 failures, 0 errors
-- `check:ready`: 57/57
+- `npm run check:release`: passed 2026-08-09 18:48 +02:00
+- `npm run test:backend`: passed 2026-08-09 18:49 +02:00, 184 tests, 0 failures, 0 errors
+- `check:ready`: 59/59
 - `check:data-safety`: 55/55
-- `check:prod`: 37/37
+- `check:prod`: 39/39
 - `npm run check:backup`: passed
 - Docker images skapade lokalt:
   - `alibooks-backend:release-gate`
@@ -43,6 +43,7 @@ Detta bevisar lokalt att:
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
 - Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
+- Databasschema-lage kontrolleras med `npm run check:schema` sa `SPRING_JPA_HIBERNATE_DDL_AUTO` ar explicit lokalt och i produktion.
 
 ## Kvar fore riktig go-live
 

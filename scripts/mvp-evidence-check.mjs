@@ -97,9 +97,21 @@ check(
 );
 
 check(
+  "Package exposes schema policy check",
+  packageJson.scripts?.["check:schema"] === "node ../scripts/schema-policy-check.mjs",
+  "frontend/package.json should expose npm run check:schema."
+);
+
+check(
   "Release gate runs evidence check",
   releaseGate.includes('"check:evidence"'),
   "The release gate should fail when MVP evidence becomes stale."
+);
+
+check(
+  "Release gate runs schema policy check",
+  releaseGate.includes('"check:schema"'),
+  "The release gate should fail when database schema policy becomes implicit."
 );
 
 check(

@@ -106,6 +106,7 @@ const requiredVars = [
   "SPRING_DATASOURCE_URL",
   "SPRING_DATASOURCE_USERNAME",
   "SPRING_DATASOURCE_PASSWORD",
+  "SPRING_JPA_HIBERNATE_DDL_AUTO",
   "JWT_SECRET",
   "JWT_EXPIRATION_MINUTES"
 ];
@@ -130,6 +131,8 @@ const frontendUrl = value(env, "APP_FRONTEND_URL");
 const corsOrigins = value(env, "APP_CORS_ALLOWED_ORIGINS");
 const datasourceUrl = value(env, "SPRING_DATASOURCE_URL");
 const jwtSecret = value(env, "JWT_SECRET");
+const ddlAuto = value(env, "SPRING_JPA_HIBERNATE_DDL_AUTO");
+const allowedDdlModes = ["none", "validate", "update", "create", "create-drop"];
 
 check("VITE_API_URL uses same-origin /api", value(env, "VITE_API_URL") === "/api", "For EC2/Nginx deployment, frontend should call /api");
 check("APP_FRONTEND_URL is an HTTP(S) URL", isHttpUrl(frontendUrl), "APP_FRONTEND_URL should be a public URL");
@@ -138,6 +141,7 @@ check("Production disables test data reset", value(env, "APP_TEST_DATA_RESET_ENA
 check("Production disables bank reset", value(env, "APP_BANK_RECONCILIATION_RESET_ENABLED") === "false", "APP_BANK_RECONCILIATION_RESET_ENABLED should be false");
 check("Production disables local CORS fallback", value(env, "APP_CORS_LOCAL_DEV_ENABLED") === "false", "APP_CORS_LOCAL_DEV_ENABLED should be false");
 check("Datasource uses PostgreSQL JDBC", datasourceUrl.startsWith("jdbc:postgresql://"), "SPRING_DATASOURCE_URL should be PostgreSQL JDBC");
+check("Hibernate ddl-auto mode is explicit", allowedDdlModes.includes(ddlAuto), "SPRING_JPA_HIBERNATE_DDL_AUTO should be one of none, validate, update, create or create-drop");
 check("JWT expiration is reasonable", Number(value(env, "JWT_EXPIRATION_MINUTES")) >= 15 && Number(value(env, "JWT_EXPIRATION_MINUTES")) <= 1440, "JWT_EXPIRATION_MINUTES should be between 15 and 1440");
 
 const stripeKey = value(env, "STRIPE_SECRET_KEY");

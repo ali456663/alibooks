@@ -43,12 +43,14 @@ requireIncludes(backendDockerfile, "EXPOSE 3000", "backend/Dockerfile");
 
 requireIncludes(compose, "5157:5157", "docker-compose.yml");
 requireIncludes(compose, "SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshop", "docker-compose.yml");
+requireIncludes(compose, "SPRING_JPA_HIBERNATE_DDL_AUTO=${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}", "docker-compose.yml");
 requireIncludes(compose, "APP_CORS_ALLOWED_ORIGINS=${APP_CORS_ALLOWED_ORIGINS:-http://localhost:5157}", "docker-compose.yml");
 requireIncludes(compose, "postgres:16", "docker-compose.yml");
 
 requireIncludes(composeProd, "cloudshop-frontend", "docker-compose.prod.yml");
 requireIncludes(composeProd, "cloudshop-backend", "docker-compose.prod.yml");
 requireIncludes(composeProd, "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}", "docker-compose.prod.yml");
+requireIncludes(composeProd, "SPRING_JPA_HIBERNATE_DDL_AUTO=${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}", "docker-compose.prod.yml");
 requireIncludes(composeProd, "APP_CORS_LOCAL_DEV_ENABLED=${APP_CORS_LOCAL_DEV_ENABLED:-false}", "docker-compose.prod.yml");
 
 requireIncludes(nginx, "proxy_pass http://backend:3000/;", "frontend/nginx.conf");

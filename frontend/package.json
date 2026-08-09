@@ -22,6 +22,7 @@
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",
     "check:professional-loop": "node ../scripts/professional-loop-check.mjs",
+    "check:schema": "node ../scripts/schema-policy-check.mjs",
     "check:secrets": "node ../scripts/secret-placeholder-check.mjs",
     "check:sync": "node ../scripts/git-release-status.mjs --strict --require-pushed",
     "check:views": "node ../scripts/frontend-view-route-check.mjs",

@@ -68,12 +68,13 @@ check(
     "check:prepush",
     "smoke:runtime",
     "check:professional-loop",
+    "check:schema",
     "check:secrets",
     "check:sync",
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -90,6 +91,7 @@ check("Release gate checks backup readiness", releaseGate.includes('"check:backu
 check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Release gate should run GitHub Actions pipeline check");
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
 check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
+check("Release gate checks schema policy", releaseGate.includes('"check:schema"'), "Release gate should run database schema policy check");
 check("Release gate checks committed secrets", releaseGate.includes('"check:secrets"'), "Release gate should run secret placeholder check");
 check("Release gate checks destructive data safety", releaseGate.includes('"check:data-safety"'), "Release gate should run destructive data safety check");
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
@@ -166,6 +168,9 @@ check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub A
 
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");
+
+const schemaPolicy = read("scripts/schema-policy-check.mjs");
+check("Schema policy check exists", includesAll(schemaPolicy, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "schema drift"]), "Schema policy should guard against implicit database schema changes");
 
 const failed = results.filter((result) => !result.ok && result.severity === "fail");
 const warnings = results.filter((result) => !result.ok && result.severity === "warn");
