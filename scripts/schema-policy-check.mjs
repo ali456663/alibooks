@@ -39,6 +39,7 @@ const envExample = parseEnv(read(".env.example"));
 const prodEnvExample = parseEnv(read(".env.production.example"));
 const compose = read("docker-compose.yml");
 const composeProd = read("docker-compose.prod.yml");
+const ci = read(".github/workflows/ci.yml");
 const prodCheck = read("scripts/production-readiness-check.mjs");
 const riskRegister = read("docs/go-live-riskregister.md");
 const releaseGate = read("scripts/release-gate.mjs");
@@ -82,6 +83,12 @@ check(
   "Production readiness checks ddl-auto",
   includesAll(prodCheck, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "none", "validate", "update"]),
   "Production readiness should validate the configured schema mode."
+);
+
+check(
+  "CI declares ddl-auto",
+  ci.includes("SPRING_JPA_HIBERNATE_DDL_AUTO: update"),
+  "GitHub Actions should run backend tests with the same explicit schema policy."
 );
 
 check(

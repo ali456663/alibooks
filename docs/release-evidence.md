@@ -33,11 +33,14 @@ Detta bevisar lokalt att:
 - `check:ready`: 63/63
 - `check:data-safety`: 55/55
 - `check:prod`: 41/41
+- `check:ci`: 24/24
+- `check:schema`: 10/10
 - `npm run check:backup`: passed, 17/17
 - Docker images skapade lokalt:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
 - CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten.
+- CI kor backendtester med explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update` sa schema-laget inte ar dolt i GitHub Actions.
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
 - Restore drill har skyddade script for Linux/EC2 och Windows som kraver `RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE`.
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.

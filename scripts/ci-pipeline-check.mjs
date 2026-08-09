@@ -30,6 +30,7 @@ check("Backend CI uses PostgreSQL 16 service", includesAll(ci, ["postgres:16", "
 check("Backend CI uses Java 21", includesAll(ci, ["actions/setup-java@v4", 'java-version: "21"']), "Backend CI should match the Spring Boot Java 21 build.");
 check("Backend CI runs Maven tests", ci.includes("run: mvn test"), "Backend job must run Maven tests.");
 check("Backend CI has JWT secret", ci.includes("JWT_SECRET: ci_test_secret_must_be_long_enough_for_demo"), "Backend tests should use a non-empty CI JWT secret.");
+check("Backend CI has explicit schema mode", ci.includes("SPRING_JPA_HIBERNATE_DDL_AUTO: update"), "Backend CI should run with an explicit Hibernate ddl-auto mode.");
 
 check("Frontend CI uses Node 24", includesAll(ci, ["actions/setup-node@v4", 'node-version: "24"']), "Frontend CI should avoid deprecated Node 20 warnings.");
 check("Frontend CI caches npm", includesAll(ci, ["cache: npm", "frontend/package-lock.json"]), "Frontend CI should cache npm dependencies from the frontend lockfile.");
