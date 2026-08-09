@@ -9,6 +9,7 @@ Kor fran `frontend`:
 ```bash
 npm run check:release -- --with-backend --with-docker-build
 npm run check:git
+npm run check:sync
 ```
 
 Detta bevisar lokalt att:
@@ -36,6 +37,7 @@ Detta bevisar lokalt att:
 - CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten.
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
+- GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 
 ## Kvar fore riktig go-live
 
@@ -43,6 +45,7 @@ Detta maste fortfarande verifieras utanfor lokal maskin innan AliBooks anvands s
 
 - GitHub Actions ska vara gron efter push.
 - Efter commit ska `npm run check:git -- --strict` visa att inga viktiga AliBooks-filer ligger kvar utanfor git.
+- Efter push ska `npm run check:sync` visa att lokal branch och GitHub ar i sync.
 - Dockerhub workflow ska pusha backend/frontend images.
 - EC2 ska kora `docker compose -f docker-compose.prod.yml up -d` mot riktig RDS.
 - Pa EC2 ska strikt produktionskontroll koras med riktig, ej committad `.env`:

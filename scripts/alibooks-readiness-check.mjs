@@ -65,10 +65,11 @@ check(
     "smoke:runtime",
     "check:professional-loop",
     "check:secrets",
+    "check:sync",
     "check:views",
     "test:backend"
   ]),
-  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:git, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:views and test:backend should exist"
+  "build, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:git, check:prod, smoke:runtime, check:professional-loop, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");

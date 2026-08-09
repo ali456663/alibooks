@@ -99,6 +99,8 @@ npm run check:docs
 npm run check:docker
 npm run check:prod
 npm run check:secrets
+npm run check:git
+npm run check:sync
 npm run check:views
 npm run smoke:runtime
 npm run test:backend
@@ -111,6 +113,8 @@ The Docker check makes sure the local and production Docker setup stays aligned 
 The production readiness check verifies the EC2/RDS `.env` shape, same-origin `/api`, CORS, disabled test reset flags, JWT settings, production compose and smoke scripts.
 The secrets check fails if real-looking Stripe, AI, AWS or private key material is accidentally committed.
 The view check makes sure every left-menu view has a rendered screen, which reduces the risk of a blank page after navigation.
+
+The git check verifies that important AliBooks files are committed locally. The sync check is stricter: it fails if local commits have not been pushed to GitHub or if the local branch is behind its upstream. Use it after push before trusting GitHub Actions or a production deploy.
 The backend test command uses Maven if available, or Docker with a Maven Java 21 image if Maven is not installed locally.
 
 ## Demo Flow

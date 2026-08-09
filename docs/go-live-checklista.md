@@ -17,6 +17,7 @@ Frontend bygger med npm run build
 Releasegrind gar igenom med npm run check:release -- --with-backend
 Produktionskontroll gar igenom med npm run check:prod
 Gitstatus ar kontrollerad med npm run check:git
+GitHub-sync ar kontrollerad med npm run check:sync efter push
 Backend startar i IntelliJ
 Docker Desktop fungerar
 MVP-flodet fungerar lokalt
@@ -63,9 +64,11 @@ git add .
 git commit -m "Prepare AliBooks MVP release"
 npm run check:git -- --strict
 git push
+npm run check:sync
 ```
 
 Om `check:git -- --strict` failar efter commit betyder det att viktiga filer fortfarande ligger utanfor git.
+Om `check:sync` failar efter push betyder det att lokal branch och GitHub inte ar i samma lage.
 
 ## 2. Dockerhub Secrets
 

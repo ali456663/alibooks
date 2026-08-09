@@ -65,6 +65,12 @@ check(
 );
 
 check(
+  "Git release checks are documented",
+  allDocs.includes("npm run check:git") && allDocs.includes("npm run check:sync"),
+  "Docs should explain local git cleanliness and GitHub sync checks."
+);
+
+check(
   "Production readiness command exists",
   allDocs.includes("npm run check:prod"),
   "Docs should include the production readiness check."

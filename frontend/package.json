@@ -20,6 +20,7 @@
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:professional-loop": "node ../scripts/professional-loop-check.mjs",
     "check:secrets": "node ../scripts/secret-placeholder-check.mjs",
+    "check:sync": "node ../scripts/git-release-status.mjs --strict --require-pushed",
     "check:views": "node ../scripts/frontend-view-route-check.mjs",
     "test:backend": "node ../scripts/backend-test.mjs",
     "smoke:runtime": "node ../scripts/frontend-runtime-smoke.mjs"

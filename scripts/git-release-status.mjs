@@ -6,6 +6,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const args = new Set(process.argv.slice(2));
 const strict = args.has("--strict");
+const requirePushed = args.has("--require-pushed");
 
 const importantPrefixes = [
   ".env.example",
@@ -80,7 +81,21 @@ function isImportant(file) {
   });
 }
 
+function parseBranchStatus(summaryLine) {
+  const aheadMatch = summaryLine.match(/ahead (\d+)/);
+  const behindMatch = summaryLine.match(/behind (\d+)/);
+  const branchMatch = summaryLine.match(/^##\s+([^\s.]+)(?:\.\.\.([^\s\[]+))?/);
+
+  return {
+    branch: branchMatch?.[1] || "",
+    upstream: branchMatch?.[2] || "",
+    ahead: aheadMatch ? Number(aheadMatch[1]) : 0,
+    behind: behindMatch ? Number(behindMatch[1]) : 0
+  };
+}
+
 const rawStatus = runGit(["status", "--porcelain=v1"]);
+const branchStatus = parseBranchStatus(runGit(["status", "-sb"]).split(/\r?\n/)[0] || "");
 const entries = rawStatus
   .split(/\r?\n/)
   .filter(Boolean)
@@ -97,6 +112,10 @@ console.log(`Important changed files: ${entries.length}`);
 console.log(`Staged important files: ${staged.length}`);
 console.log(`Unstaged/untracked important files: ${unstaged.length}`);
 console.log(`Untracked important files: ${untracked.length}`);
+console.log(`Branch: ${branchStatus.branch || "unknown"}`);
+console.log(`Upstream: ${branchStatus.upstream || "not configured"}`);
+console.log(`Commits ahead of upstream: ${branchStatus.ahead}`);
+console.log(`Commits behind upstream: ${branchStatus.behind}`);
 
 if (entries.length > 0) {
   console.log("");
@@ -113,6 +132,18 @@ if (strict && entries.length > 0) {
   process.exit(1);
 }
 
+if (requirePushed && branchStatus.ahead > 0) {
+  console.error("Git sync check failed.");
+  console.error(`${branchStatus.ahead} local commit(s) have not been pushed to ${branchStatus.upstream || "the upstream branch"}.`);
+  process.exit(1);
+}
+
+if (requirePushed && branchStatus.behind > 0) {
+  console.error("Git sync check failed.");
+  console.error(`${branchStatus.behind} remote commit(s) are not present locally. Pull/review before release.`);
+  process.exit(1);
+}
+
 if (entries.length > 0) {
   console.log("Next before push:");
   console.log("1. Review these files.");
@@ -121,4 +152,10 @@ if (entries.length > 0) {
   console.log("4. Run npm run check:git -- --strict after commit to confirm nothing important was left outside git.");
 } else {
   console.log("Git release status is clean for important AliBooks files.");
+  if (branchStatus.ahead > 0) {
+    console.log(`Push pending: ${branchStatus.ahead} local commit(s) are not on ${branchStatus.upstream || "upstream"}.`);
+  }
+  if (branchStatus.behind > 0) {
+    console.log(`Pull/review pending: ${branchStatus.behind} upstream commit(s) are not local.`);
+  }
 }
