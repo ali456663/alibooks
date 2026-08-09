@@ -45,6 +45,7 @@ npm run check:ready
 npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
+npm run check:dependencies
 npm run check:secrets
 npm run check:evidence
 npm run check:git
@@ -60,6 +61,7 @@ npm run test:backend
 `npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
+`npm run check:dependencies` kontrollerar att frontend har lockfile, att direkta runtime-beroenden ar lasta i `package-lock.json`, att Docker anvander `npm ci`, och att online-audit-kommandot `npm audit --omit=dev --audit-level=critical` finns dokumenterat fore skarp deploy.
 `npm run check:secrets` stoppar riktiga Stripe-, AI-, AWS- eller private-key-liknande hemligheter fran att hamna i GitHub.
 `npm run check:evidence` kontrollerar att releasebeviset fortfarande matchar readiness, testbevis och riskregister.
 `npm run check:git` visar om viktiga filer ligger lokalt utan att vara commitade. Efter release-commit ska `npm run check:git -- --strict` vara gron.

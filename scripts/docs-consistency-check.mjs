@@ -79,6 +79,12 @@ check(
 );
 
 check(
+  "Dependency risk command exists",
+  allDocs.includes("npm run check:dependencies") && allDocs.includes("npm audit --omit=dev --audit-level=critical"),
+  "Docs should include the local dependency lockfile check and the external vulnerability audit command."
+);
+
+check(
   "Git release checks are documented",
   allDocs.includes("npm run check:git") && allDocs.includes("npm run check:sync") && allDocs.includes("git status -sb"),
   "Docs should explain local git cleanliness, explicit status review and GitHub sync checks."

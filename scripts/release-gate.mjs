@@ -27,6 +27,7 @@ const frontendSteps = [
   ["check:evidence", "Check MVP release evidence"],
   ["check:schema", "Check database schema policy"],
   ["check:secrets", "Check committed secrets"],
+  ["check:dependencies", "Check dependency risk"],
   ["check:data-safety", "Check destructive data safety"],
   ["check:docker", "Check Docker config"],
   ["check:prod", "Check production readiness"],

@@ -109,6 +109,12 @@ check(
 );
 
 check(
+  "Package exposes dependency risk check",
+  packageJson.scripts?.["check:dependencies"] === "node ../scripts/dependency-risk-check.mjs",
+  "frontend/package.json should expose npm run check:dependencies."
+);
+
+check(
   "Package exposes schema policy check",
   packageJson.scripts?.["check:schema"] === "node ../scripts/schema-policy-check.mjs",
   "frontend/package.json should expose npm run check:schema."
@@ -136,6 +142,12 @@ check(
   "Release gate runs git parser check",
   releaseGate.includes('"check:git-parser"'),
   "The release gate should fail when git release status parser coverage is removed."
+);
+
+check(
+  "Release gate runs dependency risk check",
+  releaseGate.includes('"check:dependencies"'),
+  "The release gate should fail when frontend dependency or lockfile safety becomes stale."
 );
 
 check(

@@ -66,6 +66,7 @@ check(
     "check:docs",
     "check:docker",
     "check:data-safety",
+    "check:dependencies",
     "check:evidence",
     "check:git-parser",
     "check:git",
@@ -80,7 +81,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -101,6 +102,7 @@ check("Release gate checks docs consistency", releaseGate.includes('"check:docs"
 check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
 check("Release gate checks schema policy", releaseGate.includes('"check:schema"'), "Release gate should run database schema policy check");
 check("Release gate checks committed secrets", releaseGate.includes('"check:secrets"'), "Release gate should run secret placeholder check");
+check("Release gate checks dependency risk", releaseGate.includes('"check:dependencies"'), "Release gate should run static dependency and lockfile risk check");
 check("Release gate checks destructive data safety", releaseGate.includes('"check:data-safety"'), "Release gate should run destructive data safety check");
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
@@ -194,6 +196,13 @@ check(
 
 const schemaPolicy = read("scripts/schema-policy-check.mjs");
 check("Schema policy check exists", includesAll(schemaPolicy, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "schema drift"]), "Schema policy should guard against implicit database schema changes");
+
+const dependencyRisk = read("scripts/dependency-risk-check.mjs");
+check(
+  "Dependency risk check exists",
+  includesAll(dependencyRisk, ["package-lock.json", "npm ci", "npm audit --omit=dev --audit-level=critical", "frontend/Dockerfile.prod"]),
+  "Dependency risk should verify lockfile, Docker installs and document the online audit boundary."
+);
 
 const runtimeSmoke = read("scripts/frontend-runtime-smoke.mjs");
 check(

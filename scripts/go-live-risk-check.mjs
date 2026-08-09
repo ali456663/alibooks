@@ -37,6 +37,7 @@ const requiredRiskAreas = [
   "EC2 deploy",
   "RDS databas",
   "Backup och restore drill",
+  "Frontend beroenden",
   "Stripe betalningar",
   "SMTP e-post",
   "AI och personuppgifter",

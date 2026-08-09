@@ -8,6 +8,7 @@ Kor fran `frontend`:
 
 ```bash
 npm run check:release -- --with-backend --with-docker-build
+npm run check:dependencies
 npm run check:git
 npm run check:sync
 npm run check:prepush -- --allow-ahead
@@ -20,6 +21,7 @@ Detta bevisar lokalt att:
 - viktiga frontend/backend API-kontrakt finns kvar
 - backend-konstruktorer och Java-records matchar testerna
 - dokumentation, secrets, Docker-konfig, vyer och produktionsmallar passerar kontroller
+- frontend dependency-lockfile och Docker-installation kontrolleras statiskt
 - destruktiva raderingar/reset-endpoints har JWT, feature flags, audit och periodlasningsskydd dar det kravs
 - backendtester passerar
 - backend Docker-image kan byggas
@@ -28,10 +30,11 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - `npm run check:release -- --with-backend --with-docker-build`: passed 2026-08-09 19:30 +02:00
-- `npm run check:release`: passed 2026-08-09 19:20 +02:00
+- `npm run check:release`: passed 2026-08-09 19:49 +02:00
+- `npm run check:dependencies`: passed 2026-08-09 19:49 +02:00, 30/30
 - `npm run test:backend`: passed 2026-08-09 19:21 +02:00, 184 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 69/69
+- `check:ready`: 71/71
 - `check:acceptance`: 16/16
 - `check:data-safety`: 55/55
 - `check:prod`: 41/41
@@ -51,6 +54,7 @@ Detta bevisar lokalt att:
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
 - Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
 - Databasschema-lage kontrolleras med `npm run check:schema` sa `SPRING_JPA_HIBERNATE_DDL_AUTO` ar explicit lokalt och i produktion.
+- Frontend-beroenden kontrolleras lokalt med `npm run check:dependencies`. Fore skarp deploy ska aven aktuell online-audit koras med `npm audit --omit=dev --audit-level=critical`.
 
 ## Kvar fore riktig go-live
 

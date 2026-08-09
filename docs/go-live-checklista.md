@@ -16,6 +16,7 @@ Kontrollera lokalt:
 Frontend bygger med npm run build
 Releasegrind gar igenom med npm run check:release -- --with-backend
 Produktionskontroll gar igenom med npm run check:prod
+Dependency-kontroll gar igenom med npm run check:dependencies
 Gitstatus ar kontrollerad med npm run check:git
 GitHub-sync ar kontrollerad med npm run check:sync efter push
 Backend startar i IntelliJ
@@ -61,6 +62,8 @@ Innan du pushar kod:
 cd frontend
 npm run check:release -- --with-backend --with-docker-build
 npm run check:go-live-risks
+npm run check:dependencies
+npm audit --omit=dev --audit-level=critical
 npm run check:prepush -- --allow-ahead
 npm run check:git
 git status -sb

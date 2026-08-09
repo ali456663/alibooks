@@ -20,6 +20,7 @@ AliBooks far inte anvandas med skarp kunddata, bokforingsdata eller betalningar 
 | RDS databas | BLOCKERAR SKARP DRIFT | Backend startar inte eller skriver mot fel databas. | Kor `npm run check:prod -- --env-file ../.env --strict` pa EC2. | `/api/system/status` visar `database.ok = true` mot RDS. |
 | Backup och restore drill | BLOCKERAR SKARP DRIFT | Bokforing och underlag kan ga forlorade eller inte ga att aterlasa. | Kor `scripts/backup-postgres.*` och aterlas till separat testdatabas. | `pg_dump` skapas, `pg_restore -l` passerar och restore drill ar dokumenterad. |
 | Databas-schema och Hibernate | BLOCKERAR SKARP DRIFT | Fel schema kan ge `column does not exist` eller tysta databasandringar om `ddl-auto` inte ar valt medvetet. | Kor `npm run check:schema` och kontrollera `SPRING_JPA_HIBERNATE_DDL_AUTO` fore RDS-deploy. | Schema-lage ar explicit i `.env`, Docker Compose och production readiness. |
+| Frontend beroenden | KRAVER EXTERN VERIFIERING | Appen kan bygga lokalt men ha stale lockfile, osakra package-specs eller aktuella sarbarheter i npm-ekosystemet. | Kor `npm run check:dependencies` lokalt och `npm audit --omit=dev --audit-level=critical` med internet fore skarp deploy. | Lockfile/Docker-installation ar gron lokalt och online-audit visar inga kritiska produktionsberoenden. |
 | Stripe betalningar | KRAVER EXTERN VERIFIERING | Betalningar kan tas emot men inte bokforas korrekt om webhook saknas eller ar fel. | Testa Stripe test-webhook och `checkout.session.completed`. | AliBooks skapar/uppdaterar faktura eller Stripe-forsaljning och bokforingen balanserar. |
 | SMTP e-post | KRAVER EXTERN VERIFIERING | Faktura- och paminnelsemail kan se klara ut men inte skickas pa riktigt. | Lagga SMTP i ej committad `.env` och skicka testmail. | Testmail kommer fram och audit/event-historik visar skickad faktura/paminnelse. |
 | AI och personuppgifter | BLOCKERAR SKARP DRIFT | Personnummer, adress, telefon eller e-post kan skickas till extern AI av misstag. | Anvand AI-sakert lage och anonymiserad export for analys. | Sakerhetssidan och anonym export visar att PII minimeras eller tas bort. |
@@ -38,7 +39,8 @@ Innan riktig drift ska dessa vara sant:
 6. Stripe och SMTP ar testade om de ska anvandas skarpt.
 7. AI anvander minimerad eller anonymiserad data.
 8. Betalningsrutinen for kort/Swish/Apple Pay ar kontrollerad.
-9. En export kan lamnas till redovisningskonsult.
+9. Frontend dependency-audit ar kontrollerad.
+10. En export kan lamnas till redovisningskonsult.
 
 ## Snabbt beslut just nu
 
