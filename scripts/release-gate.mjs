@@ -20,6 +20,7 @@ const frontendSteps = [
   ["check:api-contract", "Check frontend/backend API contract"],
   ["check:ready", "Check AliBooks readiness"],
   ["check:backend-wiring", "Check backend constructor and record wiring"],
+  ["check:git-parser", "Check git status parser regression"],
   ["check:backup", "Check backup and restore readiness"],
   ["check:ci", "Check GitHub Actions pipeline"],
   ["check:docs", "Check docs consistency"],

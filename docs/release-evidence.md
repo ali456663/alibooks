@@ -31,7 +31,7 @@ Detta bevisar lokalt att:
 - `npm run check:release`: passed 2026-08-09 19:20 +02:00
 - `npm run test:backend`: passed 2026-08-09 19:21 +02:00, 184 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 68/68
+- `check:ready`: 69/69
 - `check:acceptance`: 16/16
 - `check:data-safety`: 55/55
 - `check:prod`: 41/41

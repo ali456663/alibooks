@@ -103,6 +103,12 @@ check(
 );
 
 check(
+  "Package exposes git parser check",
+  packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
+  "frontend/package.json should expose npm run check:git-parser."
+);
+
+check(
   "Package exposes schema policy check",
   packageJson.scripts?.["check:schema"] === "node ../scripts/schema-policy-check.mjs",
   "frontend/package.json should expose npm run check:schema."
@@ -124,6 +130,12 @@ check(
   "Release gate runs schema policy check",
   releaseGate.includes('"check:schema"'),
   "The release gate should fail when database schema policy becomes implicit."
+);
+
+check(
+  "Release gate runs git parser check",
+  releaseGate.includes('"check:git-parser"'),
+  "The release gate should fail when git release status parser coverage is removed."
 );
 
 check(

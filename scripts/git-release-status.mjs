@@ -7,6 +7,7 @@ const repoRoot = path.resolve(scriptDir, "..");
 const args = new Set(process.argv.slice(2));
 const strict = args.has("--strict");
 const requirePushed = args.has("--require-pushed");
+const selfTest = args.has("--self-test");
 
 const importantPrefixes = [
   ".env.example",
@@ -92,6 +93,44 @@ function parseBranchStatus(summaryLine) {
     ahead: aheadMatch ? Number(aheadMatch[1]) : 0,
     behind: behindMatch ? Number(behindMatch[1]) : 0
   };
+}
+
+function assertSelfTest(name, ok) {
+  if (!ok) {
+    console.error(`Git release status parser self-test failed: ${name}`);
+    process.exit(1);
+  }
+}
+
+if (selfTest) {
+  const unstagedDocs = parseStatusLine(" M docs/release-evidence.md");
+  assertSelfTest("unstaged docs file keeps first path character", unstagedDocs.file === "docs/release-evidence.md");
+  assertSelfTest("unstaged docs file is important", isImportant(unstagedDocs.file));
+  assertSelfTest("unstaged docs file is not staged", !unstagedDocs.staged);
+  assertSelfTest("unstaged docs file is unstaged", unstagedDocs.unstaged);
+
+  const stagedScript = parseStatusLine("M  scripts/git-release-status.mjs");
+  assertSelfTest("staged script is important", isImportant(stagedScript.file));
+  assertSelfTest("staged script is staged", stagedScript.staged);
+  assertSelfTest("staged script is not unstaged", !stagedScript.unstaged);
+
+  const untrackedFrontend = parseStatusLine("?? frontend/src/new-view.jsx");
+  assertSelfTest("untracked frontend source is important", isImportant(untrackedFrontend.file));
+  assertSelfTest("untracked frontend source is marked untracked", untrackedFrontend.untracked);
+  assertSelfTest("untracked frontend source is counted as unstaged", untrackedFrontend.unstaged);
+
+  const renamedDoc = parseStatusLine("R  docs/old.md -> docs/new.md");
+  assertSelfTest("renamed docs target path is parsed", renamedDoc.file === "docs/new.md");
+  assertSelfTest("renamed docs target path is important", isImportant(renamedDoc.file));
+
+  const branchStatus = parseBranchStatus("## main...origin/main [ahead 18, behind 2]");
+  assertSelfTest("branch name is parsed", branchStatus.branch === "main");
+  assertSelfTest("upstream name is parsed", branchStatus.upstream === "origin/main");
+  assertSelfTest("ahead count is parsed", branchStatus.ahead === 18);
+  assertSelfTest("behind count is parsed", branchStatus.behind === 2);
+
+  console.log("Git release status parser self-test passed.");
+  process.exit(0);
 }
 
 const rawStatus = runGit(["status", "--porcelain=v1"]);

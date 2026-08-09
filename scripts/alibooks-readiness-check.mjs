@@ -67,6 +67,7 @@ check(
     "check:docker",
     "check:data-safety",
     "check:evidence",
+    "check:git-parser",
     "check:git",
     "check:go-live-risks",
     "check:prod",
@@ -79,7 +80,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -93,6 +94,7 @@ check("Release gate checks MVP acceptance", releaseGate.includes('"check:accepta
 check("Release gate checks API contract", releaseGate.includes('"check:api-contract"'), "Release gate should run API contract check");
 check("Release gate checks AliBooks readiness", releaseGate.includes('"check:ready"'), "Release gate should run check:ready");
 check("Release gate checks backend wiring", releaseGate.includes('"check:backend-wiring"'), "Release gate should run backend wiring check");
+check("Release gate checks git parser regression", releaseGate.includes('"check:git-parser"'), "Release gate should run git status parser regression check");
 check("Release gate checks backup readiness", releaseGate.includes('"check:backup"'), "Release gate should run backup readiness check");
 check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Release gate should run GitHub Actions pipeline check");
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
@@ -186,7 +188,7 @@ check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:
 const gitReleaseStatus = read("scripts/git-release-status.mjs");
 check(
   "Git release status preserves porcelain status columns",
-  gitReleaseStatus.includes("trimEnd()") && !gitReleaseStatus.includes("stdout.trim()"),
+  gitReleaseStatus.includes("trimEnd()") && gitReleaseStatus.includes("--self-test") && !gitReleaseStatus.includes("stdout.trim()"),
   "Git status parser must preserve leading spaces from porcelain output so unstaged important files are not missed."
 );
 
