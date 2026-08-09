@@ -39,12 +39,14 @@ Efter stor frontend-andring:
 ```bash
 cd frontend
 npm run check:release
+npm run check:acceptance
 npm run build
 npm run check:ready
 npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
 npm run check:secrets
+npm run check:evidence
 npm run check:git
 npm run check:sync
 npm run check:views
@@ -53,11 +55,13 @@ npm run test:backend
 ```
 
 `npm run check:release` kor releasegrinden: frontend build, professionell loop, API-kontrakt, readiness, backend-wiring, dokumentation, secrets, Docker-konfig, vykontroll och runtime-smoke i en fast ordning.
+`npm run check:acceptance` kontrollerar att MVP-testprotokollet skiljer automatiska bevis fran manuella go-live-tester.
 `npm run check:ready` ar en snabb statisk kontroll for att se att projektet fortfarande har de viktigaste byggstenarna for skarp MVP: CI, Docker, env-mallar, professionell 20-stegsplan, regelkontroll, Startklar, Stripe/SMTP/JWT-punkter och dokumentation.
 `npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
 `npm run check:secrets` stoppar riktiga Stripe-, AI-, AWS- eller private-key-liknande hemligheter fran att hamna i GitHub.
+`npm run check:evidence` kontrollerar att releasebeviset fortfarande matchar readiness, testbevis och riskregister.
 `npm run check:git` visar om viktiga filer ligger lokalt utan att vara commitade. Efter release-commit ska `npm run check:git -- --strict` vara gron.
 `npm run check:sync` visar om lokala commits ar pushade till GitHub. Den ska vara gron efter push och innan du litar pa GitHub Actions.
 `npm run check:views` kontrollerar att varje menyknapp har en faktisk renderad vy, sa appen inte blir vit av en trasig navigation.

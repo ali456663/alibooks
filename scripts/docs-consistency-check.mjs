@@ -66,6 +66,18 @@ check(
 );
 
 check(
+  "MVP acceptance command exists",
+  allDocs.includes("npm run check:acceptance"),
+  "Docs should explain how automated MVP acceptance evidence is checked."
+);
+
+check(
+  "MVP evidence command exists",
+  allDocs.includes("npm run check:evidence"),
+  "Docs should explain how release evidence is kept in sync with readiness and risk checks."
+);
+
+check(
   "Git release checks are documented",
   allDocs.includes("npm run check:git") && allDocs.includes("npm run check:sync"),
   "Docs should explain local git cleanliness and GitHub sync checks."
