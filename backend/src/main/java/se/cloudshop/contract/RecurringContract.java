@@ -25,8 +25,10 @@ public class RecurringContract {
   @Column(name = "contract_interval")
   private String interval;
   private LocalDate nextInvoiceDate;
-  private boolean active;
-  private boolean archived;
+  @Column(nullable = false, columnDefinition = "boolean default true")
+  private boolean active = true;
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean archived = false;
   private String lastInvoiceNumber;
   private Instant createdAt;
   private Instant archivedAt;

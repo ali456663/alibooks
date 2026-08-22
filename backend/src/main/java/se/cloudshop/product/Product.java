@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 
 @Entity
@@ -19,6 +20,7 @@ public class Product {
   private int price;
   private int discountPrice;
   private String discountLabel;
+  @Column(nullable = false, columnDefinition = "boolean default true")
   private boolean active = true;
 
   public Product() {

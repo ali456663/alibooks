@@ -39,6 +39,7 @@ Efter stor frontend-andring:
 ```bash
 cd frontend
 npm run check:release
+npm run check:release:full
 npm run check:acceptance
 npm run build
 npm run check:ready
@@ -46,6 +47,8 @@ npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
 npm run check:dependencies
+npm run check:audit
+npm run check:release-traceability
 npm run check:secrets
 npm run check:evidence
 npm run check:git
@@ -56,12 +59,15 @@ npm run test:backend
 ```
 
 `npm run check:release` kor releasegrinden: frontend build, professionell loop, API-kontrakt, readiness, backend-wiring, dokumentation, secrets, Docker-konfig, vykontroll och runtime-smoke i en fast ordning.
+`npm run check:release:full` kor samma releasegrind plus backendtester och lokala Docker-image-builds. Anvand den innan push, deploy och skarp demo.
 `npm run check:acceptance` kontrollerar att MVP-testprotokollet skiljer automatiska bevis fran manuella go-live-tester.
 `npm run check:ready` ar en snabb statisk kontroll for att se att projektet fortfarande har de viktigaste byggstenarna for skarp MVP: CI, Docker, env-mallar, professionell 20-stegsplan, regelkontroll, Startklar, Stripe/SMTP/JWT-punkter och dokumentation.
 `npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
-`npm run check:dependencies` kontrollerar att frontend har lockfile, att direkta runtime-beroenden ar lasta i `package-lock.json`, att Docker anvander `npm ci`, och att online-audit-kommandot `npm audit --omit=dev --audit-level=critical` finns dokumenterat fore skarp deploy.
+`npm run check:dependencies` kontrollerar att frontend har lockfile, att direkta runtime-beroenden och buildverktyg ar lasta i `package-lock.json`, att Docker anvander `npm ci`, och att online-audit-kommandot ar dokumenterat fore skarp deploy.
+`npm run check:audit` kor live audit mot npm-registret och ska vara gron fore skarp deploy.
+`npm run check:release-traceability` kontrollerar att package-version, git branch/commit, GitHub-sync, Dockerhub `sha-*`/`v*`-taggar och EC2 `IMAGE_TAG` hanger ihop.
 `npm run check:secrets` stoppar riktiga Stripe-, AI-, AWS- eller private-key-liknande hemligheter fran att hamna i GitHub.
 `npm run check:evidence` kontrollerar att releasebeviset fortfarande matchar readiness, testbevis och riskregister.
 `npm run check:git` visar om viktiga filer ligger lokalt utan att vara commitade. Efter release-commit ska `npm run check:git -- --strict` vara gron.

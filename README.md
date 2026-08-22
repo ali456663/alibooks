@@ -56,15 +56,15 @@ Backend in IntelliJ:
 2. Run `CloudShopApplication`.
 3. The backend starts on `http://localhost:3000`.
 
-Frontend:
+Frontend from the project root:
 
 ```bash
-cd frontend
-npm install
+npm --prefix frontend install
 npm run dev
 ```
 
 The frontend starts on `http://localhost:5157`.
+The root `package.json` delegates common commands to `frontend`, so `npm run dev`, `npm run doctor`, `npm run check:release` and `npm run test:backend` work from the main AliBooks folder.
 
 After larger changes, run the local release gate:
 
@@ -72,21 +72,30 @@ After larger changes, run the local release gate:
 npm run check:release
 ```
 
+If AliBooks does not start or shows a blank page, run the local doctor:
+
+```bash
+npm run doctor
+```
+
+It checks PostgreSQL on `5432`, backend `/health`, backend `/system/status`, the frontend on `5157` and Docker Compose status.
+
 Before push or release, include backend tests:
 
 ```bash
-npm run check:release -- --with-backend
+npm run check:release:full
 ```
 
-Before deploy, include local Docker image builds too:
+Before deploy, include backend tests and local Docker image builds:
 
 ```bash
-npm run check:release -- --with-backend --with-docker-build
+npm run check:release:full
 ```
 
 The release gate runs the main static checks, frontend build and runtime smoke test in the same order every time.
 The `--with-backend` flag runs backend tests through Maven or Docker.
 The `--with-docker-build` flag also builds backend and frontend Docker images locally.
+The `check:release:full` script runs the same release gate with both flags enabled.
 
 Individual checks:
 

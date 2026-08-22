@@ -142,6 +142,25 @@ function declarationCounts(source, regex) {
   return counts;
 }
 
+function constructorDeclarationCounts(source, className) {
+  const counts = [];
+  const pattern = new RegExp(`public\\s+${className}\\s*\\(`, "g");
+  let match;
+
+  while ((match = pattern.exec(source)) !== null) {
+    const openIndex = source.indexOf("(", match.index);
+    const closeIndex = findMatchingParen(source, openIndex);
+    if (closeIndex < 0) {
+      fail(`Could not parse declaration for ${className}.`);
+    }
+
+    counts.push(countTopLevelItems(source.slice(openIndex + 1, closeIndex)));
+    pattern.lastIndex = closeIndex + 1;
+  }
+
+  return counts;
+}
+
 const javaFiles = walk(backendSourceRoot).filter((file) => file.endsWith(".java"));
 const mainFiles = javaFiles.filter((file) => file.includes(`${path.sep}main${path.sep}`));
 const allSource = javaFiles.map(read).join("\n");
@@ -162,10 +181,11 @@ for (const [className, expectedCount] of controllerConstructors) {
 
 for (const [recordName, expectedCount] of records) {
   const counts = invocationArgumentCounts(allSource, recordName);
-  const mismatches = counts.filter((count) => count !== expectedCount);
+  const allowedCounts = new Set([expectedCount, ...constructorDeclarationCounts(mainSource, recordName)]);
+  const mismatches = counts.filter((count) => !allowedCounts.has(count));
 
   if (mismatches.length > 0) {
-    problems.push(`${recordName} expects ${expectedCount} record component(s), found call(s) with ${unique(mismatches).join(", ")}.`);
+    problems.push(`${recordName} expects ${unique([...allowedCounts]).join(" or ")} constructor argument(s), found call(s) with ${unique(mismatches).join(", ")}.`);
   }
 }
 

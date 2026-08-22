@@ -1,5 +1,2459 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
+
 * {
   box-sizing: border-box;
+}
+
+/* ALIBOOKS LOOPSTACK FINAL OVERRIDE
+   This late layer wins over older light-theme component rules. */
+:root {
+  --loop-bg: #000000;
+  --loop-bg-soft: #050605;
+  --loop-surface: rgba(255, 255, 255, 0.075);
+  --loop-surface-strong: rgba(255, 255, 255, 0.12);
+  --loop-surface-soft: rgba(255, 255, 255, 0.045);
+  --loop-text: #ffffff;
+  --loop-muted: rgba(255, 255, 255, 0.66);
+  --loop-faint: rgba(255, 255, 255, 0.45);
+  --loop-border: rgba(255, 255, 255, 0.16);
+  --loop-border-strong: rgba(255, 255, 255, 0.28);
+  --loop-accent: #39ff14;
+  --loop-accent-soft: rgba(57, 255, 20, 0.18);
+  --loop-blue: #5d8cff;
+  --loop-yellow: #f6c84f;
+  --loop-danger: #ff6b6b;
+  --loop-shadow: 0 24px 80px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --loop-shadow-small: 0 12px 38px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --color-bg: var(--loop-bg);
+  --color-surface: var(--loop-surface);
+  --color-surface-soft: var(--loop-surface-soft);
+  --color-text: var(--loop-text);
+  --color-muted: var(--loop-muted);
+  --color-border: var(--loop-border);
+  --color-border-strong: var(--loop-border-strong);
+  --color-primary: var(--loop-accent);
+  --color-primary-dark: #26d90d;
+  --color-accent: var(--loop-yellow);
+  --shadow-soft: var(--loop-shadow);
+  --shadow-small: var(--loop-shadow-small);
+}
+
+body {
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 50% -18%, rgba(255, 255, 255, 0.16), transparent 30vh),
+    radial-gradient(circle at 14% 12%, rgba(57, 255, 20, 0.16), transparent 30vw),
+    radial-gradient(circle at 82% 8%, rgba(93, 140, 255, 0.13), transparent 28vw),
+    linear-gradient(180deg, #000000 0%, #050605 48%, #000000 100%);
+  color: var(--loop-text);
+  font-family: "General Sans", "Outfit", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  background: transparent;
+  animation: alibooks-loop-reveal 0.72s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.app-shell::after {
+  content: "AliBooks";
+  position: fixed;
+  right: max(20px, 3vw);
+  bottom: 12px;
+  z-index: -1;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.045);
+  font-family: "General Sans", "Outfit", sans-serif;
+  font-size: clamp(72px, 16vw, 250px);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  line-height: 0.8;
+  white-space: nowrap;
+  animation: alibooks-loop-wordmark 1.4s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--loop-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045)),
+    rgba(0, 0, 0, 0.82);
+  box-shadow: var(--loop-shadow-small);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+strong {
+  color: var(--loop-text);
+}
+
+.brand {
+  position: relative;
+  width: fit-content;
+  font-family: "General Sans", "Outfit", sans-serif;
+  letter-spacing: -0.05em;
+  text-shadow: 0 0 24px rgba(57, 255, 20, 0.18);
+}
+
+.brand::after {
+  content: "";
+  position: absolute;
+  right: -16px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--loop-accent);
+  box-shadow: 0 0 0 7px rgba(57, 255, 20, 0.12), 0 0 18px rgba(57, 255, 20, 0.82);
+  animation: alibooks-loop-dot 2s infinite ease-in-out;
+}
+
+.eyebrow {
+  color: var(--loop-accent);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(57, 255, 20, 0.42);
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button {
+  border-radius: 999px;
+}
+
+.nav a,
+.nav-button {
+  color: var(--loop-muted);
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--loop-text);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.nav .active,
+.nav-button.active {
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-text);
+  border-color: rgba(57, 255, 20, 0.36);
+  box-shadow: inset 4px 0 0 var(--loop-accent), 0 0 28px rgba(57, 255, 20, 0.08);
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--loop-border);
+  background: rgba(255, 255, 255, 0.085);
+  color: var(--loop-text);
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: rgba(57, 255, 20, 0.38);
+  background: #050805;
+  color: var(--loop-text);
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.04), 0 16px 36px rgba(0, 0, 0, 0.36);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: var(--loop-accent);
+  background: var(--loop-accent);
+  color: #000000;
+  box-shadow: 0 0 28px rgba(57, 255, 20, 0.36);
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--loop-border-strong);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--loop-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(57, 255, 20, 0.18);
+  border-color: var(--loop-accent);
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.18), 0 0 26px rgba(57, 255, 20, 0.12);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item {
+  border-color: var(--loop-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
+    rgba(0, 0, 0, 0.48);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow-small);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--loop-muted);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid rgba(57, 255, 20, 0.24);
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--loop-accent);
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok {
+  border-color: rgba(57, 255, 20, 0.36);
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-accent);
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today {
+  border-color: rgba(246, 200, 79, 0.38);
+  background: rgba(246, 200, 79, 0.12);
+  color: var(--loop-yellow);
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue {
+  border-color: rgba(255, 107, 107, 0.42);
+  background: rgba(255, 107, 107, 0.13);
+  color: #ffb0b0;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.42), transparent 28%),
+    linear-gradient(135deg, rgba(57, 255, 20, 0.92), rgba(93, 140, 255, 0.7));
+  color: #000000;
+  box-shadow: 0 0 0 9px rgba(57, 255, 20, 0.08), 0 20px 60px rgba(57, 255, 20, 0.2);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--loop-border);
+  background: rgba(0, 0, 0, 0.9);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  .app-shell::after,
+  .brand::after {
+    animation: none;
+  }
+}
+
+/* ALIBOOKS PROFESSIONAL FINANCE UI FINAL CASCADE LAYER
+   This final layer intentionally stays last: calm light accounting UI, with dark-mode fallback. */
+:root {
+  --finance-bg: #f7f8fa;
+  --finance-bg-soft: #fafafa;
+  --finance-surface: rgba(255, 255, 255, 0.94);
+  --finance-surface-muted: #f1f5f9;
+  --finance-text: #101828;
+  --finance-heading: #07111f;
+  --finance-muted: #667085;
+  --finance-border: #d9e2ec;
+  --finance-border-strong: #b8c7d9;
+  --finance-accent: #1d4ed8;
+  --finance-accent-soft: #dbeafe;
+  --finance-positive: #047857;
+  --finance-positive-soft: #d1fae5;
+  --finance-warning: #b45309;
+  --finance-warning-soft: #fef3c7;
+  --finance-danger: #b42318;
+  --finance-danger-soft: #fee4e2;
+  --finance-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+  --finance-shadow-small: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+html {
+  background: var(--finance-bg);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  color: var(--finance-text);
+  font-family: "General Sans", "Outfit", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+body::before,
+body::after,
+.app-shell::after,
+.brand::after {
+  display: none;
+}
+
+.app-shell {
+  background: transparent;
+  color: var(--finance-text);
+}
+
+.workspace {
+  animation: alibooks-finance-reveal 220ms ease-out both;
+}
+
+@keyframes alibooks-finance-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--finance-border);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--finance-heading);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.brand,
+.eyebrow {
+  color: var(--finance-accent);
+  text-shadow: none;
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--finance-muted);
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button,
+input,
+select,
+textarea {
+  border-radius: 8px;
+}
+
+.nav a,
+.nav-button {
+  color: #344054;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  border-color: var(--finance-border);
+  transform: none;
+}
+
+.nav .active,
+.nav-button.active {
+  background: var(--finance-accent-soft);
+  color: #174ea6;
+  border-color: #bfdbfe;
+  box-shadow: inset 4px 0 0 var(--finance-accent);
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-heading);
+  box-shadow: none;
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: var(--finance-accent);
+  background: var(--finance-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.16);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.2);
+  transform: translateY(-1px);
+}
+
+.secondary-button:not(:disabled):hover,
+.filter-button:not(.active):hover,
+.file-button:hover {
+  border-color: var(--finance-border-strong);
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  transform: none;
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-text);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98a2b3;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(29, 78, 216, 0.16);
+  border-color: var(--finance-accent);
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.12);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item,
+.security-main-card,
+.security-export-card,
+.security-control-card,
+.access-review-card,
+.data-protection-card,
+.compliance-main-card,
+.compliance-note-card,
+.compliance-control-card,
+.accounting-quality-main-card,
+.accounting-quality-note-card,
+.accounting-quality-card,
+.accounting-quality-rule-card,
+.financial-diagnostics-main-card,
+.financial-diagnostics-note-card,
+.financial-diagnostics-card,
+.daily-routine-main-card,
+.daily-routine-note-card,
+.todo-list-card,
+.declaration-package-card,
+.operations-center-main-card,
+.operations-center-note-card,
+.incident-log-card,
+.cashflow-main-card,
+.cashflow-advice-card,
+.cashflow-projection-card,
+.monthly-close-card,
+.annual-close-card,
+.annual-close-result-card,
+.declaration-check-card {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.stats article strong,
+.invoice-summary-card strong,
+.business-insight-score-card strong,
+.business-insight-main-card strong,
+.business-insight-card strong,
+.report-card strong,
+.go-live-main-card strong,
+.go-live-note-card strong,
+.go-live-control-card strong,
+.go-live-production-card strong,
+.cashflow-main-card strong,
+.budget-main-card strong,
+.vat-status-card strong,
+td,
+th,
+.amount,
+.money,
+.number,
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+table {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+}
+
+thead,
+th {
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+td {
+  color: var(--finance-text);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid var(--finance-border);
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok,
+.good,
+.ok,
+.positive,
+.reclaim {
+  border-color: #a7f3d0;
+  background: var(--finance-positive-soft);
+  color: var(--finance-positive);
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today,
+.warning,
+.watch,
+.review {
+  border-color: #fde68a;
+  background: var(--finance-warning-soft);
+  color: var(--finance-warning);
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue,
+.critical,
+.danger,
+.negative,
+.risk,
+.fail,
+.pay {
+  border-color: #fecaca;
+  background: var(--finance-danger-soft);
+  color: var(--finance-danger);
+}
+
+.danger-button:not(:disabled):hover {
+  border-color: var(--finance-danger);
+  background: var(--finance-danger);
+  color: #ffffff;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(29, 78, 216, 0.28);
+  background: linear-gradient(135deg, var(--finance-accent), #047857);
+  color: #ffffff;
+  box-shadow: 0 12px 32px rgba(29, 78, 216, 0.22);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--finance-border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --finance-bg: #0b1120;
+    --finance-bg-soft: #111827;
+    --finance-surface: rgba(17, 24, 39, 0.94);
+    --finance-surface-muted: #1f2937;
+    --finance-text: #e5e7eb;
+    --finance-heading: #f8fafc;
+    --finance-muted: #9ca3af;
+    --finance-border: rgba(148, 163, 184, 0.24);
+    --finance-border-strong: rgba(148, 163, 184, 0.42);
+    --finance-accent-soft: rgba(29, 78, 216, 0.24);
+    --finance-positive-soft: rgba(4, 120, 87, 0.18);
+    --finance-warning-soft: rgba(180, 83, 9, 0.18);
+    --finance-danger-soft: rgba(180, 35, 24, 0.18);
+    --finance-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    --finance-shadow-small: 0 10px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.2), transparent 34rem),
+      linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  }
+
+  .sidebar,
+  .topbar,
+  input,
+  select,
+  textarea,
+  .language-select,
+  button,
+  .secondary-button,
+  .filter-button,
+  .floating-ai-panel {
+    background: rgba(17, 24, 39, 0.9);
+    color: var(--finance-text);
+  }
+
+  .nav a,
+  .nav-button {
+    color: #cbd5e1;
+  }
+
+  thead,
+  th {
+    background: #1f2937;
+    color: #cbd5e1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ALIBOOKS PROFESSIONAL FINANCE UI FINAL CASCADE LAYER
+   This final layer intentionally stays last: calm light accounting UI, with dark-mode fallback. */
+:root {
+  --finance-bg: #f7f8fa;
+  --finance-bg-soft: #fafafa;
+  --finance-surface: rgba(255, 255, 255, 0.94);
+  --finance-surface-muted: #f1f5f9;
+  --finance-text: #101828;
+  --finance-heading: #07111f;
+  --finance-muted: #667085;
+  --finance-border: #d9e2ec;
+  --finance-border-strong: #b8c7d9;
+  --finance-accent: #1d4ed8;
+  --finance-accent-soft: #dbeafe;
+  --finance-positive: #047857;
+  --finance-positive-soft: #d1fae5;
+  --finance-warning: #b45309;
+  --finance-warning-soft: #fef3c7;
+  --finance-danger: #b42318;
+  --finance-danger-soft: #fee4e2;
+  --finance-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+  --finance-shadow-small: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+html {
+  background: var(--finance-bg);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  color: var(--finance-text);
+  font-family: "General Sans", "Outfit", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+body::before,
+body::after,
+.app-shell::after,
+.brand::after {
+  display: none;
+}
+
+.app-shell {
+  background: transparent;
+  color: var(--finance-text);
+}
+
+.workspace {
+  animation: alibooks-finance-reveal 220ms ease-out both;
+}
+
+@keyframes alibooks-finance-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--finance-border);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--finance-heading);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.brand,
+.eyebrow {
+  color: var(--finance-accent);
+  text-shadow: none;
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--finance-muted);
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button,
+input,
+select,
+textarea {
+  border-radius: 8px;
+}
+
+.nav a,
+.nav-button {
+  color: #344054;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  border-color: var(--finance-border);
+  transform: none;
+}
+
+.nav .active,
+.nav-button.active {
+  background: var(--finance-accent-soft);
+  color: #174ea6;
+  border-color: #bfdbfe;
+  box-shadow: inset 4px 0 0 var(--finance-accent);
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-heading);
+  box-shadow: none;
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: var(--finance-accent);
+  background: var(--finance-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.16);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.2);
+  transform: translateY(-1px);
+}
+
+.secondary-button:not(:disabled):hover,
+.filter-button:not(.active):hover,
+.file-button:hover {
+  border-color: var(--finance-border-strong);
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  transform: none;
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-text);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98a2b3;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(29, 78, 216, 0.16);
+  border-color: var(--finance-accent);
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.12);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item,
+.security-main-card,
+.security-export-card,
+.security-control-card,
+.access-review-card,
+.data-protection-card,
+.compliance-main-card,
+.compliance-note-card,
+.compliance-control-card,
+.accounting-quality-main-card,
+.accounting-quality-note-card,
+.accounting-quality-card,
+.accounting-quality-rule-card,
+.financial-diagnostics-main-card,
+.financial-diagnostics-note-card,
+.financial-diagnostics-card,
+.daily-routine-main-card,
+.daily-routine-note-card,
+.todo-list-card,
+.declaration-package-card,
+.operations-center-main-card,
+.operations-center-note-card,
+.incident-log-card,
+.cashflow-main-card,
+.cashflow-advice-card,
+.cashflow-projection-card,
+.monthly-close-card,
+.annual-close-card,
+.annual-close-result-card,
+.declaration-check-card {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.stats article strong,
+.invoice-summary-card strong,
+.business-insight-score-card strong,
+.business-insight-main-card strong,
+.business-insight-card strong,
+.report-card strong,
+.go-live-main-card strong,
+.go-live-note-card strong,
+.go-live-control-card strong,
+.go-live-production-card strong,
+.cashflow-main-card strong,
+.budget-main-card strong,
+.vat-status-card strong,
+td,
+th,
+.amount,
+.money,
+.number,
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+table {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+}
+
+thead,
+th {
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+td {
+  color: var(--finance-text);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid var(--finance-border);
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok,
+.good,
+.ok,
+.positive,
+.reclaim {
+  border-color: #a7f3d0;
+  background: var(--finance-positive-soft);
+  color: var(--finance-positive);
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today,
+.warning,
+.watch,
+.review {
+  border-color: #fde68a;
+  background: var(--finance-warning-soft);
+  color: var(--finance-warning);
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue,
+.critical,
+.danger,
+.negative,
+.risk,
+.fail,
+.pay {
+  border-color: #fecaca;
+  background: var(--finance-danger-soft);
+  color: var(--finance-danger);
+}
+
+.danger-button:not(:disabled):hover {
+  border-color: var(--finance-danger);
+  background: var(--finance-danger);
+  color: #ffffff;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(29, 78, 216, 0.28);
+  background: linear-gradient(135deg, var(--finance-accent), #047857);
+  color: #ffffff;
+  box-shadow: 0 12px 32px rgba(29, 78, 216, 0.22);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--finance-border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --finance-bg: #0b1120;
+    --finance-bg-soft: #111827;
+    --finance-surface: rgba(17, 24, 39, 0.94);
+    --finance-surface-muted: #1f2937;
+    --finance-text: #e5e7eb;
+    --finance-heading: #f8fafc;
+    --finance-muted: #9ca3af;
+    --finance-border: rgba(148, 163, 184, 0.24);
+    --finance-border-strong: rgba(148, 163, 184, 0.42);
+    --finance-accent-soft: rgba(29, 78, 216, 0.24);
+    --finance-positive-soft: rgba(4, 120, 87, 0.18);
+    --finance-warning-soft: rgba(180, 83, 9, 0.18);
+    --finance-danger-soft: rgba(180, 35, 24, 0.18);
+    --finance-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    --finance-shadow-small: 0 10px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.2), transparent 34rem),
+      linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  }
+
+  .sidebar,
+  .topbar,
+  input,
+  select,
+  textarea,
+  .language-select,
+  button,
+  .secondary-button,
+  .filter-button,
+  .floating-ai-panel {
+    background: rgba(17, 24, 39, 0.9);
+    color: var(--finance-text);
+  }
+
+  .nav a,
+  .nav-button {
+    color: #cbd5e1;
+  }
+
+  thead,
+  th {
+    background: #1f2937;
+    color: #cbd5e1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ALIBOOKS PROFESSIONAL FINANCE UI FINAL CASCADE LAYER
+   Calm accounting-app theme: light by default, functional color, minimal motion. */
+:root {
+  --finance-bg: #f7f8fa;
+  --finance-bg-soft: #fafafa;
+  --finance-surface: rgba(255, 255, 255, 0.94);
+  --finance-surface-muted: #f1f5f9;
+  --finance-text: #101828;
+  --finance-heading: #07111f;
+  --finance-muted: #667085;
+  --finance-border: #d9e2ec;
+  --finance-border-strong: #b8c7d9;
+  --finance-accent: #1d4ed8;
+  --finance-accent-soft: #dbeafe;
+  --finance-positive: #047857;
+  --finance-positive-soft: #d1fae5;
+  --finance-warning: #b45309;
+  --finance-warning-soft: #fef3c7;
+  --finance-danger: #b42318;
+  --finance-danger-soft: #fee4e2;
+  --finance-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+  --finance-shadow-small: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+html {
+  background: var(--finance-bg);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  color: var(--finance-text);
+  font-family: "General Sans", "Outfit", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+body::before,
+body::after,
+.app-shell::after,
+.brand::after {
+  display: none;
+}
+
+.app-shell {
+  background: transparent;
+  color: var(--finance-text);
+}
+
+.workspace {
+  animation: alibooks-finance-reveal 220ms ease-out both;
+}
+
+@keyframes alibooks-finance-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--finance-border);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--finance-heading);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.brand {
+  color: var(--finance-accent);
+}
+
+.eyebrow {
+  color: var(--finance-accent);
+  letter-spacing: 0.04em;
+  text-shadow: none;
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--finance-muted);
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button,
+input,
+select,
+textarea {
+  border-radius: 8px;
+}
+
+.nav a,
+.nav-button {
+  color: #344054;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  border-color: var(--finance-border);
+  transform: none;
+}
+
+.nav .active,
+.nav-button.active {
+  background: var(--finance-accent-soft);
+  color: #174ea6;
+  border-color: #bfdbfe;
+  box-shadow: inset 4px 0 0 var(--finance-accent);
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-heading);
+  box-shadow: none;
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: var(--finance-accent);
+  background: var(--finance-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.16);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.2);
+  transform: translateY(-1px);
+}
+
+.secondary-button:not(:disabled):hover,
+.filter-button:not(.active):hover,
+.file-button:hover {
+  border-color: var(--finance-border-strong);
+  background: var(--finance-surface-muted);
+  color: var(--finance-heading);
+  transform: none;
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--finance-border);
+  background: #ffffff;
+  color: var(--finance-text);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98a2b3;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(29, 78, 216, 0.16);
+  border-color: var(--finance-accent);
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.12);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item,
+.security-main-card,
+.security-export-card,
+.security-control-card,
+.access-review-card,
+.data-protection-card,
+.compliance-main-card,
+.compliance-note-card,
+.compliance-control-card,
+.accounting-quality-main-card,
+.accounting-quality-note-card,
+.accounting-quality-card,
+.accounting-quality-rule-card,
+.financial-diagnostics-main-card,
+.financial-diagnostics-note-card,
+.financial-diagnostics-card,
+.daily-routine-main-card,
+.daily-routine-note-card,
+.todo-list-card,
+.declaration-package-card,
+.operations-center-main-card,
+.operations-center-note-card,
+.incident-log-card,
+.cashflow-main-card,
+.cashflow-advice-card,
+.cashflow-projection-card,
+.monthly-close-card,
+.annual-close-card,
+.annual-close-result-card,
+.declaration-check-card {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow-small);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.stats article strong,
+.invoice-summary-card strong,
+.business-insight-score-card strong,
+.business-insight-main-card strong,
+.business-insight-card strong,
+.report-card strong,
+.go-live-main-card strong,
+.go-live-note-card strong,
+.go-live-control-card strong,
+.go-live-production-card strong,
+.cashflow-main-card strong,
+.budget-main-card strong,
+.vat-status-card strong,
+td,
+th,
+.amount,
+.money,
+.number,
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+table {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+}
+
+thead,
+th {
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+td {
+  color: var(--finance-text);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid var(--finance-border);
+  background: var(--finance-surface-muted);
+  color: #475467;
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok,
+.good,
+.ok,
+.positive,
+.reclaim {
+  border-color: #a7f3d0;
+  background: var(--finance-positive-soft);
+  color: var(--finance-positive);
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today,
+.warning,
+.watch,
+.review {
+  border-color: #fde68a;
+  background: var(--finance-warning-soft);
+  color: var(--finance-warning);
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue,
+.critical,
+.danger,
+.negative,
+.risk,
+.fail,
+.pay {
+  border-color: #fecaca;
+  background: var(--finance-danger-soft);
+  color: var(--finance-danger);
+}
+
+.danger-button:not(:disabled):hover {
+  border-color: var(--finance-danger);
+  background: var(--finance-danger);
+  color: #ffffff;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(29, 78, 216, 0.28);
+  background: linear-gradient(135deg, var(--finance-accent), #047857);
+  color: #ffffff;
+  box-shadow: 0 12px 32px rgba(29, 78, 216, 0.22);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--finance-border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--finance-text);
+  box-shadow: var(--finance-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --finance-bg: #0b1120;
+    --finance-bg-soft: #111827;
+    --finance-surface: rgba(17, 24, 39, 0.94);
+    --finance-surface-muted: #1f2937;
+    --finance-text: #e5e7eb;
+    --finance-heading: #f8fafc;
+    --finance-muted: #9ca3af;
+    --finance-border: rgba(148, 163, 184, 0.24);
+    --finance-border-strong: rgba(148, 163, 184, 0.42);
+    --finance-accent-soft: rgba(29, 78, 216, 0.24);
+    --finance-positive-soft: rgba(4, 120, 87, 0.18);
+    --finance-warning-soft: rgba(180, 83, 9, 0.18);
+    --finance-danger-soft: rgba(180, 35, 24, 0.18);
+    --finance-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    --finance-shadow-small: 0 10px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.2), transparent 34rem),
+      linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg));
+  }
+
+  .sidebar,
+  .topbar,
+  input,
+  select,
+  textarea,
+  .language-select,
+  button,
+  .secondary-button,
+  .filter-button,
+  .floating-ai-panel {
+    background: rgba(17, 24, 39, 0.9);
+    color: var(--finance-text);
+  }
+
+  .nav a,
+  .nav-button {
+    color: #cbd5e1;
+  }
+
+  thead,
+  th {
+    background: #1f2937;
+    color: #cbd5e1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ALIBOOKS LOOPSTACK GLOBAL THEME
+   Dark glassmorphism system inspired by the Loopstack reference.
+   Kept scrollable because AliBooks is a multi-page business app. */
+:root {
+  --loop-bg: #000000;
+  --loop-bg-soft: #050605;
+  --loop-surface: rgba(255, 255, 255, 0.075);
+  --loop-surface-strong: rgba(255, 255, 255, 0.12);
+  --loop-surface-soft: rgba(255, 255, 255, 0.045);
+  --loop-text: #ffffff;
+  --loop-muted: rgba(255, 255, 255, 0.66);
+  --loop-faint: rgba(255, 255, 255, 0.45);
+  --loop-border: rgba(255, 255, 255, 0.16);
+  --loop-border-strong: rgba(255, 255, 255, 0.28);
+  --loop-accent: #39ff14;
+  --loop-accent-soft: rgba(57, 255, 20, 0.18);
+  --loop-accent-ring: rgba(57, 255, 20, 0.42);
+  --loop-blue: #5d8cff;
+  --loop-yellow: #f6c84f;
+  --loop-danger: #ff6b6b;
+  --loop-warning: #f6c84f;
+  --loop-success: #39ff14;
+  --loop-shadow: 0 24px 80px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --loop-shadow-small: 0 12px 38px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --color-bg: var(--loop-bg);
+  --color-surface: var(--loop-surface);
+  --color-surface-soft: var(--loop-surface-soft);
+  --color-text: var(--loop-text);
+  --color-muted: var(--loop-muted);
+  --color-border: var(--loop-border);
+  --color-border-strong: var(--loop-border-strong);
+  --color-primary: var(--loop-accent);
+  --color-primary-dark: #26d90d;
+  --color-accent: var(--loop-yellow);
+  --shadow-soft: var(--loop-shadow);
+  --shadow-small: var(--loop-shadow-small);
+}
+
+html {
+  background: var(--loop-bg);
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.17), transparent 30vh),
+    radial-gradient(circle at 16% 12%, rgba(57, 255, 20, 0.16), transparent 30vw),
+    radial-gradient(circle at 78% 10%, rgba(93, 140, 255, 0.13), transparent 28vw),
+    linear-gradient(180deg, #000000 0%, #050605 48%, #000000 100%);
+  color: var(--loop-text);
+  font-family: "General Sans", "Outfit", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: radial-gradient(circle at top, black 0%, transparent 72%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  left: -10vw;
+  right: -10vw;
+  bottom: -38vh;
+  height: 74vh;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(57, 255, 20, 0.2), transparent 58%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, 0.11), transparent 46%);
+  filter: blur(38px);
+  opacity: 0.9;
+}
+
+.app-shell {
+  position: relative;
+  background: transparent;
+}
+
+.app-shell::after {
+  content: "AliBooks";
+  position: fixed;
+  right: max(20px, 3vw);
+  bottom: 12px;
+  z-index: -1;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.045);
+  font-family: "General Sans", "Outfit", sans-serif;
+  font-size: clamp(72px, 16vw, 250px);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  line-height: 0.8;
+  white-space: nowrap;
+  animation: alibooks-loop-wordmark 1.4s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  padding: clamp(22px, 3vw, 38px);
+  animation: alibooks-loop-reveal 0.72s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.workspace::before {
+  content: "";
+  position: fixed;
+  top: -26vh;
+  left: 18vw;
+  width: 64vw;
+  height: 42vh;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.16), transparent 68%);
+  filter: blur(42px);
+}
+
+.sidebar {
+  border-right: 1px solid var(--loop-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045)),
+    rgba(0, 0, 0, 0.82);
+  box-shadow: 18px 0 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.brand {
+  position: relative;
+  width: fit-content;
+  color: var(--loop-text);
+  font-family: "General Sans", "Outfit", sans-serif;
+  letter-spacing: -0.05em;
+  text-shadow: 0 0 24px rgba(57, 255, 20, 0.18);
+}
+
+.brand::after {
+  content: "";
+  position: absolute;
+  right: -16px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--loop-accent);
+  box-shadow: 0 0 0 7px rgba(57, 255, 20, 0.12), 0 0 18px rgba(57, 255, 20, 0.82);
+  animation: alibooks-loop-dot 2s infinite ease-in-out;
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"] {
+  border: 1px solid rgba(57, 255, 20, 0.32);
+  background: #050805;
+  color: var(--loop-text);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.04), 0 16px 36px rgba(0, 0, 0, 0.36);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled) {
+  border-color: var(--loop-accent);
+  background: var(--loop-accent);
+  color: #000000;
+  box-shadow: 0 0 28px rgba(57, 255, 20, 0.36);
+}
+
+.nav a,
+.nav-button {
+  position: relative;
+  overflow: hidden;
+  color: var(--loop-muted);
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.nav a::before,
+.nav-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(90deg, rgba(57, 255, 20, 0.16), transparent);
+  transition: opacity 0.2s ease;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--loop-text);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.nav a:hover::before,
+.nav-button:hover::before {
+  opacity: 1;
+}
+
+.nav .active,
+.nav-button.active {
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-text);
+  border-color: rgba(57, 255, 20, 0.36);
+  box-shadow: inset 4px 0 0 var(--loop-accent), 0 0 28px rgba(57, 255, 20, 0.08);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: calc(clamp(22px, 3vw, 38px) * -1) calc(clamp(22px, 3vw, 38px) * -1) 26px;
+  padding: clamp(18px, 2.4vw, 30px) clamp(22px, 3vw, 38px);
+  border-bottom: 1px solid var(--loop-border);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0.68));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.topbar h1,
+h1,
+h2 {
+  color: var(--loop-text);
+  letter-spacing: -0.035em;
+}
+
+.topbar h1 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 500;
+  text-shadow: 0 12px 42px rgba(0, 0, 0, 0.45);
+}
+
+.eyebrow {
+  color: var(--loop-accent);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(57, 255, 20, 0.42);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item {
+  border-color: var(--loop-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
+    rgba(0, 0, 0, 0.48);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow-small);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.stats article,
+.invoice-summary-card,
+.business-insight-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.go-live-control-card,
+.go-live-production-card,
+.mvp-manual-proof-card {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stats article:hover,
+.invoice-summary-card:hover,
+.business-insight-card:hover,
+.close-check-card:hover,
+.tax-plan-card:hover,
+.reserve-plan-card:hover,
+.archive-package-card:hover,
+.legal-archive-card:hover,
+.accountant-handoff-card:hover,
+.company-form-card:hover,
+.account-sign-card:hover,
+.go-live-control-card:hover,
+.go-live-production-card:hover,
+.mvp-manual-proof-card:hover {
+  border-color: rgba(57, 255, 20, 0.34);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.38), 0 0 30px rgba(57, 255, 20, 0.08);
+}
+
+.stats span,
+.stats p,
+.product p,
+.customer span,
+.order-card p,
+.order-card span,
+.mini-list-main span,
+.mini-list-amount span,
+.quote-summary-grid span,
+.quote-help-card p,
+.quote-help-card li,
+.quote-card p,
+.quote-card small,
+.supplier-summary-grid span,
+.supplier-invoice-card p,
+.supplier-invoice-card small,
+.service-admin-row p,
+.service-price-box span,
+.fixed-asset-card p,
+.fixed-asset-card small,
+.owner-equity-card p,
+.owner-equity-card small,
+.contract-card span,
+.service-job-card p,
+.service-job-card small,
+.business-insight-card p,
+.business-insight-card small,
+.customer-insight-grid span,
+.customer-insight-grid small,
+.customer-activity-row span,
+.customer-activity-row small,
+.report-card p,
+.report-line-button span,
+.automation-note,
+.signed-in {
+  color: var(--loop-muted);
+}
+
+.stats strong,
+.invoice-summary-card strong,
+.business-insight-score-card strong,
+.business-insight-main-card strong,
+.business-insight-card strong,
+.report-card strong,
+.go-live-main-card strong,
+.go-live-note-card strong,
+.go-live-control-card strong,
+.go-live-production-card strong {
+  color: var(--loop-text);
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--loop-border-strong);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--loop-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(57, 255, 20, 0.18);
+  border-color: var(--loop-accent);
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.18), 0 0 26px rgba(57, 255, 20, 0.12);
+}
+
+button,
+.secondary-button,
+.filter-button,
+.file-button,
+.language-select {
+  border-radius: 999px;
+}
+
+button {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--loop-text);
+}
+
+button:not(:disabled):hover,
+.secondary-button:not(:disabled):hover,
+.filter-button:not(.active):hover,
+.language-select:hover,
+.file-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--loop-text);
+}
+
+.secondary-button {
+  border: 1px solid var(--loop-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--loop-text);
+}
+
+.filter-button {
+  border-color: var(--loop-border);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--loop-muted);
+}
+
+.filter-button.active,
+.tabs .active {
+  border-color: var(--loop-accent);
+  background: var(--loop-accent);
+  color: #000000;
+  box-shadow: 0 0 22px rgba(57, 255, 20, 0.28);
+}
+
+.tabs button {
+  border: 1px solid var(--loop-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--loop-muted);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid rgba(57, 255, 20, 0.24);
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--loop-accent);
+}
+
+.status-paid,
+.due-status-paid,
+.due-status-ok,
+.success-status,
+.message.success {
+  border-color: rgba(57, 255, 20, 0.36);
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-accent);
+}
+
+.status-partially_paid,
+.due-status-soon,
+.due-status-today,
+.warning-status,
+.message.warning {
+  border-color: rgba(246, 200, 79, 0.38);
+  background: rgba(246, 200, 79, 0.12);
+  color: var(--loop-warning);
+}
+
+.due-status-overdue,
+.danger-button,
+.message.error {
+  border-color: rgba(255, 107, 107, 0.42);
+  background: rgba(255, 107, 107, 0.13);
+  color: #ffb0b0;
+}
+
+.danger-button:not(:disabled):hover {
+  background: var(--loop-danger);
+  color: #000000;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.42), transparent 28%),
+    linear-gradient(135deg, rgba(57, 255, 20, 0.92), rgba(93, 140, 255, 0.7));
+  color: #000000;
+  box-shadow: 0 0 0 9px rgba(57, 255, 20, 0.08), 0 20px 60px rgba(57, 255, 20, 0.2);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--loop-border);
+  background: rgba(0, 0, 0, 0.9);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.table,
+table {
+  color: var(--loop-text);
+}
+
+hr,
+.footer-divider {
+  border-color: var(--loop-border);
+}
+
+@keyframes alibooks-loop-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes alibooks-loop-wordmark {
+  0% {
+    opacity: 0;
+    transform: translateX(-4vw);
+    filter: blur(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes alibooks-loop-dot {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: scale(0.84);
+    box-shadow: 0 0 0 6px rgba(57, 255, 20, 0.1), 0 0 10px rgba(57, 255, 20, 0.46);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+    box-shadow: 0 0 0 10px rgba(57, 255, 20, 0.16), 0 0 22px rgba(57, 255, 20, 0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  .app-shell::after,
+  .brand::after {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell::after {
+    font-size: 24vw;
+    right: 14px;
+    bottom: 8px;
+  }
+
+  .topbar {
+    position: relative;
+  }
 }
 
 html,
@@ -719,6 +3173,23 @@ textarea {
   font-weight: 800;
 }
 
+.supplier-self-billing-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #b9d7ff;
+  border-radius: 8px;
+  background: #f4f8ff;
+}
+
+.supplier-self-billing-panel strong,
+.supplier-self-billing-panel p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .supplier-list {
   display: grid;
   gap: 12px;
@@ -768,6 +3239,12 @@ textarea {
   color: #705000;
   font-size: 12px;
   font-weight: 900;
+}
+
+.self-billing-status {
+  margin-left: 6px;
+  background: #e9f7ef;
+  color: #12633f;
 }
 
 .supplier-amount-box {
@@ -1179,6 +3656,50 @@ h1 {
 
 .auth-language-label .language-select {
   min-height: 42px;
+}
+
+.auth-entry {
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+}
+
+.auth-compact-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.auth-language-compact {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-actions button {
+  min-height: 48px;
+  padding: 0 18px;
+}
+
+.auth-form-inline {
+  width: 100%;
+}
+
+.auth-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.auth-form-heading .compact-button {
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .form-help {
@@ -4209,6 +6730,12 @@ button:focus-visible,
   border-color: #f3d293;
   background: #fff7e6;
   color: #8a5a00;
+}
+
+.neutral-status {
+  border-color: #c9d9ef;
+  background: #eef4ff;
+  color: #24415f;
 }
 
 .danger-status {
@@ -8010,6 +10537,86 @@ button:focus-visible,
   background: #eef5ff;
 }
 
+.todo-list-section {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 52%, #fffaf0 100%);
+}
+
+.todo-list-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.todo-list-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-left: 6px solid #1e8f5a;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-small);
+}
+
+.todo-list-card.critical {
+  border-left-color: #d64045;
+  background: #fff7f4;
+}
+
+.todo-list-card.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.todo-list-card.info {
+  border-left-color: #155ee8;
+  background: #f8fbff;
+}
+
+.todo-list-card-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.todo-list-card-header div {
+  display: grid;
+  gap: 4px;
+}
+
+.todo-list-card-header span {
+  color: #51606d;
+  font-weight: 900;
+}
+
+.todo-list-card-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.todo-list-card-header strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #155ee8;
+  font-size: 18px;
+}
+
+.todo-list-card .daily-routine-row {
+  grid-template-columns: 52px minmax(0, 1fr) minmax(110px, 0.35fr);
+}
+
+.todo-list-card .daily-routine-status {
+  text-align: right;
+}
+
 .monthly-routine-section {
   border-color: #cfe3d6;
   background: linear-gradient(180deg, #f6fbf7 0%, #ffffff 100%);
@@ -8105,6 +10712,86 @@ button:focus-visible,
 
 .declaration-center-side {
   border-color: #d7e7de;
+}
+
+.declaration-package-panel {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid #d7e7de;
+  border-radius: 8px;
+  background: #fbfefb;
+  box-shadow: var(--shadow-small);
+}
+
+.compact-section-heading h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.declaration-package-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.declaration-package-card {
+  display: grid;
+  gap: 8px;
+  min-height: 230px;
+  padding: 14px;
+  border: 1px solid #d9ddd4;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.declaration-package-card.good {
+  border-left-color: #155c49;
+  background: #f6fff9;
+}
+
+.declaration-package-card.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.declaration-package-card.info {
+  border-left-color: #155ee8;
+  background: #f8fbff;
+}
+
+.declaration-package-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 12px 28px rgba(21, 94, 232, 0.09);
+  transform: translateY(-1px);
+}
+
+.declaration-package-card span,
+.declaration-package-card small,
+.declaration-package-card p {
+  margin: 0;
+  color: #51606d;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.declaration-package-card strong {
+  color: #171a1f;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.declaration-package-card em {
+  color: #111827;
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 950;
 }
 
 .period-control-section {
@@ -9224,6 +11911,147 @@ button:focus-visible,
   margin-top: auto;
 }
 
+.go-live-production-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d7e6f6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-small);
+}
+
+.go-live-production-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.go-live-production-card {
+  display: grid;
+  gap: 6px;
+  min-height: 190px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #f8fbff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.go-live-production-card.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.go-live-production-card.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.go-live-production-card.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.go-live-production-card:hover {
+  border-color: #155ee8;
+  box-shadow: var(--shadow-medium);
+}
+
+.go-live-production-card span,
+.go-live-production-card p,
+.go-live-production-card small {
+  margin: 0;
+  color: #51606d;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.go-live-production-card em {
+  color: #191815;
+  font-size: 22px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.go-live-manual-proof-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #cddcf0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.go-live-manual-proof-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.go-live-manual-proof-summary article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.go-live-manual-proof-summary span,
+.go-live-manual-proof-row span,
+.go-live-manual-proof-row small {
+  color: #51606d;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.go-live-manual-proof-summary strong {
+  font-size: 22px;
+}
+
+.go-live-manual-proof-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.go-live-manual-proof-row {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #f2a900;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.go-live-manual-proof-row.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.go-live-manual-proof-row.fail {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.go-live-manual-proof-row.untested {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.go-live-manual-proof-row:hover {
+  border-color: #155ee8;
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+}
+
 .go-live-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9451,6 +12279,106 @@ button:focus-visible,
 .test-flow-next-list button:hover {
   border-color: #155ee8;
   background: #eef5ff;
+}
+
+.mvp-manual-proof-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #cddcf0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.mvp-manual-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mvp-manual-proof-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-left: 6px solid #9fb3c8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.mvp-manual-proof-card.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.mvp-manual-proof-card.fail {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.mvp-manual-proof-card.untested {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.mvp-manual-title-button {
+  display: grid;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mvp-manual-title-button span,
+.mvp-manual-proof-card > small {
+  color: #51606d;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mvp-manual-title-button strong {
+  font-size: 16px;
+}
+
+.mvp-manual-title-button small {
+  color: #51606d;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.mvp-manual-status-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mvp-manual-status-controls button {
+  min-height: 38px;
+  border: 1px solid #d7e2ee;
+  border-radius: 8px;
+  background: #f7fafc;
+  color: #263746;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mvp-manual-status-controls button.active {
+  border-color: #155ee8;
+  background: #155ee8;
+  color: #ffffff;
+}
+
+.mvp-manual-proof-card input {
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid #c8d4e3;
+  border-radius: 8px;
+  font: inherit;
 }
 
 .operations-center-section {
@@ -10404,6 +13332,133 @@ button:focus-visible,
 
 .result-card > strong {
   font-size: 32px;
+}
+
+.sales-report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0 28px;
+}
+
+.sales-report-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.sales-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e1e5dd;
+  border-radius: 8px;
+  background: #fbfcff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.sales-report-row:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+  transform: translateY(-1px);
+}
+
+.sales-report-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.sales-report-row small,
+.document-register-row small {
+  color: #5d6675;
+  font-weight: 700;
+}
+
+.document-register-panel {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 28px;
+  padding: 18px;
+  border: 1px solid #dce7f8;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.document-register-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 260px) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.document-register-controls label {
+  display: grid;
+  gap: 6px;
+  font-weight: 900;
+}
+
+.document-register-controls input,
+.document-register-controls select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #c7d0dc;
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.document-register-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-register-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(260px, 1.7fr) minmax(130px, 0.8fr) minmax(110px, 0.7fr) minmax(100px, 0.6fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d9ddd4;
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.document-register-row.receipt {
+  border-left-color: #155c49;
+}
+
+.document-register-row.supplierInvoice {
+  border-left-color: #f2a900;
+}
+
+.document-register-row:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+  transform: translateY(-1px);
+}
+
+.document-register-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.document-register-row strong,
+.document-register-row small {
+  overflow-wrap: anywhere;
 }
 
 .aging-report-grid {
@@ -12066,8 +15121,12 @@ button:focus-visible,
   .tax-center-board .daily-routine-row,
   .go-live-kpi-grid,
   .go-live-control-grid,
+  .go-live-production-grid,
+  .go-live-manual-proof-summary,
+  .go-live-manual-proof-list,
   .go-live-layout,
   .test-flow-kpi-grid,
+  .mvp-manual-proof-grid,
   .test-flow-layout,
   .operations-center-kpi-grid,
   .operations-url-grid,
@@ -12252,6 +15311,7 @@ button:focus-visible,
   .daily-routine-row,
   .reconciliation-statement-grid,
   .declaration-center-layout,
+  .declaration-package-grid,
   .period-lock-editor,
   .number-control-latest-grid,
   .number-control-series-row,
@@ -12283,10 +15343,14 @@ button:focus-visible,
   .go-live-hero,
   .go-live-kpi-grid,
   .go-live-control-grid,
+  .go-live-production-grid,
+  .go-live-manual-proof-summary,
+  .go-live-manual-proof-list,
   .go-live-layout,
   .test-flow-hero,
   .test-flow-kpi-grid,
   .test-flow-step,
+  .mvp-manual-proof-grid,
   .test-flow-layout,
   .operations-center-hero,
   .operations-center-kpi-grid,
@@ -12475,6 +15539,12 @@ button:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  .sales-report-grid,
+  .document-register-controls,
+  .document-register-row {
+    grid-template-columns: 1fr;
+  }
+
   .aging-report-grid,
   .aging-row,
   .customer-ledger-header,
@@ -12648,5 +15718,846 @@ button:focus-visible,
 
   .order-card div:last-child {
     text-align: left;
+  }
+}
+
+/* ALIBOOKS PROFESSIONAL FINANCE UI FINAL CASCADE LAYER
+   Must stay at the very end of this file: calm light accounting UI, with dark-mode fallback. */
+:root {
+  --finance-bg: #f7f8fa;
+  --finance-bg-soft: #fafafa;
+  --finance-surface: rgba(255, 255, 255, 0.94);
+  --finance-surface-muted: #f1f5f9;
+  --finance-text: #101828;
+  --finance-heading: #07111f;
+  --finance-muted: #667085;
+  --finance-border: #d9e2ec;
+  --finance-border-strong: #b8c7d9;
+  --finance-accent: #1d4ed8;
+  --finance-accent-soft: #dbeafe;
+  --finance-positive: #047857;
+  --finance-positive-soft: #d1fae5;
+  --finance-warning: #b45309;
+  --finance-warning-soft: #fef3c7;
+  --finance-danger: #b42318;
+  --finance-danger-soft: #fee4e2;
+  --finance-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+  --finance-shadow-small: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+html {
+  background: var(--finance-bg) !important;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg)) !important;
+  color: var(--finance-text) !important;
+  font-family: "General Sans", "Outfit", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: 0 !important;
+}
+
+body::before,
+body::after,
+.app-shell::after,
+.brand::after {
+  display: none !important;
+}
+
+.app-shell {
+  background: transparent !important;
+  color: var(--finance-text) !important;
+}
+
+.workspace {
+  animation: alibooks-finance-reveal 220ms ease-out both !important;
+}
+
+@keyframes alibooks-finance-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--finance-border) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  color: var(--finance-text) !important;
+  box-shadow: var(--finance-shadow-small) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--finance-heading) !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+
+.brand,
+.eyebrow {
+  color: var(--finance-accent) !important;
+  text-shadow: none !important;
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--finance-muted) !important;
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button,
+input,
+select,
+textarea {
+  border-radius: 8px !important;
+}
+
+.nav a,
+.nav-button {
+  color: #344054 !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: var(--finance-surface-muted) !important;
+  color: var(--finance-heading) !important;
+  border-color: var(--finance-border) !important;
+  transform: none !important;
+}
+
+.nav .active,
+.nav-button.active {
+  background: var(--finance-accent-soft) !important;
+  color: #174ea6 !important;
+  border-color: #bfdbfe !important;
+  box-shadow: inset 4px 0 0 var(--finance-accent) !important;
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--finance-border) !important;
+  background: #ffffff !important;
+  color: var(--finance-heading) !important;
+  box-shadow: none !important;
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: var(--finance-accent) !important;
+  background: var(--finance-accent) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.16) !important;
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: #1e40af !important;
+  background: #1e40af !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+.secondary-button:not(:disabled):hover,
+.filter-button:not(.active):hover,
+.file-button:hover {
+  border-color: var(--finance-border-strong) !important;
+  background: var(--finance-surface-muted) !important;
+  color: var(--finance-heading) !important;
+  transform: none !important;
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--finance-border) !important;
+  background: #ffffff !important;
+  color: var(--finance-text) !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98a2b3 !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(29, 78, 216, 0.16) !important;
+  border-color: var(--finance-accent) !important;
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.12) !important;
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item,
+.security-main-card,
+.security-export-card,
+.security-control-card,
+.access-review-card,
+.data-protection-card,
+.compliance-main-card,
+.compliance-note-card,
+.compliance-control-card,
+.accounting-quality-main-card,
+.accounting-quality-note-card,
+.accounting-quality-card,
+.accounting-quality-rule-card,
+.financial-diagnostics-main-card,
+.financial-diagnostics-note-card,
+.financial-diagnostics-card,
+.daily-routine-main-card,
+.daily-routine-note-card,
+.todo-list-card,
+.declaration-package-card,
+.operations-center-main-card,
+.operations-center-note-card,
+.incident-log-card,
+.cashflow-main-card,
+.cashflow-advice-card,
+.cashflow-projection-card,
+.monthly-close-card,
+.annual-close-card,
+.annual-close-result-card,
+.declaration-check-card {
+  border-color: var(--finance-border) !important;
+  background: var(--finance-surface) !important;
+  color: var(--finance-text) !important;
+  box-shadow: var(--finance-shadow-small) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.stats article strong,
+.invoice-summary-card strong,
+.business-insight-score-card strong,
+.business-insight-main-card strong,
+.business-insight-card strong,
+.report-card strong,
+.go-live-main-card strong,
+.go-live-note-card strong,
+.go-live-control-card strong,
+.go-live-production-card strong,
+.cashflow-main-card strong,
+.budget-main-card strong,
+.vat-status-card strong,
+td,
+th,
+.amount,
+.money,
+.number,
+input[type="number"] {
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" 1, "lnum" 1 !important;
+}
+
+table {
+  border-color: var(--finance-border) !important;
+  background: var(--finance-surface) !important;
+}
+
+thead,
+th {
+  background: var(--finance-surface-muted) !important;
+  color: #475467 !important;
+}
+
+td {
+  color: var(--finance-text) !important;
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid var(--finance-border) !important;
+  background: var(--finance-surface-muted) !important;
+  color: #475467 !important;
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok,
+.good,
+.ok,
+.positive,
+.reclaim {
+  border-color: #a7f3d0 !important;
+  background: var(--finance-positive-soft) !important;
+  color: var(--finance-positive) !important;
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today,
+.warning,
+.watch,
+.review {
+  border-color: #fde68a !important;
+  background: var(--finance-warning-soft) !important;
+  color: var(--finance-warning) !important;
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue,
+.critical,
+.danger,
+.negative,
+.risk,
+.fail,
+.pay {
+  border-color: #fecaca !important;
+  background: var(--finance-danger-soft) !important;
+  color: var(--finance-danger) !important;
+}
+
+.danger-button:not(:disabled):hover {
+  border-color: var(--finance-danger) !important;
+  background: var(--finance-danger) !important;
+  color: #ffffff !important;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(29, 78, 216, 0.28) !important;
+  background: linear-gradient(135deg, var(--finance-accent), #047857) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 32px rgba(29, 78, 216, 0.22) !important;
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--finance-border) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: var(--finance-text) !important;
+  box-shadow: var(--finance-shadow) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --finance-bg: #0b1120;
+    --finance-bg-soft: #111827;
+    --finance-surface: rgba(17, 24, 39, 0.94);
+    --finance-surface-muted: #1f2937;
+    --finance-text: #e5e7eb;
+    --finance-heading: #f8fafc;
+    --finance-muted: #9ca3af;
+    --finance-border: rgba(148, 163, 184, 0.24);
+    --finance-border-strong: rgba(148, 163, 184, 0.42);
+    --finance-accent-soft: rgba(29, 78, 216, 0.24);
+    --finance-positive-soft: rgba(4, 120, 87, 0.18);
+    --finance-warning-soft: rgba(180, 83, 9, 0.18);
+    --finance-danger-soft: rgba(180, 35, 24, 0.18);
+    --finance-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    --finance-shadow-small: 0 10px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(29, 78, 216, 0.2), transparent 34rem),
+      linear-gradient(180deg, var(--finance-bg-soft), var(--finance-bg)) !important;
+  }
+
+  .sidebar,
+  .topbar,
+  input,
+  select,
+  textarea,
+  .language-select,
+  button,
+  .secondary-button,
+  .filter-button,
+  .floating-ai-panel {
+    background: rgba(17, 24, 39, 0.9) !important;
+    color: var(--finance-text) !important;
+  }
+
+  .nav a,
+  .nav-button {
+    color: #cbd5e1 !important;
+  }
+
+  thead,
+  th {
+    background: #1f2937 !important;
+    color: #cbd5e1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root {
+  --loop-bg: #000000;
+  --loop-bg-soft: #050605;
+  --loop-surface: rgba(255, 255, 255, 0.075);
+  --loop-surface-soft: rgba(255, 255, 255, 0.045);
+  --loop-text: #ffffff;
+  --loop-muted: rgba(255, 255, 255, 0.66);
+  --loop-border: rgba(255, 255, 255, 0.16);
+  --loop-border-strong: rgba(255, 255, 255, 0.28);
+  --loop-accent: #39ff14;
+  --loop-yellow: #f6c84f;
+  --loop-danger: #ff6b6b;
+  --loop-shadow: 0 24px 80px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --loop-shadow-small: 0 12px 38px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --color-bg: var(--loop-bg);
+  --color-surface: var(--loop-surface);
+  --color-surface-soft: var(--loop-surface-soft);
+  --color-text: var(--loop-text);
+  --color-muted: var(--loop-muted);
+  --color-border: var(--loop-border);
+  --color-border-strong: var(--loop-border-strong);
+  --color-primary: var(--loop-accent);
+  --color-primary-dark: #26d90d;
+  --color-accent: var(--loop-yellow);
+  --shadow-soft: var(--loop-shadow);
+  --shadow-small: var(--loop-shadow-small);
+}
+
+body {
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 50% -18%, rgba(255, 255, 255, 0.16), transparent 30vh),
+    radial-gradient(circle at 14% 12%, rgba(57, 255, 20, 0.16), transparent 30vw),
+    radial-gradient(circle at 82% 8%, rgba(93, 140, 255, 0.13), transparent 28vw),
+    linear-gradient(180deg, #000000 0%, #050605 48%, #000000 100%);
+  color: var(--loop-text);
+  font-family: "General Sans", "Outfit", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  background: transparent;
+  animation: alibooks-loop-reveal 0.72s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.app-shell::after {
+  content: "AliBooks";
+  position: fixed;
+  right: max(20px, 3vw);
+  bottom: 12px;
+  z-index: -1;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.045);
+  font-family: "General Sans", "Outfit", sans-serif;
+  font-size: clamp(72px, 16vw, 250px);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  line-height: 0.8;
+  white-space: nowrap;
+  animation: alibooks-loop-wordmark 1.4s cubic-bezier(0.05, 0.9, 0.1, 1) both;
+}
+
+.sidebar,
+.topbar {
+  border-color: var(--loop-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045)),
+    rgba(0, 0, 0, 0.82);
+  box-shadow: var(--loop-shadow-small);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand,
+.topbar h1,
+h1,
+h2,
+h3,
+strong {
+  color: var(--loop-text);
+}
+
+.brand {
+  position: relative;
+  width: fit-content;
+  font-family: "General Sans", "Outfit", sans-serif;
+  letter-spacing: -0.05em;
+  text-shadow: 0 0 24px rgba(57, 255, 20, 0.18);
+}
+
+.brand::after {
+  content: "";
+  position: absolute;
+  right: -16px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--loop-accent);
+  box-shadow: 0 0 0 7px rgba(57, 255, 20, 0.12), 0 0 18px rgba(57, 255, 20, 0.82);
+  animation: alibooks-loop-dot 2s infinite ease-in-out;
+}
+
+.eyebrow {
+  color: var(--loop-accent);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(57, 255, 20, 0.42);
+}
+
+.nav a,
+.nav-button,
+button,
+.secondary-button,
+.filter-button,
+.language-select,
+.file-button {
+  border-radius: 999px;
+}
+
+.nav a,
+.nav-button {
+  color: var(--loop-muted);
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.nav a:hover,
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--loop-text);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.nav .active,
+.nav-button.active {
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-text);
+  border-color: rgba(57, 255, 20, 0.36);
+  box-shadow: inset 4px 0 0 var(--loop-accent), 0 0 28px rgba(57, 255, 20, 0.08);
+}
+
+button,
+.secondary-button,
+.filter-button {
+  border: 1px solid var(--loop-border);
+  background: rgba(255, 255, 255, 0.085);
+  color: var(--loop-text);
+}
+
+.create-button,
+.primary-small-button,
+.primary-action-button,
+button[type="submit"],
+.filter-button.active,
+.tabs .active {
+  border-color: rgba(57, 255, 20, 0.38);
+  background: #050805;
+  color: var(--loop-text);
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.04), 0 16px 36px rgba(0, 0, 0, 0.36);
+}
+
+.create-button:hover,
+.primary-small-button:hover:not(:disabled),
+.primary-action-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled),
+.filter-button.active:hover,
+.tabs .active:hover {
+  border-color: var(--loop-accent);
+  background: var(--loop-accent);
+  color: #000000;
+  box-shadow: 0 0 28px rgba(57, 255, 20, 0.36);
+}
+
+input,
+select,
+textarea,
+.language-select {
+  border-color: var(--loop-border-strong);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--loop-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+.nav-button:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid rgba(57, 255, 20, 0.18);
+  border-color: var(--loop-accent);
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.18), 0 0 26px rgba(57, 255, 20, 0.12);
+}
+
+.account-box,
+.auth-form,
+.form,
+.search-box,
+.customer-detail,
+.message,
+.stats article,
+.product,
+.customer,
+.order-card,
+.service-admin-row,
+.quote-summary-grid article,
+.quote-help-card,
+.quote-card,
+.supplier-summary-grid article,
+.supplier-invoice-card,
+.fixed-asset-help-card,
+.fixed-asset-card,
+.owner-equity-help-card,
+.owner-equity-card,
+.contract-card,
+.service-job-card,
+.business-insight-score-card,
+.business-insight-main-card,
+.business-insight-card,
+.invoice-summary-card,
+.customer-insight-grid article,
+.customer-activity-panel,
+.customer-activity-row,
+.mini-list-row,
+.invoice-preview,
+.bank-rule-card,
+.bank-workflow-card,
+.payroll-preview-card,
+.payroll-employee-card,
+.payroll-draft-card,
+.payroll-payment-card,
+.payroll-payslip-card,
+.payroll-batch-card,
+.advisor-card,
+.close-check-card,
+.tax-plan-card,
+.reserve-plan-card,
+.archive-package-card,
+.legal-archive-card,
+.accountant-handoff-card,
+.company-form-card,
+.account-sign-card,
+.analytics-main-card,
+.analytics-pipeline-card,
+.report-card,
+.go-live-main-card,
+.go-live-note-card,
+.go-live-panel,
+.go-live-control-card,
+.go-live-production-card,
+.go-live-manual-proof-panel,
+.mvp-manual-proof-card,
+.release-log-card,
+.budget-main-card,
+.budget-hero article,
+.backup-recovery-card,
+.system-status-item {
+  border-color: var(--loop-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.04)),
+    rgba(0, 0, 0, 0.48);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow-small);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+p,
+small,
+span,
+label,
+li,
+.signed-in,
+.automation-note,
+.order-card p,
+.order-card span,
+.report-card p,
+.product p,
+.customer span {
+  color: var(--loop-muted);
+}
+
+.status,
+.due-status,
+.quote-status,
+.discount-badge,
+.system-status-pill {
+  border: 1px solid rgba(57, 255, 20, 0.24);
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--loop-accent);
+}
+
+.message.success,
+.status-paid,
+.due-status-paid,
+.due-status-ok {
+  border-color: rgba(57, 255, 20, 0.36);
+  background: rgba(57, 255, 20, 0.12);
+  color: var(--loop-accent);
+}
+
+.message.warning,
+.status-partially_paid,
+.due-status-soon,
+.due-status-today {
+  border-color: rgba(246, 200, 79, 0.38);
+  background: rgba(246, 200, 79, 0.12);
+  color: var(--loop-yellow);
+}
+
+.message.error,
+.danger-button,
+.due-status-overdue {
+  border-color: rgba(255, 107, 107, 0.42);
+  background: rgba(255, 107, 107, 0.13);
+  color: #ffb0b0;
+}
+
+.floating-ai-button {
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.42), transparent 28%),
+    linear-gradient(135deg, rgba(57, 255, 20, 0.92), rgba(93, 140, 255, 0.7));
+  color: #000000;
+  box-shadow: 0 0 0 9px rgba(57, 255, 20, 0.08), 0 20px 60px rgba(57, 255, 20, 0.2);
+}
+
+.floating-ai-panel {
+  border: 1px solid var(--loop-border);
+  background: rgba(0, 0, 0, 0.9);
+  color: var(--loop-text);
+  box-shadow: var(--loop-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  .app-shell::after,
+  .brand::after {
+    animation: none;
   }
 }

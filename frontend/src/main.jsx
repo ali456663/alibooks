@@ -76,6 +76,7 @@ const copy = {
   en: {
     dashboard: "Business dashboard",
     overview: "Overview",
+    todoList: "To-do list",
     dailyRoutine: "Daily routine",
     monthlyRoutine: "Monthly routine",
     annualRoutine: "Annual routine",
@@ -242,6 +243,7 @@ const copy = {
   sv: {
     dashboard: "Affarsdashboard",
     overview: "Oversikt",
+    todoList: "Att gora",
     dailyRoutine: "Daglig rutin",
     monthlyRoutine: "Manadsrutin",
     annualRoutine: "Arsrutin",
@@ -887,6 +889,16 @@ function expenseCategoryLabel(category) {
   return labels[category] || category || "-";
 }
 
+function paymentSourceLabel(accountNumber, language) {
+  const labels = {
+    "1930": language === "sv" ? "1930 Foretagskonto" : "1930 Company bank account",
+    "2018": language === "sv" ? "2018 Privat betalt / egen insattning" : "2018 Privately paid / owner contribution",
+    "2890": language === "sv" ? "2890 Kortskuld/kortclearing" : "2890 Card liability/clearing"
+  };
+
+  return labels[accountNumber] || accountNumber || "-";
+}
+
 function accountCompanyTypeLabel(companyType, language) {
   if (companyType === "SOLE_TRADER") {
     return language === "sv" ? "Enskild firma" : "Sole trader";
@@ -1278,6 +1290,13 @@ function dateInputString(date) {
   return localDate.toISOString().slice(0, 10);
 }
 
+function lastDayOfMonth(monthValue) {
+  const [year, month] = String(monthValue || "").split("-").map((part) => Number(part));
+  if (!year || !month) return "";
+
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
 function addDaysInputString(value, days) {
   const date = value ? new Date(`${value}T12:00:00`) : new Date();
   date.setDate(date.getDate() + days);
@@ -1479,6 +1498,7 @@ function vatDeadlineForPeriod(periodEnd, vatReportingPeriod = "QUARTERLY") {
 
 const viewKeys = [
   "overview",
+  "todoList",
   "dailyRoutine",
   "monthlyRoutine",
   "annualRoutine",
@@ -1729,6 +1749,7 @@ function App() {
     const savedCategory = localStorage.getItem("alibooks-expense-category");
     return expenseCategoryKeys.includes(savedCategory) ? savedCategory : "5420";
   });
+  const [expensePaidFrom, setExpensePaidFrom] = useState(() => localStorage.getItem("alibooks-expense-paid-from") || "1930");
   const [expenseReceiptFile, setExpenseReceiptFile] = useState(null);
   const [receiptHashRepairMessage, setReceiptHashRepairMessage] = useState("");
   const [manualVoucherDate, setManualVoucherDate] = useState(new Date().toISOString().slice(0, 10));
@@ -1800,6 +1821,10 @@ function App() {
   const [supplierInvoiceTotalAmount, setSupplierInvoiceTotalAmount] = useState("");
   const [supplierInvoiceVatAmount, setSupplierInvoiceVatAmount] = useState("");
   const [supplierInvoiceCategory, setSupplierInvoiceCategory] = useState("5420");
+  const [supplierInvoiceSelfBilling, setSupplierInvoiceSelfBilling] = useState(false);
+  const [supplierInvoiceBuyerName, setSupplierInvoiceBuyerName] = useState("");
+  const [supplierInvoiceBuyerReference, setSupplierInvoiceBuyerReference] = useState("");
+  const [supplierInvoiceApprovalReference, setSupplierInvoiceApprovalReference] = useState("");
   const [supplierMessage, setSupplierMessage] = useState("");
   const [supplierPaymentAmounts, setSupplierPaymentAmounts] = useState({});
   const [supplierPaymentReferences, setSupplierPaymentReferences] = useState({});
@@ -1873,6 +1898,7 @@ function App() {
   const [invoice, setInvoice] = useState(null);
   const [error, setError] = useState("");
   const [authMode, setAuthMode] = useState("login");
+  const [authPanelOpen, setAuthPanelOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState(readStoredSessionToken);
@@ -1885,6 +1911,14 @@ function App() {
   const [activeView, setActiveView] = useState(() => {
     const savedView = localStorage.getItem("alibooks-active-view");
     return viewKeys.includes(savedView) ? savedView : "overview";
+  });
+  const [mvpManualChecks, setMvpManualChecks] = useState(() => {
+    try {
+      const savedChecks = JSON.parse(localStorage.getItem("alibooks-mvp-manual-checks") || "{}");
+      return savedChecks && typeof savedChecks === "object" ? savedChecks : {};
+    } catch {
+      return {};
+    }
   });
   const [invoiceFilter, setInvoiceFilter] = useState(() => {
     const savedFilter = localStorage.getItem("alibooks-invoice-filter");
@@ -2018,6 +2052,8 @@ function App() {
   const [expenseSearch, setExpenseSearch] = useState(() => localStorage.getItem("alibooks-expense-search") || "");
   const [customerSearch, setCustomerSearch] = useState(() => localStorage.getItem("alibooks-customer-search") || "");
   const [invoiceSearch, setInvoiceSearch] = useState(() => localStorage.getItem("alibooks-invoice-search") || "");
+  const [reportDocumentSearch, setReportDocumentSearch] = useState(() => localStorage.getItem("alibooks-report-document-search") || "");
+  const [reportDocumentType, setReportDocumentType] = useState(() => localStorage.getItem("alibooks-report-document-type") || "all");
   const [paymentDates, setPaymentDates] = useState({});
   const [paymentAmounts, setPaymentAmounts] = useState({});
   const [paymentReferences, setPaymentReferences] = useState({});
@@ -2049,6 +2085,16 @@ function App() {
   const [bankStatementDate, setBankStatementDate] = useState(() => localStorage.getItem("alibooks-bank-statement-date") || new Date().toISOString().slice(0, 10));
   const [bankStatementBalance, setBankStatementBalance] = useState(() => localStorage.getItem("alibooks-bank-statement-balance") || "");
   const [bankStatementNote, setBankStatementNote] = useState(() => localStorage.getItem("alibooks-bank-statement-note") || "");
+  const [cardPurchases, setCardPurchases] = useState([]);
+  const [cardPurchaseDate, setCardPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [cardPurchaseMerchantName, setCardPurchaseMerchantName] = useState("");
+  const [cardPurchaseCardHolder, setCardPurchaseCardHolder] = useState("");
+  const [cardPurchaseLast4, setCardPurchaseLast4] = useState("");
+  const [cardPurchaseReference, setCardPurchaseReference] = useState("");
+  const [cardPurchaseTotalAmount, setCardPurchaseTotalAmount] = useState("");
+  const [cardPurchaseVatAmount, setCardPurchaseVatAmount] = useState("");
+  const [cardPurchaseCategory, setCardPurchaseCategory] = useState("5420");
+  const [cardPurchaseMessage, setCardPurchaseMessage] = useState("");
   const [taxAccountStatementDate, setTaxAccountStatementDate] = useState(() => localStorage.getItem("alibooks-tax-account-statement-date") || new Date().toISOString().slice(0, 10));
   const [taxAccountStatementBalance, setTaxAccountStatementBalance] = useState(() => localStorage.getItem("alibooks-tax-account-statement-balance") || "");
   const [taxAccountStatementNote, setTaxAccountStatementNote] = useState(() => localStorage.getItem("alibooks-tax-account-statement-note") || "");
@@ -2118,6 +2164,10 @@ function App() {
   }, [activeView]);
 
   useEffect(() => {
+    localStorage.setItem("alibooks-mvp-manual-checks", JSON.stringify(mvpManualChecks));
+  }, [mvpManualChecks]);
+
+  useEffect(() => {
     localStorage.setItem("alibooks-operations-incidents", JSON.stringify(operationsIncidents));
   }, [operationsIncidents]);
 
@@ -2143,6 +2193,11 @@ function App() {
     localStorage.setItem("alibooks-expense-date-to", expenseDateTo);
     localStorage.setItem("alibooks-expense-search", expenseSearch);
   }, [expenseFilter, expenseCategoryFilter, expenseDateFrom, expenseDateTo, expenseSearch]);
+
+  useEffect(() => {
+    localStorage.setItem("alibooks-report-document-search", reportDocumentSearch);
+    localStorage.setItem("alibooks-report-document-type", reportDocumentType);
+  }, [reportDocumentSearch, reportDocumentType]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-customer-filter", customerFilter);
@@ -2374,6 +2429,10 @@ function App() {
   }, [expenseCategory]);
 
   useEffect(() => {
+    localStorage.setItem("alibooks-expense-paid-from", expensePaidFrom);
+  }, [expensePaidFrom]);
+
+  useEffect(() => {
     if (token) {
       loadAdminServices();
       loadInvoices();
@@ -2385,6 +2444,7 @@ function App() {
       loadVatVoucherControlReport();
       loadVatFilingProofReport();
       loadExpenses();
+      loadCardPurchases();
       loadSuppliers();
       loadSupplierInvoices();
       loadOwnerTransactions();
@@ -2865,6 +2925,25 @@ function App() {
       setExpenses(data);
     } catch {
       setError("Could not load expenses.");
+    }
+  }
+
+  async function loadCardPurchases(authToken = token) {
+    if (!authToken) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/card-purchases`, {
+        headers: authHeaders(authToken)
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        setCardPurchases([]);
+        setCardPurchaseMessage(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda kortkop." : "Could not load card purchases."));
+        return;
+      }
+      setCardPurchases(data);
+    } catch {
+      setCardPurchaseMessage(language === "sv" ? "Kunde inte ladda kortkop." : "Could not load card purchases.");
     }
   }
 
@@ -3653,6 +3732,16 @@ function App() {
       return;
     }
 
+    if (supplierInvoiceSelfBilling && supplierInvoiceBuyerName.trim().length < 2) {
+      setSupplierMessage(language === "sv" ? "Skriv koparens namn for sjalvfakturan." : "Enter the buyer name for the self-billing invoice.");
+      return;
+    }
+
+    if (supplierInvoiceSelfBilling && supplierInvoiceApprovalReference.trim().length < 3) {
+      setSupplierMessage(language === "sv" ? "Skriv avtal eller godkannandereferens for sjalvfakturan." : "Enter an agreement or approval reference for the self-billing invoice.");
+      return;
+    }
+
     const invoicePayload = {
       supplierId: supplier.id,
       invoiceDate: supplierInvoiceDate,
@@ -3661,7 +3750,11 @@ function App() {
       reference: supplierInvoiceReference.trim(),
       totalAmount,
       vatAmount,
-      category: supplierInvoiceCategory
+      category: supplierInvoiceCategory,
+      selfBilling: supplierInvoiceSelfBilling,
+      buyerName: supplierInvoiceSelfBilling ? supplierInvoiceBuyerName.trim() : "",
+      buyerReference: supplierInvoiceSelfBilling ? supplierInvoiceBuyerReference.trim() : "",
+      approvalReference: supplierInvoiceSelfBilling ? supplierInvoiceApprovalReference.trim() : ""
     };
 
     if (token) {
@@ -3685,6 +3778,10 @@ function App() {
       setSupplierInvoiceReference("");
       setSupplierInvoiceTotalAmount("");
       setSupplierInvoiceVatAmount("");
+      setSupplierInvoiceSelfBilling(false);
+      setSupplierInvoiceBuyerName("");
+      setSupplierInvoiceBuyerReference("");
+      setSupplierInvoiceApprovalReference("");
       setSupplierMessage(settings?.accountingMethod === "CASH_METHOD"
         ? (language === "sv"
           ? "Leverantorsfakturan sparades. Med kontantmetoden bokfors kostnad och moms nar du markerar den som betald."
@@ -3705,6 +3802,10 @@ function App() {
       paidAmount: 0,
       paymentReference: "",
       paymentHistory: "",
+      selfBilling: supplierInvoiceSelfBilling,
+      buyerName: supplierInvoiceSelfBilling ? supplierInvoiceBuyerName.trim() : "",
+      buyerReference: supplierInvoiceSelfBilling ? supplierInvoiceBuyerReference.trim() : "",
+      approvalReference: supplierInvoiceSelfBilling ? supplierInvoiceApprovalReference.trim() : "",
       status: "unpaid",
       createdAt: new Date().toISOString()
     };
@@ -3714,6 +3815,10 @@ function App() {
     setSupplierInvoiceReference("");
     setSupplierInvoiceTotalAmount("");
     setSupplierInvoiceVatAmount("");
+    setSupplierInvoiceSelfBilling(false);
+    setSupplierInvoiceBuyerName("");
+    setSupplierInvoiceBuyerReference("");
+    setSupplierInvoiceApprovalReference("");
     setSupplierMessage(language === "sv" ? "Leverantorsfakturan sparades." : "Supplier invoice saved.");
   }
 
@@ -3924,13 +4029,17 @@ function App() {
     });
 
     rows.push([]);
-    rows.push(["Fakturadatum", "Forfallodatum", "Status", "Leverantor", "Referens", "Beskrivning", "Kategori", "Netto", "Moms", "Totalt", "Betalt", "Kvar", "Betalreferens", "Makulerad datum", "Rattelseverifikat"]);
+    rows.push(["Fakturadatum", "Forfallodatum", "Status", "Typ", "Leverantor", "Kopare", "Koparreferens", "Godkannande/avtal", "Referens", "Beskrivning", "Kategori", "Netto", "Moms", "Totalt", "Betalt", "Kvar", "Betalreferens", "Makulerad datum", "Rattelseverifikat"]);
     supplierInvoices.forEach((invoice) => {
       rows.push([
         invoice.invoiceDate,
         invoice.dueDate,
         supplierInvoiceStatusLabel(invoice.status),
+        invoice.selfBilling ? "Sjalvfaktura" : "Leverantorsfaktura",
         invoice.supplierName,
+        invoice.buyerName || "",
+        invoice.buyerReference || "",
+        invoice.approvalReference || "",
         invoice.reference,
         invoice.description,
         expenseCategoryLabel(invoice.category),
@@ -5548,6 +5657,7 @@ function App() {
     setSelectedServiceId(services[0]?.id ? String(services[0].id) : "");
     setInvoiceQuantity("1");
     setExpenseCategory("5420");
+    setExpensePaidFrom("1930");
     setBokioImportQueue([]);
     setBokioImportFiles({});
     setBokioImportMessage("");
@@ -5575,7 +5685,7 @@ function App() {
         netAmount: Number(expenseNetAmount),
         vatAmount: Number(expenseVatAmount),
         category: expenseCategory,
-        paidFrom: "1930"
+        paidFrom: expensePaidFrom
       })
     });
 
@@ -5598,11 +5708,97 @@ function App() {
     setExpenseDate(new Date().toISOString().slice(0, 10));
     setExpenseNetAmount("");
     setExpenseVatAmount("");
+    setExpensePaidFrom("1930");
     setExpenseReceiptFile(null);
     loadJournalEntries();
     loadVatReport();
     loadReminders();
     loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
+  }
+
+  async function handleCreateCardPurchase(event) {
+    event.preventDefault();
+    setCardPurchaseMessage("");
+    setError("");
+
+    const totalAmount = Math.round(Number(cardPurchaseTotalAmount || 0));
+    const vatAmount = Math.round(Number(cardPurchaseVatAmount || 0));
+
+    if (!cardPurchaseDate) {
+      setCardPurchaseMessage(language === "sv" ? "Valj kopdatum." : "Choose purchase date.");
+      return;
+    }
+    if (!cardPurchaseMerchantName.trim()) {
+      setCardPurchaseMessage(language === "sv" ? "Skriv butik/leverantor." : "Enter merchant/supplier.");
+      return;
+    }
+    if (totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
+      setCardPurchaseMessage(language === "sv" ? "Kontrollera totalbelopp och moms." : "Check total amount and VAT.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/card-purchases`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders()
+      },
+      body: JSON.stringify({
+        purchaseDate: cardPurchaseDate,
+        merchantName: cardPurchaseMerchantName,
+        cardHolder: cardPurchaseCardHolder,
+        cardLast4: cardPurchaseLast4,
+        reference: cardPurchaseReference,
+        totalAmount,
+        vatAmount,
+        category: cardPurchaseCategory,
+        clearingAccount: "2890"
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setCardPurchaseMessage(apiErrorMessage(data, language === "sv" ? "Kunde inte spara kortkop." : "Could not save card purchase."));
+      return;
+    }
+
+    setCardPurchases((current) => [data, ...current.filter((purchase) => purchase.id !== data.id)]);
+    setCardPurchaseMerchantName("");
+    setCardPurchaseCardHolder("");
+    setCardPurchaseLast4("");
+    setCardPurchaseReference("");
+    setCardPurchaseTotalAmount("");
+    setCardPurchaseVatAmount("");
+    setCardPurchaseMessage(language === "sv" ? "Kortkopet sparades for granskning." : "Card purchase saved for review.");
+  }
+
+  async function bookCardPurchase(purchase) {
+    setCardPurchaseMessage("");
+    setError("");
+
+    if (isAccountingDateLocked(purchase.purchaseDate)) {
+      setCardPurchaseMessage(lockedAccountingMessage(purchase.purchaseDate));
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/card-purchases/${purchase.id}/book-expense`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setCardPurchaseMessage(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora kortkopet." : "Could not book card purchase."));
+      return;
+    }
+
+    setCardPurchases((current) => current.map((item) => item.id === data.id ? data : item));
+    setCardPurchaseMessage(language === "sv" ? "Kortkopet bokfordes som kostnad mot 2890." : "Card purchase booked as expense against 2890.");
+    loadExpenses();
+    loadJournalEntries();
+    loadVatReport();
     loadProfitAndLoss();
     loadBalanceReport();
   }
@@ -6919,6 +7115,7 @@ function App() {
       `${language === "sv" ? "Datum" : "Date"}: ${expense.expenseDate || "-"}`,
       `${t.description}: ${expense.description || "-"}`,
       `${t.category}: ${expenseCategoryLabel(expense.category)}`,
+      `${language === "sv" ? "Betalat fran" : "Paid from"}: ${paymentSourceLabel(expense.paidFrom, language)}`,
       `${t.net}: ${expense.netAmount || 0} SEK`,
       `${t.vat}: ${expense.vatAmount || 0} SEK`,
       `${t.total}: ${expense.totalAmount || 0} SEK`,
@@ -9786,6 +9983,17 @@ function App() {
       ]);
     });
 
+    rows.push([], ["Prioriterade atgarder"], ["Prioritet", "Omrade", "Status", "Poang", "Atgard"]);
+    securityPrivacyNextActions.forEach((row, index) => {
+      rows.push([
+        index + 1,
+        row.title,
+        row.statusLabel,
+        row.score,
+        row.recommendation
+      ]);
+    });
+
     downloadLocalCsv("sakerhet-integritet.csv", rows);
   }
 
@@ -9913,6 +10121,33 @@ function App() {
       ]);
     });
 
+    rows.push([], ["Anvandningsniva"], ["Omrade", "Status", "Poang", "Detalj", "Nasta steg"]);
+    goLiveProductionRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.statusLabel,
+        row.score,
+        row.detail,
+        row.recommendation
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Manuella MVP-bevis"],
+      ["Kontroll", "Status", "Senast andrad", "Anteckning", "Detalj"]
+    );
+
+    mvpManualChecklistRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.statusLabel,
+        row.checkedAt || "-",
+        row.note || "",
+        row.detail
+      ]);
+    });
+
     downloadLocalCsv("startklar-go-live.csv", rows);
   }
 
@@ -9937,6 +10172,22 @@ function App() {
         row.score,
         row.detail,
         row.actionLabel
+      ]);
+    });
+
+    rows.push(
+      [],
+      ["Manuella MVP-bevis"],
+      ["Kontroll", "Status", "Senast andrad", "Anteckning", "Detalj"]
+    );
+
+    mvpManualChecklistRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.statusLabel,
+        row.checkedAt || "-",
+        row.note || "",
+        row.detail
       ]);
     });
 
@@ -10651,6 +10902,18 @@ function App() {
     rows.push([]);
     rows.push(["Deklarationsrad", "Belopp", "Detalj"]);
     annualDeclarationRows.forEach((row) => rows.push([row.label, row.amount, row.detail]));
+
+    rows.push([]);
+    rows.push(["Deklarationspaket", "Status", "Belopp", "Detalj", "Nasta steg"]);
+    declarationFilingPackageRows.forEach((row) => {
+      rows.push([
+        row.title,
+        row.statusLabel,
+        row.amountLabel,
+        row.detail,
+        row.recommendation
+      ]);
+    });
 
     downloadLocalCsv(`deklarationscenter-${annualCloseYear || "ar"}.csv`, rows);
   }
@@ -13667,7 +13930,7 @@ function App() {
       ["Sparade underlag", filteredExpensesWithReceipt.length, "Sparat belopp", filteredReceiptTotal],
       ["Saknar kvitto", filteredExpensesMissingReceipt.length, "Saknar kvitto belopp", filteredMissingReceiptTotal],
       [],
-      ["Datum", "Beskrivning", "Kategori", "Netto", "Moms", "Totalt", "Kvitto sparat", "Filnamn", "Underlagskod SHA-256", "Uppladdat"]
+      ["Datum", "Beskrivning", "Kategori", "Betalat fran", "Netto", "Moms", "Totalt", "Kvitto sparat", "Filnamn", "Underlagskod SHA-256", "Uppladdat"]
     ];
 
     filteredExpenses.forEach((expense) => {
@@ -13675,6 +13938,7 @@ function App() {
         expense.expenseDate || "",
         expense.description || "",
         expenseCategoryLabel(expense.category),
+        paymentSourceLabel(expense.paidFrom, language),
         expense.netAmount || 0,
         expense.vatAmount || 0,
         expense.totalAmount || 0,
@@ -13714,6 +13978,66 @@ function App() {
     });
 
     downloadLocalCsv("invoices.csv", rows);
+  }
+
+  function downloadSalesReportCsv() {
+    setError("");
+    const rows = [
+      [language === "sv" ? "Forsaljningsrapport" : "Sales report"],
+      ["Statusfilter", invoiceFilter, "Fran datum", invoiceDateFrom || "-", "Till datum", invoiceDateTo || "-", "Sokning", invoiceSearch || "-"],
+      ["Fakturor", salesReportInvoiceCount, "Netto", salesReportNet, "Moms", salesReportVat, "Totalt", salesReportTotal, "Kvar att betala", salesReportOutstanding],
+      [],
+      [language === "sv" ? "Per tjanst" : "By service"],
+      ["Tjanst", "Antal", "Netto", "Moms", "Totalt", "Betalt", "Kvar att betala"]
+    ];
+
+    salesReportByService.forEach((row) => {
+      rows.push([row.label, row.count, row.net, row.vat, row.total, row.paid, row.outstanding]);
+    });
+
+    rows.push(
+      [],
+      [language === "sv" ? "Per kund" : "By customer"],
+      ["Kund", "Antal", "Netto", "Moms", "Totalt", "Betalt", "Kvar att betala"]
+    );
+    salesReportByCustomer.forEach((row) => {
+      rows.push([row.label, row.count, row.net, row.vat, row.total, row.paid, row.outstanding]);
+    });
+
+    rows.push(
+      [],
+      [language === "sv" ? "Per manad" : "By month"],
+      ["Manad", "Antal", "Netto", "Moms", "Totalt", "Betalt", "Kvar att betala"]
+    );
+    salesReportByMonth.forEach((row) => {
+      rows.push([row.label, row.count, row.net, row.vat, row.total, row.paid, row.outstanding]);
+    });
+
+    downloadLocalCsv("forsaljningsrapport.csv", rows);
+  }
+
+  function downloadDocumentRegisterCsv() {
+    setError("");
+    const rows = [
+      [language === "sv" ? "Sokbara kvitton och fakturor" : "Searchable receipts and invoices"],
+      ["Typfilter", reportDocumentType, "Sokning", reportDocumentSearch || "-", "Antal", filteredDocumentRegisterRows.length],
+      [],
+      ["Typ", "Datum", "Referens", "Namn", "Status", "Belopp", "Soktext"]
+    ];
+
+    filteredDocumentRegisterRows.forEach((row) => {
+      rows.push([
+        row.typeLabel,
+        row.date || "",
+        row.reference || "",
+        row.name || "",
+        row.statusLabel || "",
+        row.amount || 0,
+        row.searchableText || ""
+      ]);
+    });
+
+    downloadLocalCsv("sokbara-kvitton-fakturor.csv", rows);
   }
 
   function downloadPaymentOverviewCsv() {
@@ -13819,6 +14143,7 @@ function App() {
     localStorage.setItem("alibooks-email", data.email);
     setToken(data.token);
     setCurrentEmail(data.email);
+    setAuthPanelOpen(false);
     setEmail("");
     setPassword("");
     loadInvoices(data.token);
@@ -13865,11 +14190,14 @@ function App() {
 
   function handleLogout() {
     clearAuthenticatedState();
+    setAuthPanelOpen(false);
     setError("");
   }
 
   function focusAuthForm(mode) {
     setAuthMode(mode);
+    setAuthPanelOpen(true);
+    setActiveView("overview");
     window.requestAnimationFrame(() => {
       authFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       authFormRef.current?.querySelector("input")?.focus();
@@ -13954,6 +14282,11 @@ function App() {
   const stripePayoutGrossTotal = stripePayouts.reduce((sum, payout) => sum + (payout.grossAmount || 0), 0);
   const stripePayoutFeeTotal = stripePayouts.reduce((sum, payout) => sum + (payout.feeAmount || 0), 0);
   const stripePayoutNetTotal = stripePayouts.reduce((sum, payout) => sum + (payout.netAmount || 0), 0);
+  const cardPurchaseOpenRows = cardPurchases.filter((purchase) => purchase.status !== "booked");
+  const cardPurchaseBookedRows = cardPurchases.filter((purchase) => purchase.status === "booked");
+  const cardPurchaseOpenTotal = cardPurchaseOpenRows.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+  const cardClearingEntries = journalEntries.filter((entry) => entry.accountNumber === "2890");
+  const cardClearingBalance = cardClearingEntries.reduce((sum, entry) => sum + (entry.credit || 0) - (entry.debit || 0), 0);
   const bankReconciliationBookedRows = bankReconciliationHistory.filter((entry) => entry.status === "booked");
   const bankReconciliationSkippedRows = bankReconciliationHistory.filter((entry) => entry.status === "skipped");
   const bankReconciliationIncomingAmount = bankReconciliationBookedRows
@@ -14910,8 +15243,8 @@ function App() {
 
     if (normalizedQuestion.includes("idag") || normalizedQuestion.includes("daglig") || normalizedQuestion.includes("att gora") || normalizedQuestion.includes("att gora") || normalizedQuestion.includes("prioritet") || normalizedQuestion.includes("today") || normalizedQuestion.includes("daily") || normalizedQuestion.includes("todo") || normalizedQuestion.includes("priority")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} Ga till Daglig rutin. Den visar vad du ska gora idag: forfallna fakturor, bankrader, saknade underlag, moms/skatt, backup och kritiska kontroller. Just nu ar score ${dailyRoutineScore}%, ${dailyRoutineTodoCount} punkter att gora och ${dailyRoutineCriticalCount} kritiska.`
-        : `${answerIntro} Go to Daily routine. It shows what to do today: overdue invoices, bank rows, missing receipts, VAT/tax, backup and critical checks. Current score is ${dailyRoutineScore}%, ${dailyRoutineTodoCount} items to do and ${dailyRoutineCriticalCount} critical.`, "dailyRoutine");
+        ? `${answerIntro} Ga till Att gora. Dar ser du betalningar att attestera, loner att godkanna, kvitton att skicka in, saknade underlag och fragor fran AliBooks. Borja med P1 och ga sedan vidare till P2.`
+        : `${answerIntro} Go to To-do list. It shows payments to approve, payroll to approve, receipts to submit, missing evidence and questions from AliBooks. Start with P1, then continue with P2.`, "todoList");
     }
 
     if (normalizedQuestion.includes("manadsrutin") || normalizedQuestion.includes("manadsslut") || normalizedQuestion.includes("manadsavslut") || normalizedQuestion.includes("stanga manad") || normalizedQuestion.includes("period close") || normalizedQuestion.includes("month close") || normalizedQuestion.includes("monthly close") || normalizedQuestion.includes("monthly routine")) {
@@ -15587,6 +15920,169 @@ function App() {
   const filteredInvoicePaid = filteredInvoices.reduce((sum, item) => sum + invoicePaidAmount(item), 0);
   const filteredInvoiceOutstanding = filteredInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
   const filteredInvoiceVat = filteredInvoices.reduce((sum, item) => sum + invoiceVatAmount(item), 0);
+  const salesReportInvoices = filteredInvoices;
+  const salesReportInvoiceCount = salesReportInvoices.length;
+  const salesReportNet = salesReportInvoices.reduce((sum, item) => sum + invoiceNetAmount(item), 0);
+  const salesReportVat = salesReportInvoices.reduce((sum, item) => sum + invoiceVatAmount(item), 0);
+  const salesReportTotal = salesReportInvoices.reduce((sum, item) => sum + invoiceTotalAmount(item), 0);
+  const salesReportPaid = salesReportInvoices.reduce((sum, item) => sum + invoicePaidAmount(item), 0);
+  const salesReportOutstanding = salesReportInvoices.reduce((sum, item) => sum + invoiceRemainingAmount(item), 0);
+  const summarizeSales = (keyGetter, fallbackLabel = "-") => Object.values(salesReportInvoices.reduce((groups, item) => {
+    const rawKey = keyGetter(item) || fallbackLabel;
+    const key = String(rawKey).trim() || fallbackLabel;
+
+    if (!groups[key]) {
+      groups[key] = {
+        label: key,
+        count: 0,
+        net: 0,
+        vat: 0,
+        total: 0,
+        paid: 0,
+        outstanding: 0
+      };
+    }
+
+    groups[key].count += 1;
+    groups[key].net += invoiceNetAmount(item);
+    groups[key].vat += invoiceVatAmount(item);
+    groups[key].total += invoiceTotalAmount(item);
+    groups[key].paid += invoicePaidAmount(item);
+    groups[key].outstanding += invoiceRemainingAmount(item);
+
+    return groups;
+  }, {})).sort((first, second) => second.total - first.total || first.label.localeCompare(second.label, "sv"));
+  const salesReportByService = summarizeSales((item) => item.product?.name || item.productName, language === "sv" ? "Okand tjanst" : "Unknown service");
+  const salesReportByCustomer = summarizeSales((item) => item.customerName || item.customer?.name, language === "sv" ? "Okand kund" : "Unknown customer");
+  const salesReportByMonth = summarizeSales((item) => String(item.invoiceDate || item.createdAt || "").slice(0, 7) || "-", "-")
+    .sort((first, second) => second.label.localeCompare(first.label));
+  const documentRegisterRows = [
+    ...invoices.map((item) => {
+      const invoiceDate = item.invoiceDate || String(item.createdAt || "").slice(0, 10);
+      const customerNameValue = item.customerName || item.customer?.name || "";
+      const serviceNameValue = item.product?.name || item.productName || "";
+      const numberValue = invoiceNumber(item);
+      const searchText = [
+        numberValue,
+        customerNameValue,
+        serviceNameValue,
+        item.status,
+        item.ocrNumber,
+        item.dueDate,
+        invoiceDate,
+        invoiceTotalAmount(item),
+        invoiceRemainingAmount(item)
+      ].join(" ");
+
+      return {
+        id: `invoice-${item.id}`,
+        type: "invoice",
+        typeLabel: language === "sv" ? "Kundfaktura" : "Customer invoice",
+        date: invoiceDate,
+        reference: numberValue,
+        name: `${customerNameValue || "-"}${serviceNameValue ? ` - ${serviceNameValue}` : ""}`,
+        statusLabel: statusLabel(item.status, language),
+        amount: invoiceTotalAmount(item),
+        searchableText: searchText,
+        actionLabel: language === "sv" ? "Oppna faktura" : "Open invoice",
+        action: () => {
+          setInvoiceSearch(numberValue);
+          setActiveView("invoices");
+        }
+      };
+    }),
+    ...expenses.map((expense) => {
+      const hasReceipt = expenseHasReceipt(expense);
+      const referenceValue = expense.receiptFileName || expense.receiptSha256 || expense.description || `expense-${expense.id}`;
+      const searchText = [
+        expense.expenseDate,
+        expense.description,
+        expenseCategoryLabel(expense.category),
+        expense.receiptFileName,
+        expense.receiptSha256,
+        expense.totalAmount,
+        expense.netAmount,
+        expense.vatAmount,
+        hasReceipt ? "receipt" : "missing receipt"
+      ].join(" ");
+
+      return {
+        id: `expense-${expense.id}`,
+        type: "receipt",
+        typeLabel: language === "sv" ? "Kvitto/underlag" : "Receipt/evidence",
+        date: expense.expenseDate || String(expense.createdAt || "").slice(0, 10),
+        reference: referenceValue,
+        name: expense.description || expenseCategoryLabel(expense.category),
+        statusLabel: hasReceipt ? (language === "sv" ? "Underlag sparat" : "Evidence saved") : (language === "sv" ? "Saknar underlag" : "Missing evidence"),
+        amount: expense.totalAmount || 0,
+        searchableText: searchText,
+        actionLabel: hasReceipt ? (language === "sv" ? "Oppna kvitto" : "Open receipt") : (language === "sv" ? "Ga till underlag" : "Go to evidence"),
+        action: () => {
+          if (hasReceipt) {
+            openExpenseReceipt(expense.id);
+            return;
+          }
+
+          setExpenseSearch(expense.description || expenseCategoryLabel(expense.category));
+          setActiveView("uploaded");
+        }
+      };
+    }),
+    ...supplierInvoices.map((invoice) => {
+      const supplier = suppliers.find((item) => String(item.id) === String(invoice.supplierId));
+      const referenceValue = invoice.reference || invoice.approvalReference || `supplier-${invoice.id}`;
+      const invoiceDate = invoice.invoiceDate || String(invoice.createdAt || "").slice(0, 10);
+      const searchText = [
+        supplier?.name,
+        invoice.description,
+        referenceValue,
+        invoice.status,
+        invoiceDate,
+        invoice.dueDate,
+        invoice.totalAmount,
+        invoice.vatAmount,
+        invoice.selfBilling ? "self billing" : ""
+      ].join(" ");
+
+      return {
+        id: `supplier-invoice-${invoice.id}`,
+        type: "supplierInvoice",
+        typeLabel: invoice.selfBilling
+          ? (language === "sv" ? "Självfaktura" : "Self-billing invoice")
+          : (language === "sv" ? "Leverantorsfaktura" : "Supplier invoice"),
+        date: invoiceDate,
+        reference: referenceValue,
+        name: `${supplier?.name || "-"}${invoice.description ? ` - ${invoice.description}` : ""}`,
+        statusLabel: supplierInvoiceStatusLabel(invoice.status),
+        amount: invoice.totalAmount || 0,
+        searchableText: searchText,
+        actionLabel: language === "sv" ? "Oppna leverantorer" : "Open suppliers",
+        action: () => {
+          setSupplierInvoiceSupplierId(String(invoice.supplierId || ""));
+          setActiveView("suppliers");
+        }
+      };
+    })
+  ].sort((first, second) => String(second.date || "").localeCompare(String(first.date || "")));
+  const reportDocumentSearchQuery = reportDocumentSearch.toLowerCase().trim();
+  const filteredDocumentRegisterRows = documentRegisterRows.filter((row) => {
+    if (reportDocumentType !== "all" && row.type !== reportDocumentType) return false;
+    if (!reportDocumentSearchQuery) return true;
+
+    return [
+      row.typeLabel,
+      row.date,
+      row.reference,
+      row.name,
+      row.statusLabel,
+      row.amount,
+      row.searchableText
+    ].some((value) => String(value || "").toLowerCase().includes(reportDocumentSearchQuery));
+  });
+  const documentRegisterInvoiceCount = documentRegisterRows.filter((row) => row.type === "invoice").length;
+  const documentRegisterReceiptCount = documentRegisterRows.filter((row) => row.type === "receipt").length;
+  const documentRegisterSupplierInvoiceCount = documentRegisterRows.filter((row) => row.type === "supplierInvoice").length;
+  const documentRegisterMissingEvidenceCount = documentRegisterRows.filter((row) => String(row.statusLabel || "").toLowerCase().includes("saknar") || String(row.statusLabel || "").toLowerCase().includes("missing")).length;
   const filteredCustomers = customers.filter((customer) => {
     if (customerFilter === "active" && customer.archived) return false;
     if (customerFilter === "archived" && !customer.archived) return false;
@@ -19903,6 +20399,24 @@ function App() {
     }
   ];
   securityPrivacyRiskRows = securityPrivacyControlRows.filter((row) => row.status !== "ok");
+  const securityPrivacyPriorityOrder = {
+    jwt: 1,
+    cors: 2,
+    "login-attempts": 3,
+    backup: 4,
+    integrations: 5,
+    "ai-safe-provider": 6,
+    "ai-export": 7,
+    "personal-data": 8,
+    "data-quality": 9
+  };
+  const securityPrivacyNextActions = securityPrivacyRiskRows
+    .map((row) => ({
+      ...row,
+      priority: securityPrivacyPriorityOrder[row.key] || 99
+    }))
+    .sort((a, b) => a.priority - b.priority || a.score - b.score)
+    .slice(0, 6);
   securityPrivacyScore = Math.round(
     securityPrivacyControlRows.reduce((sum, row) => sum + row.score, 0) / Math.max(securityPrivacyControlRows.length, 1)
   );
@@ -20326,8 +20840,199 @@ function App() {
       ? (language === "sv" ? "Bygg klart sista riskerna" : "Finish the last risks")
       : (language === "sv" ? "Fortsatt MVP-arbete" : "Continue MVP work");
   const goLiveNextRows = goLiveRows.filter((row) => row.status !== "ok").slice(0, 5);
+  const goLiveProductionRows = [
+    {
+      key: "local-mvp",
+      status: goLiveCriticalCount === 0 ? "ok" : "critical",
+      title: language === "sv" ? "Lokal MVP-anvandning" : "Local MVP use",
+      statusLabel: goLiveCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: goLiveCriticalCount === 0 ? Math.max(75, goLiveScore) : Math.min(55, goLiveScore),
+      detail: language === "sv"
+        ? `${goLiveCriticalCount} kritiska punkter, ${goLiveWarningCount} varningar.`
+        : `${goLiveCriticalCount} critical items, ${goLiveWarningCount} warnings.`,
+      recommendation: language === "sv"
+        ? "For lokal anvandning: kritiska bokforings-, databas- och berakningsfel ska vara noll."
+        : "For local use: critical bookkeeping, database and calculation issues should be zero.",
+      action: () => setActiveView("testFlow")
+    },
+    {
+      key: "production-env",
+      status: systemStatus?.security?.jwtStrong && systemStatus?.cors?.productionReady ? "ok" : "warning",
+      title: language === "sv" ? "Produktionsmiljo" : "Production environment",
+      statusLabel: systemStatus?.security?.jwtStrong && systemStatus?.cors?.productionReady ? "OK" : (language === "sv" ? "Miljo kvar" : "Env left"),
+      score: systemStatus?.security?.jwtStrong && systemStatus?.cors?.productionReady ? 100 : systemStatus?.security?.jwtStrong || systemStatus?.cors?.configured ? 70 : 50,
+      detail: language === "sv"
+        ? `JWT: ${systemStatus?.security?.jwtStrong ? "OK" : "svag/saknas"}, CORS: ${systemStatus?.cors?.productionReady ? "produktion" : "lokal/kontrollera"}`
+        : `JWT: ${systemStatus?.security?.jwtStrong ? "OK" : "weak/missing"}, CORS: ${systemStatus?.cors?.productionReady ? "production" : "local/check"}`,
+      recommendation: language === "sv"
+        ? "Satt stark JWT_SECRET, publik APP_CORS_ALLOWED_ORIGINS och APP_CORS_LOCAL_DEV_ENABLED=false innan skarp drift."
+        : "Set a strong JWT_SECRET, public APP_CORS_ALLOWED_ORIGINS and APP_CORS_LOCAL_DEV_ENABLED=false before production.",
+      action: () => setActiveView("security")
+    },
+    {
+      key: "backup-restore",
+      status: backupValidation?.ok && archivePackageWarnings === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Backup och aterlasning" : "Backup and restore",
+      statusLabel: backupValidation?.ok && archivePackageWarnings === 0 ? "OK" : (language === "sv" ? "Verifiera" : "Verify"),
+      score: backupValidation?.ok && archivePackageWarnings === 0 ? 100 : backupValidation?.ok ? 80 : 55,
+      detail: language === "sv"
+        ? `Backup verifierad: ${backupValidation?.ok ? "ja" : "nej"}, arkivvarningar: ${archivePackageWarnings}.`
+        : `Backup verified: ${backupValidation?.ok ? "yes" : "no"}, archive warnings: ${archivePackageWarnings}.`,
+      recommendation: language === "sv"
+        ? "Ta backup och gor minst en restore drill pa testdatabas innan riktig data flyttas."
+        : "Take a backup and run at least one restore drill on a test database before moving real data.",
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "customer-communication",
+      status: systemStatus?.email?.configured && (systemStatus?.stripe?.configured || bankImportRows.length > 0) ? "ok" : "warning",
+      title: language === "sv" ? "Kundkommunikation och betalning" : "Customer communication and payment",
+      statusLabel: systemStatus?.email?.configured && (systemStatus?.stripe?.configured || bankImportRows.length > 0) ? "OK" : (language === "sv" ? "Test kvar" : "Test left"),
+      score: systemStatus?.email?.configured && systemStatus?.stripe?.configured ? 100 : systemStatus?.email?.configured || bankImportRows.length > 0 ? 80 : 60,
+      detail: language === "sv"
+        ? `SMTP: ${systemStatus?.email?.configured ? "OK" : "saknas"}, Stripe: ${systemStatus?.stripe?.configured ? "OK" : "saknas"}, bank-CSV: ${bankImportRows.length}.`
+        : `SMTP: ${systemStatus?.email?.configured ? "OK" : "missing"}, Stripe: ${systemStatus?.stripe?.configured ? "OK" : "missing"}, bank CSV: ${bankImportRows.length}.`,
+      recommendation: language === "sv"
+        ? "Testa fakturamejl, paminnelsemejl, betalningsmarkering och Stripe/webhook innan kunder anvander flodet."
+        : "Test invoice email, reminder email, payment registration and Stripe/webhook before customers use the flow.",
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "advisor-review",
+      status: complianceCriticalCount === 0 && calculationCriticalCount === 0 ? "ok" : "warning",
+      title: language === "sv" ? "Sista redovisningskontroll" : "Final accounting review",
+      statusLabel: complianceCriticalCount === 0 && calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Granska" : "Review"),
+      score: complianceCriticalCount === 0 && calculationCriticalCount === 0 ? 95 : 65,
+      detail: language === "sv"
+        ? `Regelkritiska: ${complianceCriticalCount}, berakningskritiska: ${calculationCriticalCount}.`
+        : `Compliance critical: ${complianceCriticalCount}, calculation critical: ${calculationCriticalCount}.`,
+      recommendation: language === "sv"
+        ? "Lat en redovisningskonsult granska forsta skarpa perioden om du ar osaker pa moms, kassaregister eller bokslut."
+        : "Ask an accountant to review the first production period if VAT, cash register rules or closing are uncertain.",
+      action: () => setActiveView("compliance")
+    }
+  ];
+  const goLiveProductionBlockingRows = goLiveProductionRows.filter((row) => row.status !== "ok");
+  const goLiveProductionScore = Math.round(
+    goLiveProductionRows.reduce((sum, row) => sum + row.score, 0) / Math.max(goLiveProductionRows.length, 1)
+  );
+  const goLiveUsageLevelText = goLiveCriticalCount > 0
+    ? (language === "sv" ? "Inte redo for lokal skarp anvandning" : "Not ready for local production use")
+    : goLiveProductionBlockingRows.length > 0
+      ? (language === "sv" ? "Redo lokalt, inte helt produktionsklar" : "Ready locally, not fully production-ready")
+      : (language === "sv" ? "Redo for kontrollerad skarp drift" : "Ready for controlled production use");
   const testFlowSentInvoices = invoices.filter((item) => ["SENT", "PARTIALLY_PAID", "PAID"].includes(item.status));
   const testFlowPaidInvoices = invoices.filter((item) => ["PARTIALLY_PAID", "PAID"].includes(item.status) || invoicePaidAmount(item) > 0);
+  const mvpManualChecklistRows = [
+    {
+      key: "browser-start",
+      title: language === "sv" ? "Appen visar inte vit sida" : "App does not show a blank page",
+      detail: language === "sv"
+        ? "Oppna http://localhost:5157, uppdatera sidan och kontrollera att Oversikt eller vald vy visas."
+        : "Open http://localhost:5157, refresh the page and verify that Overview or the selected view renders.",
+      actionLabel: language === "sv" ? "Oversikt" : "Overview",
+      action: () => setActiveView("overview")
+    },
+    {
+      key: "auth-flow",
+      title: language === "sv" ? "Registrering och inloggning testad" : "Registration and login tested",
+      detail: language === "sv"
+        ? "Skapa ett testkonto, logga in, logga ut och testa fel losenord."
+        : "Create a test account, sign in, sign out and test a wrong password.",
+      actionLabel: language === "sv" ? "Logga in" : "Login",
+      action: () => setActiveView("overview")
+    },
+    {
+      key: "customer-validation",
+      title: language === "sv" ? "Kundvalidering visar exakta fel" : "Customer validation shows exact errors",
+      detail: language === "sv"
+        ? "Testa fel namn, e-post, personnummer, postnummer och telefon innan riktig kund sparas."
+        : "Test wrong name, email, personal number, postal code and phone before saving a real customer.",
+      actionLabel: t.customers,
+      action: () => setActiveView("customers")
+    },
+    {
+      key: "invoice-pdf",
+      title: language === "sv" ? "Faktura och PDF visuellt godkand" : "Invoice and PDF visually approved",
+      detail: language === "sv"
+        ? "Kontrollera fakturanummer, datum, kunduppgifter, F-skatt, PlusGiro, OCR, moms och totalsumma."
+        : "Check invoice number, date, customer details, F-tax text, PlusGiro, OCR, VAT and total amount.",
+      actionLabel: t.invoices,
+      action: () => setActiveView("invoices")
+    },
+    {
+      key: "partial-payment",
+      title: language === "sv" ? "Delbetalning och bokforing testad" : "Partial payment and bookkeeping tested",
+      detail: language === "sv"
+        ? "Registrera en delbetalning och kontrollera kvar att betala, betalningshistorik och verifikat."
+        : "Register a partial payment and verify remaining amount, payment history and voucher rows.",
+      actionLabel: t.payments,
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "receipts-export",
+      title: language === "sv" ? "Kvitton/underlag sparas och kan oppnas" : "Receipts/evidence save and open",
+      detail: language === "sv"
+        ? "Ladda upp minst ett kvitto/PDF, oppna det igen och exportera underlagslistan."
+        : "Upload at least one receipt/PDF, open it again and export the evidence list.",
+      actionLabel: t.uploaded,
+      action: () => setActiveView("uploaded")
+    },
+    {
+      key: "stripe-or-bank",
+      title: language === "sv" ? "Stripe eller bankimport testad med testdata" : "Stripe or bank import tested with test data",
+      detail: language === "sv"
+        ? "Testa Stripe testnycklar/webhook eller importera bank-CSV och matcha betalning innan riktiga pengar."
+        : "Test Stripe test keys/webhook or import bank CSV and match payment before using real money.",
+      actionLabel: t.payments,
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "reports-tax",
+      title: language === "sv" ? "Rapporter, moms och skatt rimlighetskontrollerade" : "Reports, VAT and tax sanity-checked",
+      detail: language === "sv"
+        ? "Jamfor resultatrapport, balansrapport, momsrapport och deklarationspaket innan export."
+        : "Compare profit and loss, balance report, VAT report and filing package before export.",
+      actionLabel: t.declarationCenter,
+      action: () => setActiveView("declarationCenter")
+    },
+    {
+      key: "backup-restore",
+      title: language === "sv" ? "Backup nedladdad och restore drill planerad" : "Backup downloaded and restore drill planned",
+      detail: language === "sv"
+        ? "Ladda ned backup, kontrollera filen i AliBooks och gor restore drill i separat testdatabas innan skarp drift."
+        : "Download backup, verify it in AliBooks and rehearse restore in a separate test database before production use.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "public-demo",
+      title: language === "sv" ? "Publik demo/produktion verifierad" : "Public demo/production verified",
+      detail: language === "sv"
+        ? "Kontrollera publik frontend, backend/API, EC2, RDS, CORS och GitHub Actions innan extern demo."
+        : "Verify public frontend, backend/API, EC2, RDS, CORS and GitHub Actions before external demo.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    }
+  ].map((row) => {
+    const saved = mvpManualChecks[row.key] || {};
+    const status = ["ok", "fail", "untested"].includes(saved.status) ? saved.status : "untested";
+    return {
+      ...row,
+      status,
+      statusLabel: status === "ok"
+        ? "OK"
+        : status === "fail"
+          ? (language === "sv" ? "Fel" : "Fail")
+          : (language === "sv" ? "Ej testat" : "Untested"),
+      checkedAt: saved.checkedAt || "",
+      note: saved.note || ""
+    };
+  });
+  const mvpManualOkCount = mvpManualChecklistRows.filter((row) => row.status === "ok").length;
+  const mvpManualFailCount = mvpManualChecklistRows.filter((row) => row.status === "fail").length;
+  const mvpManualUntestedCount = mvpManualChecklistRows.filter((row) => row.status === "untested").length;
+  const mvpManualScore = Math.round((mvpManualOkCount / Math.max(mvpManualChecklistRows.length, 1)) * 100);
   const testFlowRows = [
     {
       key: "system",
@@ -20447,6 +21152,22 @@ function App() {
         : (language === "sv" ? "Ingen backup verifierad i denna session." : "No backup verified in this session."),
       actionLabel: t.settings,
       action: () => setActiveView("settings")
+    },
+    {
+      key: "manual-proof",
+      status: mvpManualFailCount > 0 ? "fail" : mvpManualUntestedCount > 0 ? "todo" : "done",
+      title: language === "sv" ? "12. Manuella MVP-bevis" : "12. Manual MVP evidence",
+      statusLabel: mvpManualFailCount > 0
+        ? (language === "sv" ? "Stoppar" : "Blocking")
+        : mvpManualUntestedCount > 0
+          ? (language === "sv" ? "Ej klart" : "Not ready")
+          : "OK",
+      score: mvpManualFailCount > 0 ? 30 : mvpManualUntestedCount > 0 ? Math.max(55, mvpManualScore) : 100,
+      detail: language === "sv"
+        ? `${mvpManualOkCount}/${mvpManualChecklistRows.length} manuella bevis OK, ${mvpManualFailCount} fel, ${mvpManualUntestedCount} ej testade.`
+        : `${mvpManualOkCount}/${mvpManualChecklistRows.length} manual evidence items OK, ${mvpManualFailCount} failed, ${mvpManualUntestedCount} untested.`,
+      actionLabel: t.testFlow,
+      action: () => setActiveView("testFlow")
     }
   ];
   const testFlowDoneCount = testFlowRows.filter((row) => row.status === "done").length;
@@ -21625,6 +22346,104 @@ function App() {
       action: () => setActiveView("settings")
     }
   ].sort((first, second) => first.priority - second.priority);
+  const declarationFilingPackageRows = [
+    {
+      key: "vat-filing",
+      title: language === "sv" ? "Momsdeklaration" : "VAT filing",
+      status: selectedVatFilingIsPaid ? "good" : selectedVatFilingIsSubmittedOrPaid ? "info" : vatPeriodEntries.length > 0 ? "warning" : "info",
+      statusLabel: selectedVatFilingIsPaid
+        ? (language === "sv" ? "Betald/arkiverad" : "Paid/archived")
+        : selectedVatFilingIsSubmittedOrPaid
+          ? (language === "sv" ? "Inlamnad/arkiverad" : "Filed/archived")
+          : vatPeriodEntries.length > 0
+            ? (language === "sv" ? "Underlag finns" : "Basis exists")
+            : (language === "sv" ? "Ingen period vald" : "No period selected"),
+      amountLabel: `${vatPeriodToPay} SEK`,
+      detail: language === "sv"
+        ? `Vald momsperiod ${vatPeriodFrom || "-"} - ${vatPeriodTo || "-"}. AliBooks kan skapa momsrapport, kontrollera verifikat och arkivera kvittens.`
+        : `Selected VAT period ${vatPeriodFrom || "-"} - ${vatPeriodTo || "-"}. AliBooks can create VAT report, check vouchers and archive receipt.`,
+      recommendation: language === "sv"
+        ? "Kontrollera period och kvittens hos Skatteverket innan perioden markeras betald."
+        : "Verify the period and receipt with the tax authority before marking the period paid.",
+      action: () => setActiveView("vat")
+    },
+    {
+      key: "income-tax",
+      title: settings?.companyType === "LIMITED_COMPANY"
+        ? (language === "sv" ? "Inkomstdeklaration INK2" : "Income tax return INK2")
+        : (language === "sv" ? "Inkomstdeklaration NE nu / INK2 senare" : "Income tax NE now / INK2 later"),
+      status: annualDeclarationWarnings === 0 && annualCloseWarnings === 0 ? "good" : "warning",
+      statusLabel: annualDeclarationWarnings === 0 && annualCloseWarnings === 0 ? "OK" : (language === "sv" ? "Kontrollera" : "Check"),
+      amountLabel: `${annualCloseResult} SEK`,
+      detail: settings?.companyType === "LIMITED_COMPANY"
+        ? (language === "sv"
+          ? "AliBooks visar kontrollunderlag for INK2 med intakter, kostnader, resultat, moms och lonekostnader."
+          : "AliBooks shows an INK2 control basis with revenue, expenses, result, VAT and payroll costs.")
+        : (language === "sv"
+          ? "Nuvarande lage ar enskild firma: AliBooks visar NE-arbetsunderlag. Vid framtida AB byter laget till INK2-kontroll."
+          : "Current mode is sole trader: AliBooks shows NE working basis. In future limited-company mode it switches to INK2 control."),
+      recommendation: language === "sv"
+        ? "Anvand som arbetsunderlag. Slutliga rutor, skattemassiga justeringar och bilagor kontrolleras manuellt."
+        : "Use as working basis. Final fields, tax adjustments and attachments are checked manually.",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "employer-declaration",
+      title: language === "sv" ? "Arbetsgivardeklaration" : "Employer declaration",
+      status: annualClosePayrollTotals.count === 0
+        ? "info"
+        : annualClosePayrollTotals.count === annualClosePayrollTotals.booked && payrollTaxTotalToHandle >= 0
+          ? "good"
+          : "warning",
+      statusLabel: annualClosePayrollTotals.count === 0
+        ? (language === "sv" ? "Ingen lon" : "No payroll")
+        : annualClosePayrollTotals.count === annualClosePayrollTotals.booked
+          ? "OK"
+          : (language === "sv" ? "Lon ej klar" : "Payroll not ready"),
+      amountLabel: `${annualClosePayrollTotals.tax + annualClosePayrollTotals.employerFees} SEK`,
+      detail: language === "sv"
+        ? `${annualClosePayrollTotals.count} loneunderlag for ${annualCloseYear}. Skatt ${annualClosePayrollTotals.tax} SEK och arbetsgivaravgift ${annualClosePayrollTotals.employerFees} SEK.`
+        : `${annualClosePayrollTotals.count} payroll basis rows for ${annualCloseYear}. Tax ${annualClosePayrollTotals.tax} SEK and employer contribution ${annualClosePayrollTotals.employerFees} SEK.`,
+      recommendation: language === "sv"
+        ? "Skapa arbetsgivardeklarationsunderlag per manad i Lon och kontrollera mot Skatteverket innan inlamning."
+        : "Create monthly employer declaration basis in Payroll and verify against the tax authority before filing.",
+      action: () => setActiveView("payroll")
+    },
+    {
+      key: "k2-annual-report",
+      title: settings?.companyType === "LIMITED_COMPANY"
+        ? (language === "sv" ? "Bokslut K2 och arsredovisning" : "K2 closing and annual report")
+        : (language === "sv" ? "Bokslut nu / K2 och arsredovisning senare" : "Closing now / K2 annual report later"),
+      status: annualCloseWarnings === 0 && annualCloseHasResultVoucher ? "good" : "warning",
+      statusLabel: annualCloseWarnings === 0 && annualCloseHasResultVoucher ? "OK" : (language === "sv" ? "Bokslut kvar" : "Closing left"),
+      amountLabel: `${annualCloseReadiness}%`,
+      detail: settings?.companyType === "LIMITED_COMPANY"
+        ? (language === "sv"
+          ? "AB-lage visar bokslut, resultatkonto 2099 och underlag som kan anvandas som start for K2/arsredovisning."
+          : "Limited-company mode shows closing, result account 2099 and basis for K2/annual report work.")
+        : (language === "sv"
+          ? "Enskild firma anvander bokslutsunderlag nu. K2/arsredovisning blir relevant nar du driver aktiebolag."
+          : "Sole trader uses closing basis now. K2/annual report becomes relevant when you run a limited company."),
+      recommendation: language === "sv"
+        ? "AliBooks skapar arbetsunderlag, inte komplett juridisk arsredovisning till Bolagsverket annu."
+        : "AliBooks creates working basis, not a complete legal annual report submission yet.",
+      action: () => setActiveView("reports")
+    },
+    {
+      key: "tax-vat-payment",
+      title: language === "sv" ? "Betalning av skatt och moms" : "Payment of tax and VAT",
+      status: taxAccountTotalToHandle === 0 && taxAccountStatementBalanceIsSet ? "good" : taxAccountStatementBalanceIsSet ? "warning" : "warning",
+      statusLabel: taxAccountTotalToHandle === 0 && taxAccountStatementBalanceIsSet ? "OK" : taxAccountStatementBalanceIsSet ? (language === "sv" ? "Planera betalning" : "Plan payment") : (language === "sv" ? "Stam av skattekonto" : "Reconcile tax account"),
+      amountLabel: `${taxAccountTotalToHandle} SEK`,
+      detail: language === "sv"
+        ? `${taxAccountVatToHandle} SEK moms och ${taxAccountPayrollToHandle} SEK loneskatt/avgifter att hantera mot skattekonto.`
+        : `${taxAccountVatToHandle} SEK VAT and ${taxAccountPayrollToHandle} SEK payroll tax/contributions to handle against tax account.`,
+      recommendation: language === "sv"
+        ? "Fyll saldo fran Skatteverket, jamfor 1630 och bokfor betalning/avrakning innan du markerar som klart."
+        : "Enter tax authority balance, compare 1630 and book payment/settlement before marking as done.",
+      action: () => setActiveView("taxCenter")
+    }
+  ];
   const declarationCenterCriticalCount = declarationCenterRows.filter((row) => row.status === "critical").length;
   const declarationCenterWarningCount = declarationCenterRows.filter((row) => row.status === "warning").length;
   const declarationCenterTodoCount = declarationCenterRows.filter((row) => row.status !== "good").length;
@@ -24752,6 +25571,7 @@ function App() {
   }
 
   function viewTitle() {
+    if (activeView === "todoList") return t.todoList;
     if (activeView === "dailyRoutine") return t.dailyRoutine;
     if (activeView === "monthlyRoutine") return t.monthlyRoutine;
     if (activeView === "annualRoutine") return t.annualRoutine;
@@ -24818,6 +25638,164 @@ function App() {
     return language === "sv" ? "Period" : "Period";
   }
 
+  const todoPaymentApprovalRows = [
+    ...cardPurchaseOpenRows.map((purchase) => ({
+      key: `card-purchase-${purchase.id}`,
+      status: "warning",
+      priorityLabel: "P2",
+      title: purchase.merchantName || (language === "sv" ? "Kortkop" : "Card purchase"),
+      detail: `${purchase.purchaseDate || "-"} - ${purchase.totalAmount || 0} SEK${purchase.reference ? ` - ${purchase.reference}` : ""}`,
+      actionLabel: language === "sv" ? "Attestera" : "Approve",
+      action: () => setActiveView("payments")
+    })),
+    ...paymentReconciliationBankReviewRows.map((row) => ({
+      key: `bank-review-${row.id}`,
+      status: "warning",
+      priorityLabel: "P2",
+      title: row.description || row.reference || (language === "sv" ? "Bankrad att granska" : "Bank row to review"),
+      detail: `${row.date || "-"} - ${row.amount || 0} SEK`,
+      actionLabel: language === "sv" ? "Granska bank" : "Review bank",
+      action: () => {
+        setActiveView("payments");
+        setBankImportFilter("review");
+      }
+    })),
+    ...payablesOverdueRows.map((row) => ({
+      key: `payable-overdue-${row.id}`,
+      status: "critical",
+      priorityLabel: "P1",
+      title: row.supplierName || (language === "sv" ? "Leverantorsfaktura" : "Supplier invoice"),
+      detail: `${row.dueDate || "-"} - ${row.remainingAmount || row.totalAmount || 0} SEK${row.reference ? ` - ${row.reference}` : ""}`,
+      actionLabel: language === "sv" ? "Betala/kontrollera" : "Pay/review",
+      action: () => setActiveView("payablesCenter")
+    }))
+  ].slice(0, 10);
+  const todoPayrollApprovalRows = payrollDrafts
+    .filter((draft) => draft.status !== "booked")
+    .map((draft) => {
+      const calculation = payrollDraftCalculation(draft);
+      return {
+        key: `payroll-approval-${draft.id}`,
+        status: "warning",
+        priorityLabel: "P2",
+        title: draft.employeeName || (language === "sv" ? "Loneutkast" : "Payroll draft"),
+        detail: `${formatMonthLabel(draft.period, language)} - ${calculation.netPay} SEK netto, ${calculation.withheldTax} SEK skatt`,
+        actionLabel: language === "sv" ? "Godkann lon" : "Approve payroll",
+        action: () => {
+          setPayrollReportMonth(draft.period || payrollReportMonth);
+          setActiveView("payroll");
+        }
+      };
+    })
+    .slice(0, 10);
+  const todoReceiptSubmissionRows = expensesMissingReceipt.map((expense) => ({
+    key: `receipt-submit-${expense.id}`,
+    status: "critical",
+    priorityLabel: "P1",
+    title: expense.description || expenseCategoryLabel(expense.category),
+    detail: `${expense.expenseDate || expense.date || "-"} - ${expense.totalAmount || 0} SEK`,
+    actionLabel: language === "sv" ? "Ladda upp kvitto" : "Upload receipt",
+    action: () => {
+      setActiveView("uploaded");
+      setExpenseFilter("missingReceipt");
+      setExpenseSearch(expense.description || "");
+    }
+  })).slice(0, 10);
+  const todoMissingEvidenceRows = verificationControlRows
+    .filter((row) => row.status !== "good" && row.area !== "expenses")
+    .map((row) => ({
+      key: `missing-evidence-${row.id}`,
+      status: row.status === "critical" ? "critical" : "warning",
+      priorityLabel: row.status === "critical" ? "P1" : "P2",
+      title: row.title || row.reference || row.areaLabel,
+      detail: `${row.areaLabel || ""}${row.amount ? ` - ${row.amount} SEK` : ""} - ${row.detail || row.statusLabel}`,
+      actionLabel: language === "sv" ? "Komplettera" : "Complete",
+      action: row.action || (() => setActiveView("verificationControl"))
+    }))
+    .slice(0, 10);
+  const todoAliBooksQuestionRows = [
+    ...accountantQuestionItems.map((item) => ({
+      key: `alibooks-question-${item.key}`,
+      status: "info",
+      priorityLabel: "P3",
+      title: item.title,
+      detail: item.detail,
+      actionLabel: language === "sv" ? "Oppna paket" : "Open package",
+      action: () => setActiveView("accountantHandoff")
+    })),
+    voucherReviewPendingCount > 0 && {
+      key: "alibooks-question-voucher-review",
+      status: "warning",
+      priorityLabel: "P2",
+      title: language === "sv" ? "Vilka verifikat ska godkannas innan periodlasning?" : "Which vouchers should be approved before period lock?",
+      detail: `${voucherReviewPendingCount} ${language === "sv" ? "verifikat vantar pa attest" : "vouchers await approval"}.`,
+      actionLabel: language === "sv" ? "Oppna internkontroll" : "Open internal control",
+      action: () => setActiveView("internalControl")
+    },
+    taxCenterWarningCount > 0 && {
+      key: "alibooks-question-tax",
+      status: "warning",
+      priorityLabel: "P2",
+      title: language === "sv" ? "Ar moms, skatt och reserv kontrollerade?" : "Are VAT, tax and reserve checked?",
+      detail: `${taxCenterWarningCount} ${language === "sv" ? "skattepunkter behover kontroll" : "tax items need review"}.`,
+      actionLabel: language === "sv" ? "Oppna skattecenter" : "Open tax center",
+      action: () => setActiveView("taxCenter")
+    }
+  ].filter(Boolean).slice(0, 10);
+  const todoListSections = [
+    {
+      key: "payments",
+      title: language === "sv" ? "Betalningar att attestera" : "Payments to approve",
+      count: todoPaymentApprovalRows.length,
+      status: todoPaymentApprovalRows.some((row) => row.status === "critical") ? "critical" : todoPaymentApprovalRows.length > 0 ? "warning" : "good",
+      emptyText: language === "sv" ? "Inga betalningar vantar pa attest." : "No payments are waiting for approval.",
+      rows: todoPaymentApprovalRows
+    },
+    {
+      key: "payroll",
+      title: language === "sv" ? "Loner att godkanna" : "Payroll to approve",
+      count: todoPayrollApprovalRows.length,
+      status: todoPayrollApprovalRows.length > 0 ? "warning" : "good",
+      emptyText: language === "sv" ? "Inga loneutkast vantar pa godkannande." : "No payroll drafts are waiting for approval.",
+      rows: todoPayrollApprovalRows
+    },
+    {
+      key: "receipts",
+      title: language === "sv" ? "Kvitton att skicka in" : "Receipts to submit",
+      count: todoReceiptSubmissionRows.length,
+      status: todoReceiptSubmissionRows.length > 0 ? "critical" : "good",
+      emptyText: language === "sv" ? "Alla registrerade kostnader har kvitto/faktura." : "All registered expenses have receipt/invoice evidence.",
+      rows: todoReceiptSubmissionRows
+    },
+    {
+      key: "missing-evidence",
+      title: language === "sv" ? "Saknade underlag att skicka in" : "Missing evidence to submit",
+      count: todoMissingEvidenceRows.length,
+      status: todoMissingEvidenceRows.some((row) => row.status === "critical") ? "critical" : todoMissingEvidenceRows.length > 0 ? "warning" : "good",
+      emptyText: language === "sv" ? "Inga andra underlag saknas just nu." : "No other evidence is missing right now.",
+      rows: todoMissingEvidenceRows
+    },
+    {
+      key: "questions",
+      title: language === "sv" ? "Fragor fran AliBooks" : "Questions from AliBooks",
+      count: todoAliBooksQuestionRows.length,
+      status: todoAliBooksQuestionRows.some((row) => row.status === "warning") ? "warning" : todoAliBooksQuestionRows.length > 0 ? "info" : "good",
+      emptyText: language === "sv" ? "Inga fragor att svara pa just nu." : "No questions to answer right now.",
+      rows: todoAliBooksQuestionRows
+    }
+  ];
+  const todoListTotalCount = todoListSections.reduce((sum, section) => sum + section.count, 0);
+  const todoListCriticalCount = todoListSections.reduce((sum, section) => sum + section.rows.filter((row) => row.status === "critical").length, 0);
+  const todoListWarningCount = todoListSections.reduce((sum, section) => sum + section.rows.filter((row) => row.status === "warning").length, 0);
+  const todoListStatusText = todoListCriticalCount > 0
+    ? (language === "sv" ? "Det finns akuta saker att gora" : "There are urgent items to handle")
+    : todoListWarningCount > 0
+      ? (language === "sv" ? "Det finns saker att kontrollera" : "There are items to review")
+      : todoListTotalCount > 0
+        ? (language === "sv" ? "Det finns informationspunkter att ga igenom" : "There are information items to review")
+        : (language === "sv" ? "Att gora-listan ar tom" : "The to-do list is empty");
+  const todoListScore = Math.max(0, Math.round(100 - (todoListCriticalCount * 16) - (todoListWarningCount * 7) - Math.max(0, todoListTotalCount - todoListCriticalCount - todoListWarningCount) * 2));
+
   const reactBitsMenuItems = [
     {
       text: language === "sv" ? "Fakturor" : "Invoices",
@@ -24860,6 +25838,7 @@ function App() {
         <button className="create-button" type="button">{t.createNew}</button>
         <nav className="nav">
           {navButton("overview", t.overview)}
+          {navButton("todoList", t.todoList)}
           {navButton("dailyRoutine", t.dailyRoutine)}
           {navButton("monthlyRoutine", t.monthlyRoutine)}
           {navButton("annualRoutine", t.annualRoutine)}
@@ -24930,66 +25909,79 @@ function App() {
                 <p className="signed-in">{t.signedIn} {currentEmail}</p>
                 <button type="button" className="secondary-button" onClick={handleLogout}>{t.logout}</button>
               </>
-            ) : (
-              <form ref={authFormRef} onSubmit={handleAuth} className="auth-form">
-                <label className="auth-language-label">
-                  {language === "sv" ? "Sprak" : "Language"}
-                  <select
-                    className="language-select"
-                    value={language}
-                    onChange={(event) => setLanguage(event.target.value)}
-                  >
-                    <option value="sv">Svenska</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
-                <div className="tabs">
-                  <button
-                    type="button"
-                    className={authMode === "login" ? "active" : ""}
-                    onClick={() => setAuthMode("login")}
-                  >
-                    {t.login}
-                  </button>
-                  <button
-                    type="button"
-                    className={authMode === "register" ? "active" : ""}
-                    onClick={() => setAuthMode("register")}
-                  >
-                    {t.register}
-                  </button>
+            ) : activeView === "overview" ? (
+              <div className={`auth-entry ${authPanelOpen ? "auth-entry-open" : ""}`}>
+                <div className="auth-compact-row">
+                  <label className="auth-language-label auth-language-compact">
+                    <span>{language === "sv" ? "Sprak" : "Language"}</span>
+                    <select
+                      className="language-select"
+                      value={language}
+                      onChange={(event) => setLanguage(event.target.value)}
+                    >
+                      <option value="sv">Svenska</option>
+                      <option value="en">English</option>
+                    </select>
+                  </label>
+                  <div className="auth-actions">
+                    <button
+                      type="button"
+                      className={authPanelOpen && authMode === "login" ? "active" : ""}
+                      onClick={() => focusAuthForm("login")}
+                    >
+                      {t.login}
+                    </button>
+                    <button
+                      type="button"
+                      className={authPanelOpen && authMode === "register" ? "active" : ""}
+                      onClick={() => focusAuthForm("register")}
+                    >
+                      {t.register}
+                    </button>
+                  </div>
                 </div>
 
-                <label>
-                  {t.email}
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </label>
+                {authPanelOpen && (
+                  <form ref={authFormRef} onSubmit={handleAuth} className="auth-form auth-form-inline">
+                    <div className="auth-form-heading">
+                      <strong>{authMode === "login" ? t.login : t.register}</strong>
+                      <button type="button" className="secondary-button compact-button" onClick={() => setAuthPanelOpen(false)}>
+                        {language === "sv" ? "Stang" : "Close"}
+                      </button>
+                    </div>
 
-                <label>
-                  {t.password}
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={language === "sv" ? "Minst 8 tecken" : "At least 8 characters"}
-                  />
-                </label>
-                {authMode === "register" && (
-                  <p className="form-help">
-                    {language === "sv" ? "Anvand minst 8 tecken." : "Use at least 8 characters."}
-                  </p>
+                    <label>
+                      {t.email}
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="you@example.com"
+                      />
+                    </label>
+
+                    <label>
+                      {t.password}
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder={language === "sv" ? "Minst 8 tecken" : "At least 8 characters"}
+                      />
+                    </label>
+                    {authMode === "register" && (
+                      <p className="form-help">
+                        {language === "sv" ? "Anvand minst 8 tecken." : "Use at least 8 characters."}
+                      </p>
+                    )}
+
+                    <button type="submit">
+                      {authMode === "login" ? t.login : t.register}
+                    </button>
+                  </form>
                 )}
-
-                <button type="submit">
-                  {authMode === "login" ? t.login : t.register}
-                </button>
-              </form>
-            )}
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -25456,6 +26448,108 @@ function App() {
             </div>
           )}
         </section>}
+
+        {token && activeView === "todoList" && (
+          <section className="orders-section daily-routine-section todo-list-section">
+            <div className="section-heading">
+              <div>
+                <h2>{t.todoList}</h2>
+                <p className="automation-note">
+                  {language === "sv"
+                    ? "En samlad arbetsko for det som maste hanteras innan bokforing, betalning, lon, momsrapport eller bokslut."
+                    : "A single work queue for items to handle before bookkeeping, payments, payroll, VAT filing or closing."}
+                </p>
+              </div>
+              <div className="button-row">
+                <span className={todoListCriticalCount === 0 ? "status success-status" : "status warning-status"}>
+                  {todoListScore}% {language === "sv" ? "klarhet" : "clearance"}
+                </span>
+                <button type="button" className="secondary-button" onClick={() => setActiveView("dailyRoutine")}>
+                  {language === "sv" ? "Daglig rutin" : "Daily routine"}
+                </button>
+              </div>
+            </div>
+
+            <div className="daily-routine-hero">
+              <article className={todoListCriticalCount > 0 ? "daily-routine-main-card critical" : todoListWarningCount > 0 ? "daily-routine-main-card warning" : "daily-routine-main-card good"}>
+                <span>{language === "sv" ? "I din Att gora-lista" : "In your to-do list"}</span>
+                <strong>{todoListStatusText}</strong>
+                <p>
+                  {language === "sv"
+                    ? `${todoListTotalCount} punkter ar aktiva. P1 betyder fixa forst, P2 betyder kontrollera innan du gar vidare.`
+                    : `${todoListTotalCount} items are active. P1 means handle first, P2 means review before continuing.`}
+                </p>
+              </article>
+              <article className="daily-routine-note-card">
+                <span>{language === "sv" ? "Professionellt arbetsflode" : "Professional workflow"}</span>
+                <strong>{language === "sv" ? "En ko, flera moduler" : "One queue, many modules"}</strong>
+                <p>
+                  {language === "sv"
+                    ? "Listan ar byggd fran riktiga data i AliBooks: bankimport, kortkop, loner, kvitton, verifikationskontroll och redovisningsfragor."
+                    : "The list is built from real AliBooks data: bank import, card purchases, payroll, receipts, voucher evidence and accounting questions."}
+                </p>
+              </article>
+            </div>
+
+            <div className="daily-routine-kpi-grid">
+              <article className={todoPaymentApprovalRows.length === 0 ? "balanced-summary" : "warning-summary"}>
+                <span>{language === "sv" ? "Betalningar" : "Payments"}</span>
+                <strong>{todoPaymentApprovalRows.length}</strong>
+              </article>
+              <article className={todoPayrollApprovalRows.length === 0 ? "balanced-summary" : "warning-summary"}>
+                <span>{language === "sv" ? "Loner" : "Payroll"}</span>
+                <strong>{todoPayrollApprovalRows.length}</strong>
+              </article>
+              <article className={todoReceiptSubmissionRows.length === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Kvitton" : "Receipts"}</span>
+                <strong>{todoReceiptSubmissionRows.length}</strong>
+              </article>
+              <article className={todoMissingEvidenceRows.length === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                <span>{language === "sv" ? "Underlag" : "Evidence"}</span>
+                <strong>{todoMissingEvidenceRows.length}</strong>
+              </article>
+              <article className={todoAliBooksQuestionRows.length === 0 ? "balanced-summary" : "warning-summary"}>
+                <span>{language === "sv" ? "Fragor" : "Questions"}</span>
+                <strong>{todoAliBooksQuestionRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Totalt" : "Total"}</span>
+                <strong>{todoListTotalCount}</strong>
+              </article>
+            </div>
+
+            <div className="todo-list-grid">
+              {todoListSections.map((section) => (
+                <article className={`todo-list-card ${section.status}`} key={section.key}>
+                  <div className="todo-list-card-header">
+                    <div>
+                      <span>{section.status === "critical" ? "P1" : section.status === "warning" ? "P2" : section.status === "info" ? "P3" : "OK"}</span>
+                      <h3>{section.title}</h3>
+                    </div>
+                    <strong>{section.count}</strong>
+                  </div>
+
+                  {section.rows.length === 0 ? (
+                    <p className="empty-state">{section.emptyText}</p>
+                  ) : (
+                    <div className="daily-routine-list">
+                      {section.rows.map((row) => (
+                        <button type="button" className={`daily-routine-row ${row.status}`} key={row.key} onClick={row.action}>
+                          <span className="daily-routine-priority">{row.priorityLabel}</span>
+                          <span className="daily-routine-main">
+                            <strong>{row.title}</strong>
+                            <small>{row.detail}</small>
+                          </span>
+                          <span className="daily-routine-status">{row.actionLabel}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {token && activeView === "dailyRoutine" && (
           <section className="orders-section daily-routine-section">
@@ -26050,6 +27144,34 @@ function App() {
                 <span>{language === "sv" ? "Spara till" : "Keep until"}</span>
                 <strong>{legalArchiveRetentionUntil}</strong>
               </article>
+            </div>
+
+            <div className="declaration-package-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "Deklarationspaket" : "Filing package"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Samlar de stora skatte- och bokslutsdelarna: moms, inkomstdeklaration, arbetsgivardeklaration, K2/arsredovisning och betalning till skattekonto."
+                      : "Gathers the major tax and closing parts: VAT, income tax, employer declaration, K2/annual report and tax account payment."}
+                  </p>
+                </div>
+                <button type="button" className="secondary-button" onClick={downloadDeclarationCenterCsv}>
+                  {t.exportCsv}
+                </button>
+              </div>
+
+              <div className="declaration-package-grid">
+                {declarationFilingPackageRows.map((row) => (
+                  <button type="button" className={`declaration-package-card ${row.status}`} key={row.key} onClick={row.action}>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <em>{row.amountLabel}</em>
+                    <small>{row.detail}</small>
+                    <p>{row.recommendation}</p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="declaration-center-layout">
@@ -29251,6 +30373,48 @@ function App() {
                     <option value="4010">4010 Inkop</option>
                   </select>
                 </label>
+                <label className="supplier-wide-field checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={supplierInvoiceSelfBilling}
+                    onChange={(event) => setSupplierInvoiceSelfBilling(event.target.checked)}
+                  />
+                  {language === "sv" ? "Detta ar en sjalvfaktura" : "This is a self-billing invoice"}
+                </label>
+                {supplierInvoiceSelfBilling && (
+                  <div className="supplier-self-billing-panel">
+                    <strong>{language === "sv" ? "Sjalvfakturering" : "Self-billing"}</strong>
+                    <p className="muted-line">
+                      {language === "sv"
+                        ? "Anvand bara nar det finns ett avtal/godkannande att koparen far skapa fakturan at leverantoren."
+                        : "Use only when there is an agreement/approval that the buyer may issue the invoice for the supplier."}
+                    </p>
+                    <label>
+                      {language === "sv" ? "Kopare" : "Buyer"}
+                      <input
+                        value={supplierInvoiceBuyerName}
+                        onChange={(event) => setSupplierInvoiceBuyerName(event.target.value)}
+                        placeholder={language === "sv" ? "Koparens foretag/namn" : "Buyer's company/name"}
+                      />
+                    </label>
+                    <label>
+                      {language === "sv" ? "Koparreferens" : "Buyer reference"}
+                      <input
+                        value={supplierInvoiceBuyerReference}
+                        onChange={(event) => setSupplierInvoiceBuyerReference(event.target.value)}
+                        placeholder={language === "sv" ? "Order, utbetalning eller referens" : "Order, payout or reference"}
+                      />
+                    </label>
+                    <label>
+                      {language === "sv" ? "Avtal/godkannande" : "Agreement/approval"}
+                      <input
+                        value={supplierInvoiceApprovalReference}
+                        onChange={(event) => setSupplierInvoiceApprovalReference(event.target.value)}
+                        placeholder={language === "sv" ? "Avtal-2026-01 eller godkannande" : "Agreement-2026-01 or approval"}
+                      />
+                    </label>
+                  </div>
+                )}
                 {selectedSupplier?.paymentInfo && (
                   <p className="supplier-payment-hint">
                     {language === "sv" ? "Betalinfo" : "Payment info"}: {selectedSupplier.paymentInfo}
@@ -29273,6 +30437,11 @@ function App() {
                   <article className={`supplier-invoice-card ${isOverdue ? "overdue" : invoice.status}`} key={invoice.id}>
                     <div>
                       <span className="supplier-status">{supplierInvoiceStatusLabel(invoice.status)}</span>
+                      {invoice.selfBilling && (
+                        <span className="supplier-status self-billing-status">
+                          {language === "sv" ? "Sjalvfaktura" : "Self-billing"}
+                        </span>
+                      )}
                       <h3>{invoice.supplierName}</h3>
                       <p>{invoice.description}</p>
                       <small>
@@ -29281,6 +30450,13 @@ function App() {
                         {t.dueDate}: {formatDateOnly(invoice.dueDate)}
                       </small>
                       <small>{language === "sv" ? "Referens" : "Reference"}: {invoice.reference || "-"}</small>
+                      {invoice.selfBilling && (
+                        <small>
+                          {language === "sv" ? "Kopare" : "Buyer"}: {invoice.buyerName || "-"}
+                          {invoice.buyerReference ? ` | ${language === "sv" ? "Koparreferens" : "Buyer reference"}: ${invoice.buyerReference}` : ""}
+                          {invoice.approvalReference ? ` | ${language === "sv" ? "Godkannande" : "Approval"}: ${invoice.approvalReference}` : ""}
+                        </small>
+                      )}
                     </div>
                     <div className="supplier-amount-box">
                       <span>{expenseCategoryLabel(invoice.category)}</span>
@@ -30590,6 +31766,38 @@ function App() {
               </article>
             </div>
 
+            <div className="security-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Nasta saker att fixa" : "Next things to fix"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "AliBooks prioriterar de kvarvarande sakerhets- och driftpunkterna sa du vet vad vi ska ta forst."
+                      : "AliBooks prioritizes the remaining security and operations items so you know what to address first."}
+                  </p>
+                </div>
+                <span className={securityPrivacyNextActions.length === 0 ? "status success-status" : "status warning-status"}>
+                  {securityPrivacyNextActions.length === 0 ? "OK" : `${securityPrivacyNextActions.length} ${language === "sv" ? "kvar" : "left"}`}
+                </span>
+              </div>
+              <div className="security-export-list">
+                {securityPrivacyNextActions.length === 0 ? (
+                  <article>
+                    <strong>{language === "sv" ? "Alla sakerhetskontroller ar grona" : "All security controls are green"}</strong>
+                    <span>{language === "sv" ? "Gor en sista backup och go-live-kontroll innan produktionssattning." : "Run one final backup and go-live check before production release."}</span>
+                  </article>
+                ) : (
+                  securityPrivacyNextActions.map((row, index) => (
+                    <article key={`security-next-${row.key}`}>
+                      <strong>{index + 1}. {row.title}</strong>
+                      <span>{row.detail}</span>
+                      <small>{row.recommendation}</small>
+                    </article>
+                  ))
+                )}
+              </div>
+            </div>
+
             <div className="security-control-grid">
               {securityPrivacyControlRows.map((row) => (
                 <article className={`security-control-card ${row.status}`} key={row.key}>
@@ -31524,6 +32732,84 @@ function App() {
               </article>
             </div>
 
+            <div className="go-live-production-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Anvandningsniva" : "Usage level"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Har skiljer AliBooks pa lokal MVP-anvandning och riktig produktion med kunder, e-post, betalning, backup och publik miljo."
+                      : "This separates local MVP use from real production with customers, email, payments, backup and public environment."}
+                  </p>
+                </div>
+                <span className={goLiveProductionBlockingRows.length === 0 && goLiveCriticalCount === 0 ? "status success-status" : "status warning-status"}>
+                  {goLiveProductionScore}% {language === "sv" ? "produktionskontroll" : "production check"}
+                </span>
+              </div>
+              <article className={goLiveCriticalCount > 0 ? "go-live-main-card critical" : goLiveProductionBlockingRows.length > 0 ? "go-live-main-card warning" : "go-live-main-card good"}>
+                <span>{language === "sv" ? "Arlig MVP-status" : "Honest MVP status"}</span>
+                <strong>{goLiveUsageLevelText}</strong>
+                <p>
+                  {language === "sv"
+                    ? `${goLiveProductionBlockingRows.length} produktionspunkter aterstar. Du kan jobba lokalt nar kritiska punkter ar noll, men skarp drift kraver att dessa ar kontrollerade.`
+                    : `${goLiveProductionBlockingRows.length} production items remain. You can work locally when critical items are zero, but production use requires these checks.`}
+                </p>
+              </article>
+              <div className="go-live-production-grid">
+                {goLiveProductionRows.map((row) => (
+                  <button type="button" className={`go-live-production-card ${row.status}`} key={row.key} onClick={row.action}>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <em>{row.score}%</em>
+                    <p>{row.detail}</p>
+                    <small>{row.recommendation}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="go-live-manual-proof-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "Manuella MVP-bevis" : "Manual MVP evidence"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Det har ar sista klicktestet som automatiska tester inte kan bevisa: PDF, e-post, Stripe/bank, underlag, backup och publik demo."
+                      : "This is the final click test that automated checks cannot prove: PDF, email, Stripe/bank, evidence, backup and public demo."}
+                  </p>
+                </div>
+                <span className={mvpManualFailCount > 0 ? "status warning-status" : mvpManualUntestedCount > 0 ? "status neutral-status" : "status success-status"}>
+                  {mvpManualOkCount}/{mvpManualChecklistRows.length} {language === "sv" ? "OK" : "OK"}
+                </span>
+              </div>
+              <div className="go-live-manual-proof-summary">
+                <article className={mvpManualFailCount === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                  <span>{language === "sv" ? "Fel" : "Failed"}</span>
+                  <strong>{mvpManualFailCount}</strong>
+                </article>
+                <article className={mvpManualUntestedCount === 0 ? "balanced-summary" : "warning-summary"}>
+                  <span>{language === "sv" ? "Ej testat" : "Untested"}</span>
+                  <strong>{mvpManualUntestedCount}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Manuell score" : "Manual score"}</span>
+                  <strong>{mvpManualScore}%</strong>
+                </article>
+              </div>
+              <div className="go-live-manual-proof-list">
+                {mvpManualChecklistRows.slice(0, 6).map((row) => (
+                  <button type="button" className={`go-live-manual-proof-row ${row.status}`} key={`go-live-manual-${row.key}`} onClick={row.action}>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <small>{row.note || row.detail}</small>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setActiveView("testFlow")}>
+                {language === "sv" ? "Oppna hela Testflode" : "Open full Test flow"}
+              </button>
+            </div>
+
             <div className="go-live-control-grid">
               {goLiveRows.map((row) => (
                 <article className={`go-live-control-card ${row.status}`} key={row.key}>
@@ -31648,6 +32934,81 @@ function App() {
                   <small>{row.actionLabel}</small>
                 </button>
               ))}
+            </div>
+
+            <div className="mvp-manual-proof-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "Manuella MVP-bevis" : "Manual MVP evidence"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Markera de saker som automatiska kontroller inte kan bevisa: PDF-utseende, e-post, Stripe-test, kvitton, publik demo och restore drill."
+                      : "Mark the items automated checks cannot prove: PDF appearance, email, Stripe test, receipts, public demo and restore drill."}
+                  </p>
+                </div>
+                <div className="button-row">
+                  <span className={mvpManualFailCount > 0 ? "status warning-status" : mvpManualUntestedCount > 0 ? "status neutral-status" : "status success-status"}>
+                    {mvpManualScore}% {language === "sv" ? "manuellt" : "manual"}
+                  </span>
+                  <button type="button" className="secondary-button" onClick={() => setMvpManualChecks({})}>
+                    {language === "sv" ? "Nollstall" : "Reset"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mvp-manual-proof-grid">
+                {mvpManualChecklistRows.map((row) => (
+                  <article className={`mvp-manual-proof-card ${row.status}`} key={row.key}>
+                    <button type="button" className="mvp-manual-title-button" onClick={row.action}>
+                      <span>{row.statusLabel}</span>
+                      <strong>{row.title}</strong>
+                      <small>{row.detail}</small>
+                    </button>
+                    <div className="mvp-manual-status-controls" aria-label={row.title}>
+                      {["ok", "fail", "untested"].map((status) => (
+                        <button
+                          type="button"
+                          key={`${row.key}-${status}`}
+                          className={row.status === status ? "active" : ""}
+                          onClick={() => setMvpManualChecks((current) => ({
+                            ...current,
+                            [row.key]: {
+                              ...(current[row.key] || {}),
+                              status,
+                              checkedAt: status === "untested" ? "" : new Date().toISOString()
+                            }
+                          }))}
+                        >
+                          {status === "ok"
+                            ? "OK"
+                            : status === "fail"
+                              ? (language === "sv" ? "Fel" : "Fail")
+                              : (language === "sv" ? "Ej testat" : "Untested")}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={row.note}
+                      onChange={(event) => setMvpManualChecks((current) => ({
+                        ...current,
+                        [row.key]: {
+                          ...(current[row.key] || {}),
+                          status: row.status,
+                          checkedAt: row.checkedAt,
+                          note: event.target.value
+                        }
+                      }))}
+                      placeholder={language === "sv" ? "Kort anteckning, t.ex. vad som ska fixas" : "Short note, for example what needs fixing"}
+                    />
+                    <small>
+                      {row.checkedAt
+                        ? `${language === "sv" ? "Senast andrad" : "Last changed"}: ${formatDateTime(row.checkedAt)}`
+                        : (language === "sv" ? "Inte markerad annu" : "Not marked yet")}
+                    </small>
+                  </article>
+                ))}
+              </div>
             </div>
 
             <div className="test-flow-layout">
@@ -34107,6 +35468,155 @@ function App() {
             )}
           </div>
 
+          <div className="bank-import-panel card-purchase-panel">
+            <div className="section-heading compact-heading">
+              <div>
+                <h3>{language === "sv" ? "Kortkop och Wintkort-liknande notiser" : "Card purchases and Wint-card style notifications"}</h3>
+                <p>
+                  {language === "sv"
+                    ? "Registrera kortkop manuellt nu. Senare kan samma ko fyllas automatiskt av Wint, bank eller kort-webhook. Bokforing: kostnad debet, 2641 debet och 2890 kredit."
+                    : "Register card purchases manually for now. Later, the same queue can be filled automatically by Wint, bank or card webhooks. Booking: expense debit, 2641 debit and 2890 credit."}
+                </p>
+              </div>
+              <button type="button" className="secondary-button" onClick={loadCardPurchases}>
+                {t.refresh}
+              </button>
+            </div>
+
+            <div className="expense-summary-grid bank-import-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Att granska" : "To review"}</span>
+                <strong>{cardPurchaseOpenRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Obokfort kortbelopp" : "Unbooked card amount"}</span>
+                <strong>{cardPurchaseOpenTotal} SEK</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Bokforda kortkop" : "Booked card purchases"}</span>
+                <strong>{cardPurchaseBookedRows.length}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Saldo 2890" : "Account 2890 balance"}</span>
+                <strong>{cardClearingBalance} SEK</strong>
+              </article>
+            </div>
+
+            <form className="bank-rule-form" onSubmit={handleCreateCardPurchase}>
+              <label>
+                {language === "sv" ? "Kopdatum" : "Purchase date"}
+                <input
+                  type="date"
+                  value={cardPurchaseDate}
+                  onChange={(event) => setCardPurchaseDate(event.target.value)}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Butik/leverantor" : "Merchant/supplier"}
+                <input
+                  value={cardPurchaseMerchantName}
+                  onChange={(event) => setCardPurchaseMerchantName(event.target.value)}
+                  placeholder={language === "sv" ? "Ex. Adobe, SJ, hotell" : "E.g. Adobe, train, hotel"}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Kortinnehavare" : "Card holder"}
+                <input
+                  value={cardPurchaseCardHolder}
+                  onChange={(event) => setCardPurchaseCardHolder(event.target.value)}
+                  placeholder="Ali"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Kort sista 4" : "Card last 4"}
+                <input
+                  value={cardPurchaseLast4}
+                  onChange={(event) => setCardPurchaseLast4(event.target.value)}
+                  placeholder="1234"
+                  inputMode="numeric"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Totalt inkl. moms" : "Total incl. VAT"}
+                <input
+                  type="number"
+                  min="1"
+                  value={cardPurchaseTotalAmount}
+                  onChange={(event) => setCardPurchaseTotalAmount(event.target.value)}
+                  placeholder="125"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Moms" : "VAT"}
+                <input
+                  type="number"
+                  min="0"
+                  value={cardPurchaseVatAmount}
+                  onChange={(event) => setCardPurchaseVatAmount(event.target.value)}
+                  placeholder="25"
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Konto" : "Account"}
+                <select value={cardPurchaseCategory} onChange={(event) => setCardPurchaseCategory(event.target.value)}>
+                  <option value="5420">5420 Programvaror</option>
+                  <option value="5410">5410 Forbrukningsinventarier</option>
+                  <option value="5800">5800 Resekostnader</option>
+                  <option value="6570">6570 Bankkostnader</option>
+                  <option value="4010">4010 Inkop</option>
+                </select>
+              </label>
+              <label>
+                {language === "sv" ? "Referens" : "Reference"}
+                <input
+                  value={cardPurchaseReference}
+                  onChange={(event) => setCardPurchaseReference(event.target.value)}
+                  placeholder={language === "sv" ? "Kortnotis, kvitto-ID, transaktions-ID" : "Card notification, receipt ID, transaction ID"}
+                />
+              </label>
+              <button type="submit" className="primary-small-button">
+                {language === "sv" ? "Spara kortkop" : "Save card purchase"}
+              </button>
+            </form>
+
+            {cardPurchaseMessage && <strong className="status">{cardPurchaseMessage}</strong>}
+            {cardPurchases.length === 0 ? (
+              <p className="empty-state">
+                {language === "sv"
+                  ? "Inga kortkop registrerade annu."
+                  : "No card purchases registered yet."}
+              </p>
+            ) : (
+              <div className="bank-rule-list card-purchase-list">
+                {cardPurchases.slice(0, 8).map((purchase) => (
+                  <article className={purchase.status === "booked" ? "bank-rule-card booked" : "bank-rule-card"} key={purchase.id}>
+                    <div>
+                      <strong>{purchase.merchantName}</strong>
+                      <span>{purchase.purchaseDate || "-"} · {expenseCategoryLabel(purchase.category)}</span>
+                    </div>
+                    <div>
+                      <span>{language === "sv" ? "Kort" : "Card"}: {purchase.cardLast4 ? `**** ${purchase.cardLast4}` : "-"}</span>
+                      <span>{language === "sv" ? "Moms" : "VAT"}: {purchase.vatAmount || 0} SEK</span>
+                      <strong>{purchase.totalAmount || 0} SEK</strong>
+                    </div>
+                    <div className="button-row">
+                      <span className={purchase.status === "booked" ? "status" : "warning-text"}>
+                        {purchase.status === "booked"
+                          ? (language === "sv" ? `Bokford som kostnad #${purchase.bookedExpenseId || "-"}` : `Booked as expense #${purchase.bookedExpenseId || "-"}`)
+                          : (language === "sv" ? "Att granska" : "To review")}
+                      </span>
+                      {purchase.status !== "booked" && (
+                        <button type="button" className="primary-small-button" onClick={() => bookCardPurchase(purchase)}>
+                          {language === "sv" ? "Bokfor som kostnad" : "Book as expense"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="bank-import-panel">
             <div>
               <h3>{language === "sv" ? "Bankimport CSV" : "Bank import CSV"}</h3>
@@ -34898,6 +36408,15 @@ function App() {
             </label>
 
             <label>
+              {language === "sv" ? "Betalat fran" : "Paid from"}
+              <select value={expensePaidFrom} onChange={(event) => setExpensePaidFrom(event.target.value)}>
+                <option value="1930">{paymentSourceLabel("1930", language)}</option>
+                <option value="2018">{paymentSourceLabel("2018", language)}</option>
+                <option value="2890">{paymentSourceLabel("2890", language)}</option>
+              </select>
+            </label>
+
+            <label>
               {t.receipt}
               <input
                 type="file"
@@ -34919,6 +36438,7 @@ function App() {
                     <h3>{expense.description}</h3>
                     <p>{expense.expenseDate}</p>
                     <p>{t.category}: {expenseCategoryLabel(expense.category)}</p>
+                    <p>{language === "sv" ? "Betalat fran" : "Paid from"}: {paymentSourceLabel(expense.paidFrom, language)}</p>
                     <span className={`due-status ${expenseHasReceipt(expense) ? "due-status-ok" : "due-status-soon"}`}>
                       {expenseHasReceipt(expense)
                         ? (language === "sv" ? "Kvitto sparat" : "Receipt saved")
@@ -36766,6 +38286,182 @@ function App() {
               <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
               <strong>{expensesMissingReceipt.length}</strong>
             </article>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Forsaljningsrapport" : "Sales report"}</h2>
+            <div className="button-row">
+              <span className={salesReportOutstanding > 0 ? "status warning-status" : "status success-status"}>
+                {salesReportInvoiceCount} {language === "sv" ? "fakturor" : "invoices"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadSalesReportCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="expense-summary-grid sales-report-summary-grid">
+            <article>
+              <span>{language === "sv" ? "Nettoforsaljning" : "Net sales"}</span>
+              <strong>{salesReportNet} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Utgaende moms" : "Output VAT"}</span>
+              <strong>{salesReportVat} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Totalt fakturerat" : "Total invoiced"}</span>
+              <strong>{salesReportTotal} SEK</strong>
+            </article>
+            <article>
+              <span>{language === "sv" ? "Betalt" : "Paid"}</span>
+              <strong>{salesReportPaid} SEK</strong>
+            </article>
+            <article className={salesReportOutstanding > 0 ? "warning-summary" : "balanced-summary"}>
+              <span>{language === "sv" ? "Kvar att betala" : "Outstanding"}</span>
+              <strong>{salesReportOutstanding} SEK</strong>
+            </article>
+          </div>
+
+          <div className="sales-report-grid">
+            <article className="report-card sales-report-card">
+              <h3>{language === "sv" ? "Per tjanst" : "By service"}</h3>
+              {salesReportByService.length === 0 ? (
+                <p className="muted-line">{language === "sv" ? "Ingen forsäljning i filtret." : "No sales in this filter."}</p>
+              ) : salesReportByService.slice(0, 8).map((row) => (
+                <button type="button" className="sales-report-row" key={row.label} onClick={() => {
+                  setInvoiceSearch(row.label);
+                  setActiveView("invoices");
+                }}>
+                  <span>
+                    <strong>{row.label}</strong>
+                    <small>{row.count} {language === "sv" ? "fakturor" : "invoices"}</small>
+                  </span>
+                  <span>{row.net} SEK</span>
+                  <strong>{row.total} SEK</strong>
+                </button>
+              ))}
+            </article>
+
+            <article className="report-card sales-report-card">
+              <h3>{language === "sv" ? "Per kund" : "By customer"}</h3>
+              {salesReportByCustomer.length === 0 ? (
+                <p className="muted-line">{language === "sv" ? "Ingen kundforsaljning i filtret." : "No customer sales in this filter."}</p>
+              ) : salesReportByCustomer.slice(0, 8).map((row) => (
+                <button type="button" className="sales-report-row" key={row.label} onClick={() => {
+                  setInvoiceSearch(row.label);
+                  setActiveView("invoices");
+                }}>
+                  <span>
+                    <strong>{row.label}</strong>
+                    <small>{row.count} {language === "sv" ? "fakturor" : "invoices"}</small>
+                  </span>
+                  <span>{row.outstanding} SEK {language === "sv" ? "obetalt" : "open"}</span>
+                  <strong>{row.total} SEK</strong>
+                </button>
+              ))}
+            </article>
+
+            <article className="report-card sales-report-card">
+              <h3>{language === "sv" ? "Per manad" : "By month"}</h3>
+              {salesReportByMonth.length === 0 ? (
+                <p className="muted-line">{language === "sv" ? "Ingen manadsdata i filtret." : "No monthly data in this filter."}</p>
+              ) : salesReportByMonth.slice(0, 8).map((row) => (
+                <button type="button" className="sales-report-row" key={row.label} onClick={() => {
+                  setInvoiceDateFrom(`${row.label}-01`);
+                  setInvoiceDateTo(lastDayOfMonth(row.label));
+                  setActiveView("invoices");
+                }}>
+                  <span>
+                    <strong>{row.label}</strong>
+                    <small>{row.count} {language === "sv" ? "fakturor" : "invoices"}</small>
+                  </span>
+                  <span>{row.vat} SEK moms</span>
+                  <strong>{row.total} SEK</strong>
+                </button>
+              ))}
+            </article>
+          </div>
+
+          <div className="section-heading report-subheading">
+            <h2>{language === "sv" ? "Sokbara kvitton och fakturor" : "Searchable receipts and invoices"}</h2>
+            <div className="button-row">
+              <span className={documentRegisterMissingEvidenceCount > 0 ? "status warning-status" : "status success-status"}>
+                {filteredDocumentRegisterRows.length} {language === "sv" ? "traffar" : "matches"}
+              </span>
+              <button type="button" className="secondary-button" onClick={downloadDocumentRegisterCsv}>
+                {t.exportCsv}
+              </button>
+            </div>
+          </div>
+
+          <div className="document-register-panel">
+            <div className="document-register-controls">
+              <label>
+                {language === "sv" ? "Sok dokument" : "Search documents"}
+                <input
+                  value={reportDocumentSearch}
+                  onChange={(event) => setReportDocumentSearch(event.target.value)}
+                  placeholder={language === "sv" ? "Fakturanr, kund, OCR, filnamn, belopp..." : "Invoice no, customer, OCR, file name, amount..."}
+                />
+              </label>
+              <label>
+                {language === "sv" ? "Typ" : "Type"}
+                <select value={reportDocumentType} onChange={(event) => setReportDocumentType(event.target.value)}>
+                  <option value="all">{language === "sv" ? "Alla dokument" : "All documents"}</option>
+                  <option value="invoice">{language === "sv" ? "Kundfakturor" : "Customer invoices"}</option>
+                  <option value="receipt">{language === "sv" ? "Kvitton/underlag" : "Receipts/evidence"}</option>
+                  <option value="supplierInvoice">{language === "sv" ? "Leverantorsfakturor" : "Supplier invoices"}</option>
+                </select>
+              </label>
+              <button type="button" className="secondary-button" onClick={() => {
+                setReportDocumentSearch("");
+                setReportDocumentType("all");
+              }}>
+                {language === "sv" ? "Rensa filter" : "Clear filters"}
+              </button>
+            </div>
+
+            <div className="expense-summary-grid document-register-summary-grid">
+              <article>
+                <span>{language === "sv" ? "Kundfakturor" : "Customer invoices"}</span>
+                <strong>{documentRegisterInvoiceCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Kvitton" : "Receipts"}</span>
+                <strong>{documentRegisterReceiptCount}</strong>
+              </article>
+              <article>
+                <span>{language === "sv" ? "Leverantorsfakturor" : "Supplier invoices"}</span>
+                <strong>{documentRegisterSupplierInvoiceCount}</strong>
+              </article>
+              <article className={documentRegisterMissingEvidenceCount > 0 ? "warning-summary" : "balanced-summary"}>
+                <span>{language === "sv" ? "Saknar underlag" : "Missing evidence"}</span>
+                <strong>{documentRegisterMissingEvidenceCount}</strong>
+              </article>
+            </div>
+
+            {filteredDocumentRegisterRows.length === 0 ? (
+              <p className="empty-state">{language === "sv" ? "Inga dokument matchar sokningen." : "No documents match this search."}</p>
+            ) : (
+              <div className="document-register-list">
+                {filteredDocumentRegisterRows.slice(0, 120).map((row) => (
+                  <button type="button" className={`document-register-row ${row.type}`} key={row.id} onClick={row.action}>
+                    <span>
+                      <strong>{formatDateOnly(row.date) || "-"}</strong>
+                      <small>{row.typeLabel}</small>
+                    </span>
+                    <span>
+                      <strong>{row.reference || "-"}</strong>
+                      <small>{row.name || "-"}</small>
+                    </span>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.amount} SEK</strong>
+                    <small>{row.actionLabel}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="section-heading report-subheading">

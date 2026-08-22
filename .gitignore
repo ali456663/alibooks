@@ -15,6 +15,16 @@ backups/
 
 *.log
 *.dump
+*.backup
+*.bak
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.xls
+*.xlsx
+*.ofx
+*.qif
 .env
 .env.*
 !.env.example

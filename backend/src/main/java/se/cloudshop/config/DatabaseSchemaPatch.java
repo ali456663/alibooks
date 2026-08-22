@@ -1,5 +1,8 @@
 package se.cloudshop.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -7,14 +10,25 @@ import org.springframework.stereotype.Component;
 @Component
 public class DatabaseSchemaPatch implements CommandLineRunner {
 
-  private final JdbcTemplate jdbcTemplate;
+  private static final Logger log = LoggerFactory.getLogger(DatabaseSchemaPatch.class);
 
-  public DatabaseSchemaPatch(JdbcTemplate jdbcTemplate) {
+  private final JdbcTemplate jdbcTemplate;
+  private final boolean schemaPatchEnabled;
+
+  public DatabaseSchemaPatch(
+      JdbcTemplate jdbcTemplate,
+      @Value("${app.schema-patch.enabled:true}") boolean schemaPatchEnabled) {
     this.jdbcTemplate = jdbcTemplate;
+    this.schemaPatchEnabled = schemaPatchEnabled;
   }
 
   @Override
   public void run(String... args) {
+    if (!schemaPatchEnabled) {
+      log.info("Database schema patch is disabled by app.schema-patch.enabled=false.");
+      return;
+    }
+
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS active boolean DEFAULT true");
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_label varchar(255)");
@@ -135,6 +149,22 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_sha256 varchar(64)");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_uploaded_at timestamp");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS card_purchases (id bigserial PRIMARY KEY)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS purchase_date date");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS merchant_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS card_holder varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS card_last4 varchar(16)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS category varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS clearing_account varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'review'");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS booked_expense_id bigint");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS updated_at timestamp");
+    jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS card_purchases_purchase_date_idx ON card_purchases(purchase_date)");
     jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS suppliers (id bigserial PRIMARY KEY)");
     jdbcTemplate.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS name varchar(255)");
     jdbcTemplate.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS email varchar(255)");
@@ -163,6 +193,10 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_history text");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancelled_at date");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancellation_voucher_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS self_billing boolean DEFAULT false");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_reference varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS approval_reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS created_at timestamp");
     jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS supplier_invoices_supplier_id_idx ON supplier_invoices(supplier_id)");
     jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS supplier_invoices_due_date_idx ON supplier_invoices(due_date)");
@@ -253,6 +287,10 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("UPDATE supplier_invoices SET paid_amount = total_amount WHERE (status = 'paid' OR paid_at IS NOT NULL) AND paid_amount = 0");
     jdbcTemplate.execute("UPDATE supplier_invoices SET payment_reference = '' WHERE payment_reference IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET payment_history = '' WHERE payment_history IS NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET self_billing = false WHERE self_billing IS NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET buyer_name = '' WHERE buyer_name IS NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET buyer_reference = '' WHERE buyer_reference IS NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET approval_reference = '' WHERE approval_reference IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET status = 'cancelled' WHERE cancellation_voucher_number IS NOT NULL AND cancellation_voucher_number <> ''");
     jdbcTemplate.execute("UPDATE recurring_contracts SET quantity = 1 WHERE quantity IS NULL OR quantity = 0");
     jdbcTemplate.execute("UPDATE recurring_contracts SET contract_interval = 'monthly' WHERE contract_interval IS NULL OR contract_interval = ''");

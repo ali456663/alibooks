@@ -26,12 +26,16 @@ const frontendSteps = [
   ["check:docs", "Check docs consistency"],
   ["check:evidence", "Check MVP release evidence"],
   ["check:schema", "Check database schema policy"],
+  ["check:migrations", "Check controlled schema migration"],
+  ["check:schema-bootstrap", "Check full schema bootstrap runbook"],
   ["check:secrets", "Check committed secrets"],
   ["check:dependencies", "Check dependency risk"],
   ["check:data-safety", "Check destructive data safety"],
   ["check:docker", "Check Docker config"],
   ["check:prod", "Check production readiness"],
   ["check:go-live-risks", "Check go-live risk register"],
+  ["check:finance-ui", "Check professional finance UI theme"],
+  ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],
   ["smoke:runtime", "Smoke test frontend render"]
 ];

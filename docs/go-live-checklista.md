@@ -14,9 +14,12 @@ Kontrollera lokalt:
 
 ```text
 Frontend bygger med npm run build
-Releasegrind gar igenom med npm run check:release -- --with-backend
+Releasegrind gar igenom med npm run check:release:full
 Produktionskontroll gar igenom med npm run check:prod
 Dependency-kontroll gar igenom med npm run check:dependencies
+Release-sparbarhet gar igenom med npm run check:release-traceability
+Schema-migration gar igenom med npm run check:migrations
+Schema-bootstrap gar igenom med npm run check:schema-bootstrap
 Gitstatus ar kontrollerad med npm run check:git
 GitHub-sync ar kontrollerad med npm run check:sync efter push
 Backend startar i IntelliJ
@@ -31,6 +34,7 @@ docs/mvp-testprotokoll.md
 docs/dockerhub-release.md
 docs/aws-rds-ec2-checklista.md
 docs/go-live-riskregister.md
+docs/schema-bootstrap-runbook.md
 ```
 
 ## 1. GitHub Actions CI
@@ -60,9 +64,13 @@ Innan du pushar kod:
 
 ```bash
 cd frontend
-npm run check:release -- --with-backend --with-docker-build
+npm run check:release:full
 npm run check:go-live-risks
 npm run check:dependencies
+npm run check:audit
+npm run check:release-traceability
+npm run check:migrations
+npm run check:schema-bootstrap
 npm audit --omit=dev --audit-level=critical
 npm run check:prepush -- --allow-ahead
 npm run check:git
@@ -116,6 +124,13 @@ cloudshop-backend:latest
 cloudshop-frontend:latest
 cloudshop-backend:sha-...
 cloudshop-frontend:sha-...
+```
+
+Spara vilken image som ska koras pa EC2:
+
+```text
+Antingen IMAGE_TAG=latest for snabb demo
+eller IMAGE_TAG=sha-<commit> / IMAGE_TAG=v1.0.0 for sparbar release
 ```
 
 Vill du skapa en fast demo-version:
@@ -242,6 +257,41 @@ npm run check:prod -- --env-file ../.env --strict
 ```
 
 Om kontrollen failar ska du fixa `.env`, `docker-compose.prod.yml` eller Nginx innan du startar produktion.
+
+## 8.1. Kontrollerad Schema-Migration Pa RDS
+
+AliBooks ska inte andra RDS-schema dolt nar backend startar i produktion.
+Darfor ska produktion kora med:
+
+```text
+SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+APP_SCHEMA_PATCH_ENABLED=false
+```
+
+Kontrollera att migrationsfilen speglar backendens schema-patchar:
+
+```bash
+cd frontend
+npm run check:schema
+npm run check:migrations
+npm run check:schema-bootstrap
+```
+
+Testa alltid mot restore/staging forst:
+
+```bash
+psql "postgresql://USER:PASSWORD@HOST:5432/cloudshop_test" -f ../db/migrations/001_startup_schema_patch.sql
+```
+
+For en helt ny RDS-databas ska full bas-schema komma fran en testad schema-dump av release-databasen enligt `docs/schema-bootstrap-runbook.md`.
+Exempel pa schemafil:
+
+```text
+backups/alibooks-schema.sql
+```
+
+Kor sedan `db/migrations/001_startup_schema_patch.sql` for additiva patchar.
+Starta inte skarp backend mot RDS innan restore drill, schema-test och `/api/system/status` ar grona.
 
 Om du vill testa e-post och Stripe:
 

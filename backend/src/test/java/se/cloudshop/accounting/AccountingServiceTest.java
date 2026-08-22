@@ -274,6 +274,38 @@ class AccountingServiceTest {
   }
 
   @Test
+  void cashMethodFinalPartialPaymentBooksRemainingVatRoundingDifference() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    when(voucherNumberService.nextVoucherNumber("B")).thenReturn("B-2");
+    Order invoice = testInvoice(799);
+    invoice.setStatus("SENT");
+    invoice.registerPayment(invoice.getInvoiceDate(), 666, "Bank first payments");
+
+    accountingService.createPaymentEntries(invoice, invoice.getInvoiceDate(), 333);
+
+    List<JournalEntry> entries = savedJournalEntries();
+
+    assertThat(invoice.getTotalAmount()).isEqualTo(999);
+    assertThat(invoice.getVatAmount()).isEqualTo(200);
+    assertThat(entries).hasSize(3);
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("1930");
+      assertThat(entry.getDebit()).isEqualTo(333);
+      assertThat(entry.getCredit()).isZero();
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("3041");
+      assertThat(entry.getDebit()).isZero();
+      assertThat(entry.getCredit()).isEqualTo(266);
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("2611");
+      assertThat(entry.getDebit()).isZero();
+      assertThat(entry.getCredit()).isEqualTo(67);
+    });
+  }
+
+  @Test
   void invoiceMethodBooksCustomerRefundAgainstReceivablesAndBank() {
     when(voucherNumberService.nextVoucherNumber("AR")).thenReturn("AR-1");
     Order invoice = testInvoice(1000);
@@ -418,7 +450,7 @@ class AccountingServiceTest {
         LocalDate.of(2026, 7, 31)
     );
 
-    assertThat(report.accountCount()).isEqualTo(11);
+    assertThat(report.accountCount()).isEqualTo(12);
     assertThat(report.criticalIssueCount()).isEqualTo(2);
     assertThat(report.warningIssueCount()).isEqualTo(1);
     assertThat(report.lines())
@@ -1456,6 +1488,49 @@ class AccountingServiceTest {
   }
 
   @Test
+  void stripePayoutWithoutFeeDoesNotCreateZeroAmountFeeLine() {
+    when(voucherNumberService.nextVoucherNumber("SU")).thenReturn("SU-2");
+
+    List<JournalEntry> entries = accountingService.createStripePayoutEntry(new CreateStripePayoutRequest(
+        LocalDate.of(2026, 7, 1),
+        999,
+        0,
+        "po_no_fee"
+    ));
+
+    assertThat(entries).hasSize(2);
+    assertThat(entries).noneSatisfy(entry -> assertThat(entry.getAccountNumber()).isEqualTo("6570"));
+    assertThat(entries).allSatisfy(entry -> {
+      assertThat(entry.getDebit() + entry.getCredit()).isGreaterThan(0);
+      assertThat(entry.getVoucherNumber()).isEqualTo("SU-2");
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("1930");
+      assertThat(entry.getDebit()).isEqualTo(999);
+      assertThat(entry.getCredit()).isZero();
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("1580");
+      assertThat(entry.getDebit()).isZero();
+      assertThat(entry.getCredit()).isEqualTo(999);
+    });
+  }
+
+  @Test
+  void rejectsStripePayoutWhenFeeWouldMakeBankLineZero() {
+    assertThatThrownBy(() -> accountingService.createStripePayoutEntry(new CreateStripePayoutRequest(
+        LocalDate.of(2026, 7, 1),
+        999,
+        999,
+        "po_zero_bank"
+    )))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Stripe fee must be less than gross amount");
+
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
   void createsExpenseEntriesLinkedToExpenseEvidence() {
     when(voucherNumberService.nextVoucherNumber("K")).thenReturn("K-1");
     Expense expense = new Expense(LocalDate.of(2026, 7, 22), "Adobe", 800, 200, "5420", "1930");
@@ -1628,6 +1703,45 @@ class AccountingServiceTest {
       assertThat(entry.getVoucherNumber()).isEqualTo("LB-1");
       assertThat(entry.getVoucherDate()).isEqualTo(LocalDate.of(2026, 8, 1));
       assertThat(entry.getDescription()).contains("cash method");
+    });
+  }
+
+  @Test
+  void cashMethodFinalSupplierPartialPaymentBooksRemainingInputVatRoundingDifference() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    when(voucherNumberService.nextVoucherNumber("LB")).thenReturn("LB-3");
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 22),
+        LocalDate.of(2026, 8, 21),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        999,
+        200,
+        "5420"
+    );
+    invoice.registerPayment(LocalDate.of(2026, 8, 1), 666, "BANK-1");
+
+    accountingService.createSupplierInvoicePaymentEntries(invoice, LocalDate.of(2026, 8, 2), 333, "BANK-2");
+
+    List<JournalEntry> entries = savedJournalEntries();
+
+    assertThat(entries).hasSize(3);
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("5420");
+      assertThat(entry.getDebit()).isEqualTo(266);
+      assertThat(entry.getCredit()).isZero();
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("2641");
+      assertThat(entry.getDebit()).isEqualTo(67);
+      assertThat(entry.getCredit()).isZero();
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo("1930");
+      assertThat(entry.getDebit()).isZero();
+      assertThat(entry.getCredit()).isEqualTo(333);
     });
   }
 

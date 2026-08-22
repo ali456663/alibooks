@@ -120,6 +120,19 @@ public class SupplierController {
 
     accountingService.requireUnlockedAccountingDate(invoiceDate);
     String reference = clean(request.reference());
+    boolean selfBilling = Boolean.TRUE.equals(request.selfBilling());
+    String buyerName = clean(request.buyerName());
+    String buyerReference = clean(request.buyerReference());
+    String approvalReference = clean(request.approvalReference());
+
+    if (selfBilling) {
+      if (buyerName.length() < 2) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer name is required for self-billing invoices.");
+      }
+      if (approvalReference.length() < 3) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Approval or agreement reference is required for self-billing invoices.");
+      }
+    }
 
     if (!reference.isBlank() && supplierInvoiceRepository.existsBySupplier_IdAndReferenceIgnoreCase(supplier.getId(), reference)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice reference already exists for this supplier.");
@@ -133,11 +146,15 @@ public class SupplierController {
         reference,
         request.totalAmount(),
         request.vatAmount(),
-        request.category() == null || request.category().isBlank() ? "5420" : request.category()
+        request.category() == null || request.category().isBlank() ? "5420" : request.category(),
+        selfBilling,
+        buyerName,
+        buyerReference,
+        approvalReference
     ));
 
     accountingService.createSupplierInvoiceEntries(invoice);
-    auditService.record("supplier_invoice", "supplier_invoice", invoice.getId(), "created", invoice.getReference(), "Supplier invoice created", invoice.getTotalAmount(), authorizationHeader);
+    auditService.record("supplier_invoice", "supplier_invoice", invoice.getId(), "created", invoice.getReference(), selfBilling ? "Self-billing supplier invoice created" : "Supplier invoice created", invoice.getTotalAmount(), authorizationHeader);
     return invoice;
   }
 
@@ -241,15 +258,19 @@ public class SupplierController {
     authHeader.requireValidToken(authorizationHeader);
 
     StringBuilder csv = new StringBuilder();
-    csv.append("Fakturadatum;Forfallodatum;Status;Leverantor;E-post;Org/personnummer;Referens;Beskrivning;Kategori;Netto;Moms;Totalt;Betalt;Kvar;Betaldatum;Betalreferens;Betalhistorik;Makulerad datum;Rattelseverifikat\r\n");
+    csv.append("Fakturadatum;Forfallodatum;Status;Typ;Leverantor;E-post;Org/personnummer;Kopare;Koparreferens;Godkannande/avtal;Referens;Beskrivning;Kategori;Netto;Moms;Totalt;Betalt;Kvar;Betaldatum;Betalreferens;Betalhistorik;Makulerad datum;Rattelseverifikat\r\n");
     List<SupplierInvoice> invoices = supplierInvoiceRepository.findAllByOrderByDueDateAscIdAsc();
     invoices.forEach(invoice -> csv.append(String.join(";",
         cell(invoice.getInvoiceDate()),
         cell(invoice.getDueDate()),
         cell(invoice.getStatus()),
+        cell(invoice.isSelfBilling() ? "Sjalvfaktura" : "Leverantorsfaktura"),
         cell(invoice.getSupplierName()),
         cell(invoice.getSupplierEmail()),
         cell(invoice.getSupplierOrgNumber()),
+        cell(invoice.getBuyerName()),
+        cell(invoice.getBuyerReference()),
+        cell(invoice.getApprovalReference()),
         cell(invoice.getReference()),
         cell(invoice.getDescription()),
         cell(invoice.getCategory()),

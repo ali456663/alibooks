@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ public class LoginAttemptService {
   private final Clock clock;
   private final Map<String, LoginAttemptState> attempts = new ConcurrentHashMap<>();
 
+  @Autowired
   public LoginAttemptService(
       @Value("${app.auth.max-failed-login-attempts:5}") int maxFailedAttempts,
       @Value("${app.auth.login-lock-minutes:15}") int lockMinutes

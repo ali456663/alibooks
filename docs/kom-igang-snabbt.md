@@ -34,10 +34,9 @@ Om porten ar upptagen, kontrollera om en gammal backend redan kor.
 
 ## 3. Starta frontend
 
-Oppna en ny Git Bash:
+Oppna en ny Git Bash fran projektets rotmapp:
 
 ```bash
-cd frontend
 npm run dev
 ```
 
@@ -49,7 +48,17 @@ http://localhost:5157
 
 Om port `5157` ar upptagen stoppar Vite direkt, eftersom projektet anvander `--strictPort`. Stoppa den gamla frontend-terminalen och kor `npm run dev` igen.
 
+Du kan fortfarande kora samma kommando fran `frontend`, men projektroten har genvagar sa du slipper hamna i fel npm-projekt.
+
 ## 4. Snabb systemkontroll
+
+Fran projektets rotmapp kan du kora:
+
+```bash
+npm run doctor
+```
+
+Den kontrollerar PostgreSQL pa `5432`, backend `/health`, backend `/system/status`, frontend pa `5157` och Docker Compose-status. Om nagot inte ar igang visar den forslag pa vad du ska starta.
 
 I AliBooks:
 
@@ -153,7 +162,6 @@ Vit frontend-sida
 Oppna webblasarkonsolen och kontrollera fel. Kor ocksa:
 
 ```bash
-cd frontend
 npm run build
 npm run check:views
 npm run smoke:runtime
@@ -164,28 +172,24 @@ npm run smoke:runtime
 Kor detta nar du har gjort storre andringar:
 
 ```bash
-cd frontend
 npm run check:release
 ```
 
 Kor detta innan push eller release:
 
 ```bash
-cd frontend
-npm run check:release -- --with-backend
+npm run check:release:full
 ```
 
 Kor detta innan deploy om Docker Desktop ar igang:
 
 ```bash
-cd frontend
-npm run check:release -- --with-backend --with-docker-build
+npm run check:release:full
 ```
 
 Du kan ocksa kora kontrollerna separat om du vill se exakt vilket steg som failar:
 
 ```bash
-cd frontend
 npm run build
 npm run check:api-contract
 npm run check:ready

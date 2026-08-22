@@ -25,14 +25,17 @@ public class AppSettings {
   private int fiscalYearEndMonth;
   private int vatPercent;
   private int paymentTermsDays;
-  private boolean fTaxApproved;
+  @Column(nullable = false, columnDefinition = "boolean default true")
+  private boolean fTaxApproved = true;
   @Column(columnDefinition = "text")
   private String invoiceEmailTemplate;
-  private boolean automaticInvoiceRemindersEnabled;
+  @Column(nullable = false, columnDefinition = "boolean default true")
+  private boolean automaticInvoiceRemindersEnabled = true;
   private int invoiceReminderDaysBeforeDue;
   @Column(columnDefinition = "text")
   private String invoiceReminderTemplate;
-  private boolean overdueInvoiceRemindersEnabled;
+  @Column(nullable = false, columnDefinition = "boolean default true")
+  private boolean overdueInvoiceRemindersEnabled = true;
   private int overdueInvoiceReminderDaysAfterDue;
   @Column(columnDefinition = "text")
   private String overdueInvoiceReminderTemplate;

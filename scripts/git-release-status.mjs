@@ -14,6 +14,9 @@ const importantPrefixes = [
   ".env.production.example",
   ".github/workflows/",
   ".gitignore",
+  "package.json",
+  "db/",
+  "db/migrations/",
   "README.md",
   "backend/pom.xml",
   "backend/Dockerfile",
@@ -109,6 +112,9 @@ if (selfTest) {
   assertSelfTest("unstaged docs file is not staged", !unstagedDocs.staged);
   assertSelfTest("unstaged docs file is unstaged", unstagedDocs.unstaged);
 
+  const unstagedRootPackage = parseStatusLine(" M package.json");
+  assertSelfTest("unstaged root package file is important", isImportant(unstagedRootPackage.file));
+
   const stagedScript = parseStatusLine("M  scripts/git-release-status.mjs");
   assertSelfTest("staged script is important", isImportant(stagedScript.file));
   assertSelfTest("staged script is staged", stagedScript.staged);
@@ -118,6 +124,10 @@ if (selfTest) {
   assertSelfTest("untracked frontend source is important", isImportant(untrackedFrontend.file));
   assertSelfTest("untracked frontend source is marked untracked", untrackedFrontend.untracked);
   assertSelfTest("untracked frontend source is counted as unstaged", untrackedFrontend.unstaged);
+
+  const untrackedMigration = parseStatusLine("?? db/migrations/002_add_accounts.sql");
+  assertSelfTest("untracked schema migration is important", isImportant(untrackedMigration.file));
+  assertSelfTest("untracked schema migration is marked untracked", untrackedMigration.untracked);
 
   const renamedDoc = parseStatusLine("R  docs/old.md -> docs/new.md");
   assertSelfTest("renamed docs target path is parsed", renamedDoc.file === "docs/new.md");
@@ -186,7 +196,7 @@ if (requirePushed && branchStatus.behind > 0) {
 if (entries.length > 0) {
   console.log("Next before push:");
   console.log("1. Review these files.");
-  console.log("2. Run npm run check:release -- --with-backend --with-docker-build.");
+  console.log("2. Run npm run check:release:full.");
   console.log("3. Stage, commit and push the intended release changes.");
   console.log("4. Run npm run check:git -- --strict after commit to confirm nothing important was left outside git.");
 } else {

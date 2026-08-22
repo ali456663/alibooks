@@ -33,6 +33,8 @@ function check(name, ok, detail) {
 }
 
 const allDocs = docs.map((file) => `${file}\n${read(file)}`).join("\n\n");
+const rootPackage = JSON.parse(read("package.json"));
+const rootScripts = rootPackage.scripts || {};
 const riskyGitStagePattern = /git\s+add\s+\./;
 const mojibakeMarkers = ["Ã", "Â", "ï¿½", "�"];
 
@@ -61,9 +63,29 @@ check(
 );
 
 check(
+  "Local doctor command exists",
+  allDocs.includes("npm run doctor") && allDocs.includes("/system/status") && allDocs.includes("5432"),
+  "Docs should include the local DB/backend/frontend diagnosis command."
+);
+
+check(
+  "Root npm command center exists",
+  ["dev", "doctor", "build", "check:release", "check:release:full", "test:backend"].every((script) =>
+    rootScripts[script]?.includes("--prefix frontend")
+  ),
+  "The repo root should delegate common AliBooks commands to frontend so npm run is safe from the project root."
+);
+
+check(
   "Local release gate command exists",
   allDocs.includes("npm run check:release"),
   "Docs should include the one-command MVP release gate."
+);
+
+check(
+  "Full release gate command exists",
+  allDocs.includes("npm run check:release:full"),
+  "Docs should include the full local release gate with backend tests and Docker image builds."
 );
 
 check(
@@ -80,8 +102,28 @@ check(
 
 check(
   "Dependency risk command exists",
-  allDocs.includes("npm run check:dependencies") && allDocs.includes("npm audit --omit=dev --audit-level=critical"),
-  "Docs should include the local dependency lockfile check and the external vulnerability audit command."
+  allDocs.includes("npm run check:dependencies") &&
+    allDocs.includes("npm run check:audit") &&
+    allDocs.includes("npm audit --omit=dev --audit-level=critical"),
+  "Docs should include the local dependency lockfile check, check:audit wrapper and the external vulnerability audit command."
+);
+
+check(
+  "Controlled schema migration command exists",
+  allDocs.includes("npm run check:migrations") &&
+    allDocs.includes("npm run check:schema-bootstrap") &&
+    allDocs.includes("schema-bootstrap-runbook.md") &&
+    allDocs.includes("alibooks-schema.sql") &&
+    allDocs.includes("db/migrations/001_startup_schema_patch.sql") &&
+    allDocs.includes("APP_SCHEMA_PATCH_ENABLED=false") &&
+    allDocs.includes("psql"),
+  "Docs should explain the controlled schema bootstrap and migration path before RDS production start."
+);
+
+check(
+  "Release traceability command exists",
+  allDocs.includes("npm run check:release-traceability") && allDocs.includes("IMAGE_TAG") && allDocs.includes("sha-"),
+  "Docs should explain how commit/image/version traceability is checked before go-live."
 );
 
 check(

@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -40,6 +41,11 @@ public class SupplierInvoice {
   private String paymentHistory;
   private LocalDate cancelledAt;
   private String cancellationVoucherNumber;
+  @Column(columnDefinition = "boolean default false")
+  private boolean selfBilling = false;
+  private String buyerName;
+  private String buyerReference;
+  private String approvalReference;
   private Instant createdAt;
 
   public SupplierInvoice() {
@@ -54,6 +60,36 @@ public class SupplierInvoice {
       int totalAmount,
       int vatAmount,
       String category
+  ) {
+    this(
+        supplier,
+        invoiceDate,
+        dueDate,
+        description,
+        reference,
+        totalAmount,
+        vatAmount,
+        category,
+        false,
+        "",
+        "",
+        ""
+    );
+  }
+
+  public SupplierInvoice(
+      Supplier supplier,
+      LocalDate invoiceDate,
+      LocalDate dueDate,
+      String description,
+      String reference,
+      int totalAmount,
+      int vatAmount,
+      String category,
+      boolean selfBilling,
+      String buyerName,
+      String buyerReference,
+      String approvalReference
   ) {
     this.supplier = supplier;
     this.supplierName = supplier.getName();
@@ -71,6 +107,10 @@ public class SupplierInvoice {
     this.paidAmount = 0;
     this.paymentReference = "";
     this.paymentHistory = "";
+    this.selfBilling = selfBilling;
+    this.buyerName = clean(buyerName);
+    this.buyerReference = clean(buyerReference);
+    this.approvalReference = clean(approvalReference);
     this.createdAt = Instant.now();
   }
 
@@ -158,6 +198,22 @@ public class SupplierInvoice {
     return cancellationVoucherNumber;
   }
 
+  public boolean isSelfBilling() {
+    return selfBilling;
+  }
+
+  public String getBuyerName() {
+    return buyerName;
+  }
+
+  public String getBuyerReference() {
+    return buyerReference;
+  }
+
+  public String getApprovalReference() {
+    return approvalReference;
+  }
+
   public Instant getCreatedAt() {
     return createdAt;
   }
@@ -225,5 +281,9 @@ public class SupplierInvoice {
 
   private String normalizeReference(String reference) {
     return reference == null ? "" : reference.trim().toLowerCase();
+  }
+
+  private String clean(String value) {
+    return value == null ? "" : value.trim();
   }
 }

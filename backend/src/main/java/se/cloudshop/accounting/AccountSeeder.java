@@ -49,6 +49,7 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("2091", "Balanserad vinst eller forlust", "LIMITED_COMPANY");
     upsert("2099", "Arets resultat", "LIMITED_COMPANY");
     upsert("2440", "Leverantorsskulder", "BOTH");
+    upsert("2890", "Kortskuld och kortclearing", "BOTH");
     upsert("2510", "Skatteskulder", "LIMITED_COMPANY");
     upsert("2710", "Personalskatt", "LIMITED_COMPANY");
     upsert("2731", "Avrakning sociala avgifter", "LIMITED_COMPANY");

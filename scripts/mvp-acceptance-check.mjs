@@ -28,6 +28,7 @@ const testProtocol = read("docs/mvp-testprotokoll.md");
 const releaseEvidence = read("docs/release-evidence.md");
 const apiContract = read("scripts/api-contract-check.mjs");
 const runtimeSmoke = read("scripts/frontend-runtime-smoke.mjs");
+const mainSource = read("frontend/src/main.jsx");
 
 const requiredProtocolSections = [
   "## 1. Start och systemstatus",
@@ -70,6 +71,7 @@ const requiredBackendTests = [
   "backend/src/test/java/se/cloudshop/auth/JwtServiceTest.java",
   "backend/src/test/java/se/cloudshop/order/OrderControllerTest.java",
   "backend/src/test/java/se/cloudshop/accounting/AccountingServiceTest.java",
+  "backend/src/test/java/se/cloudshop/config/DatabaseSchemaPatchTest.java",
   "backend/src/test/java/se/cloudshop/payment/StripePaymentServiceTest.java",
   "backend/src/test/java/se/cloudshop/expense/ExpenseControllerTest.java",
   "backend/src/test/java/se/cloudshop/invoice/InvoicePdfControllerTest.java"
@@ -119,6 +121,12 @@ check(
   "Runtime smoke guards against blank page",
   includesAll(runtimeSmoke, ["bodyTextLength", "rootChildCount", "scrollHeight", "alibooks-active-view"]),
   "Frontend smoke should catch blank page and broken reset states."
+);
+
+check(
+  "Frontend exposes manual MVP evidence",
+  includesAll(mainSource, ["mvpManualChecklistRows", "alibooks-mvp-manual-checks", "Manuella MVP-bevis", "downloadTestFlowCsv", "downloadGoLiveCsv"]),
+  "Test flow and go-live should keep manual evidence for PDF, email, Stripe/bank, receipts, backup and public demo visible."
 );
 
 check(

@@ -36,6 +36,79 @@ const readinessActualTotal = readinessActualMatch ? Number(readinessActualMatch[
 const readinessEvidenceMatch = evidence.match(/`check:ready`:\s*(\d+)\/(\d+)/);
 const readinessEvidenceTotal = readinessEvidenceMatch ? Number(readinessEvidenceMatch[2]) : 0;
 
+function runNodeScript(relativePath) {
+  const result = spawnSync(process.execPath, [relativePath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    shell: false
+  });
+  return {
+    status: result.status,
+    output: `${result.stdout || ""}\n${result.stderr || ""}`
+  };
+}
+
+function countFromOutput(output, label) {
+  const match = output.match(new RegExp(`${label}:\\s*(\\d+)\\/(\\d+)`));
+  return match ? Number(match[2]) : 0;
+}
+
+function countFromEvidence(pattern) {
+  const match = evidence.match(pattern);
+  return match ? Number(match[2]) : 0;
+}
+
+const countedEvidenceChecks = [
+  {
+    name: "Data safety evidence count matches script",
+    script: "scripts/data-safety-check.mjs",
+    outputLabel: "AliBooks data safety check",
+    evidencePattern: /`check:data-safety`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Production readiness evidence count matches script",
+    script: "scripts/production-readiness-check.mjs",
+    outputLabel: "Production readiness check",
+    evidencePattern: /`check:prod`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "CI evidence count matches script",
+    script: "scripts/ci-pipeline-check.mjs",
+    outputLabel: "AliBooks CI pipeline check",
+    evidencePattern: /`check:ci`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Schema policy evidence count matches script",
+    script: "scripts/schema-policy-check.mjs",
+    outputLabel: "Schema policy check",
+    evidencePattern: /`check:schema`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Schema migration evidence count matches script",
+    script: "scripts/schema-migration-check.mjs",
+    outputLabel: "Schema migration check",
+    evidencePattern: /`check:migrations`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Schema bootstrap evidence count matches script",
+    script: "scripts/schema-bootstrap-check.mjs",
+    outputLabel: "Schema bootstrap check",
+    evidencePattern: /`check:schema-bootstrap`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Backup evidence count matches script",
+    script: "scripts/backup-readiness-check.mjs",
+    outputLabel: "AliBooks backup readiness check",
+    evidencePattern: /`npm run check:backup`:\s*passed,\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Go-live risk evidence count matches script",
+    script: "scripts/go-live-risk-check.mjs",
+    outputLabel: "Go-live risk check",
+    evidencePattern: /`check:go-live-risks`:\s*(\d+)\/(\d+)/
+  }
+];
+
 check(
   "Readiness script runs for evidence check",
   readinessResult.status === 0 && readinessActualTotal > 0,
@@ -44,7 +117,7 @@ check(
 
 check(
   "Release evidence documents full gate",
-  evidence.includes("npm run check:release -- --with-backend --with-docker-build"),
+  evidence.includes("npm run check:release:full"),
   "The release evidence should name the strongest local verification command."
 );
 
@@ -54,10 +127,22 @@ check(
   `release-evidence has ${readinessEvidenceTotal || "missing"} readiness checks; current readiness output has ${readinessActualTotal || "missing"}.`
 );
 
+for (const countedCheck of countedEvidenceChecks) {
+  const result = runNodeScript(countedCheck.script);
+  const actualTotal = countFromOutput(result.output, countedCheck.outputLabel);
+  const evidenceTotal = countFromEvidence(countedCheck.evidencePattern);
+  check(
+    countedCheck.name,
+    result.status === 0 && actualTotal > 0 && evidenceTotal === actualTotal,
+    `release-evidence has ${evidenceTotal || "missing"} checks; current script output has ${actualTotal || "missing"}.`
+  );
+}
+
+const backendTestEvidence = evidence.match(/(\d+) tests,\s*0 failures,\s*0 errors/);
 check(
   "Release evidence documents backend tests",
-  /184 tests,\s*0 failures,\s*0 errors/.test(evidence),
-  "Backend test proof should include test count and zero failures/errors."
+  backendTestEvidence && Number(backendTestEvidence[1]) >= 187,
+  "Backend test proof should include at least 187 tests and zero failures/errors."
 );
 
 check(
@@ -115,9 +200,33 @@ check(
 );
 
 check(
+  "Package exposes release traceability check",
+  packageJson.scripts?.["check:release-traceability"] === "node ../scripts/release-traceability-check.mjs",
+  "frontend/package.json should expose npm run check:release-traceability."
+);
+
+check(
+  "Package exposes full release gate",
+  packageJson.scripts?.["check:release:full"] === "node ../scripts/release-gate.mjs --with-backend --with-docker-build",
+  "frontend/package.json should expose npm run check:release:full."
+);
+
+check(
   "Package exposes schema policy check",
   packageJson.scripts?.["check:schema"] === "node ../scripts/schema-policy-check.mjs",
   "frontend/package.json should expose npm run check:schema."
+);
+
+check(
+  "Package exposes schema migration check",
+  packageJson.scripts?.["check:migrations"] === "node ../scripts/schema-migration-check.mjs",
+  "frontend/package.json should expose npm run check:migrations."
+);
+
+check(
+  "Package exposes schema bootstrap check",
+  packageJson.scripts?.["check:schema-bootstrap"] === "node ../scripts/schema-bootstrap-check.mjs",
+  "frontend/package.json should expose npm run check:schema-bootstrap."
 );
 
 check(
@@ -139,6 +248,18 @@ check(
 );
 
 check(
+  "Release gate runs schema migration check",
+  releaseGate.includes('"check:migrations"'),
+  "The release gate should fail when production schema migration proof becomes stale."
+);
+
+check(
+  "Release gate runs schema bootstrap check",
+  releaseGate.includes('"check:schema-bootstrap"'),
+  "The release gate should fail when first RDS schema bootstrap proof is undocumented."
+);
+
+check(
   "Release gate runs git parser check",
   releaseGate.includes('"check:git-parser"'),
   "The release gate should fail when git release status parser coverage is removed."
@@ -148,6 +269,12 @@ check(
   "Release gate runs dependency risk check",
   releaseGate.includes('"check:dependencies"'),
   "The release gate should fail when frontend dependency or lockfile safety becomes stale."
+);
+
+check(
+  "Release gate runs release traceability check",
+  releaseGate.includes('"check:release-traceability"'),
+  "The release gate should fail when release traceability between git, Dockerhub and EC2 becomes stale."
 );
 
 check(

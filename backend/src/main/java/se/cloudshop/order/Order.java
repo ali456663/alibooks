@@ -5,6 +5,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.CascadeType;
@@ -31,7 +32,8 @@ public class Order {
   private LocalDate invoiceDate;
   private LocalDate dueDate;
   private int paymentTermsDays;
-  private boolean fTaxApproved;
+  @Column(nullable = false, columnDefinition = "boolean default true")
+  private boolean fTaxApproved = true;
   private String ocrNumber;
   private String plusGiro;
   private String paymentRecipient;
@@ -59,7 +61,8 @@ public class Order {
   private int discountAmount;
   private String discountLabel;
   private String stripeCheckoutSessionId;
-  private boolean creditInvoice;
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean creditInvoice = false;
   private Long creditedInvoiceId;
 
   @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)

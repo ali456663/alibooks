@@ -299,8 +299,8 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe fee cannot be negative.");
     }
 
-    if (request.feeAmount() > request.grossAmount()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe fee cannot be greater than gross amount.");
+    if (request.feeAmount() >= request.grossAmount()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe fee must be less than gross amount.");
     }
 
     LocalDate voucherDate = request.payoutDate() == null ? LocalDate.now() : request.payoutDate();
@@ -315,7 +315,8 @@ public class AccountingService {
     String voucherNumber = voucherNumberService.nextVoucherNumber("SU");
     Account bank = account("1930");
     Account stripeReceivable = account("1580");
-    Account bankFees = account("6570");
+    Account bankFees = request.feeAmount() > 0 ? account("6570") : null;
+    List<JournalEntry> entries = new ArrayList<>();
 
     JournalEntry bankEntry = journalEntryRepository.save(new JournalEntry(
         null,
@@ -326,15 +327,20 @@ public class AccountingService {
         description,
         voucherDate
     ));
-    JournalEntry feeEntry = journalEntryRepository.save(new JournalEntry(
-        null,
-        bankFees,
-        voucherNumber,
-        request.feeAmount(),
-        0,
-        description + " fee",
-        voucherDate
-    ));
+    entries.add(bankEntry);
+
+    if (request.feeAmount() > 0) {
+      entries.add(journalEntryRepository.save(new JournalEntry(
+          null,
+          bankFees,
+          voucherNumber,
+          request.feeAmount(),
+          0,
+          description + " fee",
+          voucherDate
+      )));
+    }
+
     JournalEntry stripeEntry = journalEntryRepository.save(new JournalEntry(
         null,
         stripeReceivable,
@@ -344,6 +350,7 @@ public class AccountingService {
         description,
         voucherDate
     ));
+    entries.add(stripeEntry);
 
     stripePayoutRepository.save(new StripePayout(
         voucherDate,
@@ -353,7 +360,7 @@ public class AccountingService {
         voucherNumber
     ));
 
-    return List.of(bankEntry, feeEntry, stripeEntry);
+    return entries;
   }
 
   public List<StripePayout> findStripePayouts() {
@@ -417,7 +424,8 @@ public class AccountingService {
         : supplierInvoice.getCategory());
     Account inputVat = account("2641");
     Account payables = account("2440");
-    String description = "Supplier invoice: " + supplierInvoice.getDescription();
+    String descriptionPrefix = supplierInvoice.isSelfBilling() ? "Self-billing supplier invoice: " : "Supplier invoice: ";
+    String description = descriptionPrefix + supplierInvoice.getDescription();
 
     journalEntryRepository.save(new JournalEntry(
         null,
@@ -440,7 +448,7 @@ public class AccountingService {
           voucherNumber,
           supplierInvoice.getVatAmount(),
           0,
-          "Supplier invoice VAT: " + supplierInvoice.getDescription(),
+          (supplierInvoice.isSelfBilling() ? "Self-billing supplier invoice VAT: " : "Supplier invoice VAT: ") + supplierInvoice.getDescription(),
           supplierInvoice.getInvoiceDate()
       ));
     }
@@ -1583,6 +1591,7 @@ public class AccountingService {
         new AccountSignRule("1220", "Inventarier och verktyg", false, false, "warning"),
         new AccountSignRule("1229", "Ackumulerade avskrivningar pa inventarier", true, false, "warning"),
         new AccountSignRule("2440", "Leverantorsskulder", true, true, "critical"),
+        new AccountSignRule("2890", "Kortskuld och kortclearing", true, false, "warning"),
         new AccountSignRule("2510", "Skatteskulder", true, true, "critical"),
         new AccountSignRule("2710", "Personalskatt", true, true, "critical"),
         new AccountSignRule("2731", "Arbetsgivaravgift", true, true, "critical"),

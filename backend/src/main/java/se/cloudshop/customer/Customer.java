@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 
 @Entity
@@ -21,7 +22,8 @@ public class Customer {
   private String phone;
   private String postalCode;
   private String city;
-  private boolean archived;
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean archived = false;
 
   public Customer() {
   }

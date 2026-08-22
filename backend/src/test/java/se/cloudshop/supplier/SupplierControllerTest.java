@@ -128,6 +128,68 @@ class SupplierControllerTest {
   }
 
   @Test
+  void createSelfBillingSupplierInvoiceRequiresApprovalReference() {
+    Supplier supplier = new Supplier("Muscle Partner", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    setSupplierId(supplier, 1L);
+    when(supplierRepository.findById(1L)).thenReturn(Optional.of(supplier));
+
+    assertThatThrownBy(() -> supplierController.createSupplierInvoice(
+        "Bearer " + authHeaderToken(),
+        new CreateSupplierInvoiceRequest(
+            1L,
+            LocalDate.of(2026, 7, 1),
+            LocalDate.of(2026, 7, 31),
+            "Commission payout",
+            "SELF-123",
+            1250,
+            250,
+            "4010",
+            true,
+            "AliBooks Buyer",
+            "BUY-123",
+            ""
+        )
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Approval or agreement reference is required");
+
+    verify(supplierInvoiceRepository, never()).save(any(SupplierInvoice.class));
+    verify(accountingService, never()).createSupplierInvoiceEntries(any(SupplierInvoice.class));
+  }
+
+  @Test
+  void createSelfBillingSupplierInvoiceStoresBuyerAndApprovalMetadata() {
+    Supplier supplier = new Supplier("Muscle Partner", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    setSupplierId(supplier, 1L);
+    when(supplierRepository.findById(1L)).thenReturn(Optional.of(supplier));
+    when(supplierInvoiceRepository.save(any(SupplierInvoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    SupplierInvoice invoice = supplierController.createSupplierInvoice(
+        "Bearer " + authHeaderToken(),
+        new CreateSupplierInvoiceRequest(
+            1L,
+            LocalDate.of(2026, 7, 1),
+            LocalDate.of(2026, 7, 31),
+            "Commission payout",
+            "SELF-123",
+            1250,
+            250,
+            "4010",
+            true,
+            "AliBooks Buyer",
+            "BUY-123",
+            "Agreement-2026-07"
+        )
+    );
+
+    assertThat(invoice.isSelfBilling()).isTrue();
+    assertThat(invoice.getBuyerName()).isEqualTo("AliBooks Buyer");
+    assertThat(invoice.getBuyerReference()).isEqualTo("BUY-123");
+    assertThat(invoice.getApprovalReference()).isEqualTo("Agreement-2026-07");
+    verify(accountingService).createSupplierInvoiceEntries(invoice);
+  }
+
+  @Test
   void supplierInvoiceCanBePartlyPaid() {
     Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
     SupplierInvoice invoice = new SupplierInvoice(

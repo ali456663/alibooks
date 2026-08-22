@@ -41,10 +41,14 @@ const requiredFiles = [
   "docs/release-evidence.md",
   "docs/backup-restore-runbook.md",
   "docs/go-live-riskregister.md",
+  "docs/schema-bootstrap-runbook.md",
+  "db/migrations/001_startup_schema_patch.sql",
   "scripts/backup-postgres.sh",
   "scripts/backup-postgres.ps1",
   "scripts/restore-postgres.sh",
-  "scripts/restore-postgres.ps1"
+  "scripts/restore-postgres.ps1",
+  "scripts/schema-migration-check.mjs",
+  "scripts/schema-bootstrap-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -56,9 +60,12 @@ check(
   "Frontend scripts",
   includesAll(Object.keys(frontendPackage.scripts || {}).join("\n"), [
     "build",
+    "check:audit",
     "check:acceptance",
     "check:api-contract",
     "check:release",
+    "check:release:full",
+    "doctor",
     "check:ready",
     "check:backend-wiring",
     "check:backup",
@@ -75,18 +82,22 @@ check(
     "check:prepush",
     "smoke:runtime",
     "check:professional-loop",
+    "check:release-traceability",
     "check:schema",
+    "check:migrations",
+    "check:schema-bootstrap",
     "check:secrets",
     "check:sync",
     "check:views",
     "test:backend"
   ]),
-  "build, check:acceptance, check:api-contract, check:release, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:schema, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
 const releaseGate = read("scripts/release-gate.mjs");
 check("CI runs backend tests", ci.includes("mvn test"), "GitHub Actions should run mvn test");
+check("CI runs frontend dependency audit", ci.includes("npm run check:audit"), "GitHub Actions should run npm audit before frontend release gate");
 check("CI runs frontend release gate", ci.includes("npm run check:release"), "GitHub Actions should run the same frontend release gate as local verification");
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");
 check("Release gate runs frontend smoke", releaseGate.includes('"smoke:runtime"'), "Release gate should run smoke:runtime");
@@ -101,12 +112,15 @@ check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Re
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
 check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
 check("Release gate checks schema policy", releaseGate.includes('"check:schema"'), "Release gate should run database schema policy check");
+check("Release gate checks controlled schema migration", releaseGate.includes('"check:migrations"'), "Release gate should run controlled schema migration check");
+check("Release gate checks schema bootstrap runbook", releaseGate.includes('"check:schema-bootstrap"'), "Release gate should run full schema bootstrap runbook check");
 check("Release gate checks committed secrets", releaseGate.includes('"check:secrets"'), "Release gate should run secret placeholder check");
 check("Release gate checks dependency risk", releaseGate.includes('"check:dependencies"'), "Release gate should run static dependency and lockfile risk check");
 check("Release gate checks destructive data safety", releaseGate.includes('"check:data-safety"'), "Release gate should run destructive data safety check");
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
 check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
+check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
 
@@ -132,11 +146,15 @@ check("Local env template has required variables", includesAll(envExample, requi
 check("Production env template has required variables", includesAll(prodEnvExample, requiredEnvVars.filter((item) => item !== "VITE_API_URL")), requiredEnvVars.join(", "));
 
 const possibleSecretPatterns = [
+  /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/,
   /sk_live_[A-Za-z0-9]{12,}/,
   /sk_test_[A-Za-z0-9]{12,}/,
   /whsec_[A-Za-z0-9]{12,}/,
   /hf_[A-Za-z0-9]{20,}/,
-  /AIzaSy[A-Za-z0-9_-]{20,}/
+  /AIzaSy[A-Za-z0-9_-]{20,}/,
+  /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}/,
+  /github_pat_[A-Za-z0-9_]{22,}/,
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/
 ];
 const envText = `${envExample}\n${prodEnvExample}`;
 check(
@@ -152,18 +170,27 @@ check(
   includesAll(gitignore, [".m2-cache/", "backups/"]) && includesAll(secretCheck, ['".m2-cache"', '"backups"']),
   "Secret scan and gitignore should agree that local Maven cache and database backups are not release artifacts."
 );
+check(
+  "Secret scan protects AI tokens and bank files",
+  includesAll(secretCheck, ["OpenAI-compatible API key", "GitHub token", "JWT token"]) &&
+    includesAll(gitignore, ["*.csv", "*.xlsx", "*.ofx", "*.qif"]),
+  "Secret scan should catch AI/API tokens and gitignore should block raw bank/export files."
+);
 
 const mainSource = read("frontend/src/main.jsx");
 check("Professional 20-step plan exists", mainSource.includes("const professionalActionPlanRows = ["), "Frontend should expose the professional action plan");
 check("Go-live view exists", mainSource.includes('activeView === "goLive"'), "Frontend should expose Startklar/Go-live");
+check("Go-live separates local MVP and production use", includesAll(mainSource, ["goLiveProductionRows", "goLiveUsageLevelText", "Anvandningsniva"]), "Startklar should distinguish local MVP use from production readiness.");
 check("Compliance view exists", mainSource.includes('activeView === "compliance"'), "Frontend should expose Regelkontroll/Compliance");
 check("Payment compliance warning exists", mainSource.includes("electronicPaymentNeedsCashRegisterReview"), "Stripe/Swish/card rule should be visible before production use");
 check("AI assistant exists", mainSource.includes("aiAssistantMessages"), "AI assistant state should exist");
 check("Runtime crash fallback exists", mainSource.includes("AliBooks kunde inte visa sidan"), "Frontend should have a render recovery fallback");
+check("Local doctor exists", exists("scripts/local-doctor.mjs"), "Local startup diagnosis should be available for DB/backend/frontend checks.");
 
 const backendFiles = [
   "backend/src/main/java/se/cloudshop/system/HealthController.java",
   "backend/src/main/java/se/cloudshop/config/SecurityHeadersFilter.java",
+  "backend/src/test/java/se/cloudshop/config/DatabaseSchemaPatchTest.java",
   "backend/src/main/java/se/cloudshop/accounting/AccountingService.java",
   "backend/src/main/java/se/cloudshop/accounting/AccountingPeriodLockService.java",
   "backend/src/main/java/se/cloudshop/audit/AuditService.java",
@@ -176,11 +203,12 @@ for (const file of backendFiles) {
 const releaseEvidence = read("docs/release-evidence.md");
 const backupRunbook = read("docs/backup-restore-runbook.md");
 const riskRegister = read("docs/go-live-riskregister.md");
-const docs = `${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
+const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
+check("Docs include local doctor", includesAll(docs, ["npm run doctor", "/system/status", "5432"]), "Docs should explain the local startup diagnosis command.");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
 check("Docs include cash/card payment review", includesAll(docs, ["kort", "Swish", "Stripe"]), "Docs should remind about electronic payment review");
-check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release -- --with-backend --with-docker-build"), "Release evidence should document the full local verification command");
+check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release:full"), "Release evidence should document the full local verification command");
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");
 check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
 
@@ -193,15 +221,45 @@ check(
   gitReleaseStatus.includes("trimEnd()") && gitReleaseStatus.includes("--self-test") && !gitReleaseStatus.includes("stdout.trim()"),
   "Git status parser must preserve leading spaces from porcelain output so unstaged important files are not missed."
 );
+check(
+  "Git release status includes database migrations",
+  gitReleaseStatus.includes('"db/migrations/"') && gitReleaseStatus.includes("untracked schema migration is important"),
+  "Git status parser must treat reviewed SQL migrations as important release files."
+);
 
 const schemaPolicy = read("scripts/schema-policy-check.mjs");
 check("Schema policy check exists", includesAll(schemaPolicy, ["SPRING_JPA_HIBERNATE_DDL_AUTO", "ddl-auto", "schema drift"]), "Schema policy should guard against implicit database schema changes");
+
+const schemaMigration = read("scripts/schema-migration-check.mjs");
+const migrationSql = read("db/migrations/001_startup_schema_patch.sql");
+check(
+  "Controlled schema migration exists",
+  includesAll(schemaMigration, ["DatabaseSchemaPatch.java", "001_startup_schema_patch.sql", "Migration mirrors DatabaseSchemaPatch SQL"]) &&
+    includesAll(migrationSql, ["APP_SCHEMA_PATCH_ENABLED=false", "SPRING_JPA_HIBERNATE_DDL_AUTO=validate", "RDS", "restore", "psql"]),
+  "Production schema changes should be mirrored in reviewed SQL before RDS deploy."
+);
+
+const schemaBootstrap = read("scripts/schema-bootstrap-check.mjs");
+const schemaBootstrapRunbook = read("docs/schema-bootstrap-runbook.md");
+check(
+  "Schema bootstrap runbook exists",
+  includesAll(schemaBootstrap, ["pg_dump", "--schema-only", "check:schema-bootstrap"]) &&
+    includesAll(schemaBootstrapRunbook, ["SPRING_JPA_HIBERNATE_DDL_AUTO=validate", "APP_SCHEMA_PATCH_ENABLED=false", "alibooks-schema.sql", "restore/staging"]),
+  "First RDS schema bootstrap should be documented and checked before production use."
+);
 
 const dependencyRisk = read("scripts/dependency-risk-check.mjs");
 check(
   "Dependency risk check exists",
   includesAll(dependencyRisk, ["package-lock.json", "npm ci", "npm audit --omit=dev --audit-level=critical", "frontend/Dockerfile.prod"]),
   "Dependency risk should verify lockfile, Docker installs and document the online audit boundary."
+);
+
+const releaseTraceability = read("scripts/release-traceability-check.mjs");
+check(
+  "Release traceability check exists",
+  includesAll(releaseTraceability, ["type=sha,prefix=sha-", "${IMAGE_TAG:-latest}", "git tag v1.0.0", "Commits ahead of upstream"]),
+  "Release traceability should connect package version, git state, Dockerhub tags and EC2 IMAGE_TAG."
 );
 
 const runtimeSmoke = read("scripts/frontend-runtime-smoke.mjs");

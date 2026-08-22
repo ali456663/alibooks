@@ -35,6 +35,7 @@ check("Frontend lockfile exists", exists(lockPath), lockPath);
 const packageJson = exists(packagePath) ? json(packagePath) : {};
 const lockJson = exists(lockPath) ? json(lockPath) : {};
 const dependencies = packageJson.dependencies || {};
+const devDependencies = packageJson.devDependencies || {};
 const rootLockPackage = lockJson.packages?.[""] || {};
 
 check(
@@ -67,9 +68,38 @@ for (const [name, spec] of Object.entries(dependencies)) {
 }
 
 check(
+  "Build dependencies are declared",
+  Object.keys(devDependencies).length > 0,
+  "frontend/package.json should list build tooling such as Vite as devDependencies."
+);
+
+for (const [name, spec] of Object.entries(devDependencies)) {
+  const lockEntry = lockJson.packages?.[`node_modules/${name}`];
+  const isUnsafeSpec = /^(?:\*|latest)$/i.test(spec) || /^(?:git\+|git:|https?:|file:)/i.test(spec);
+
+  check(
+    `Build dependency has safe package spec: ${name}`,
+    !isUnsafeSpec,
+    `${name} should use an npm semver range, not latest, wildcard, git, file or URL specs.`
+  );
+
+  check(
+    `Build dependency is locked: ${name}`,
+    Boolean(lockEntry?.version),
+    `${name} should exist in frontend/package-lock.json with an exact resolved version.`
+  );
+}
+
+check(
   "Root lockfile mirrors runtime dependencies",
   Object.keys(dependencies).every((name) => rootLockPackage.dependencies?.[name] === dependencies[name]),
   "The root package-lock entry should match frontend/package.json dependencies."
+);
+
+check(
+  "Root lockfile mirrors build dependencies",
+  Object.keys(devDependencies).every((name) => rootLockPackage.devDependencies?.[name] === devDependencies[name]),
+  "The root package-lock entry should match frontend/package.json devDependencies."
 );
 
 const frontendDockerfile = exists("frontend/Dockerfile") ? read("frontend/Dockerfile") : "";
@@ -112,7 +142,7 @@ const docsText = [
 
 check(
   "External npm audit command is documented",
-  docsText.includes("npm audit --omit=dev --audit-level=critical"),
+  docsText.includes("npm run check:audit") && docsText.includes("npm audit --omit=dev --audit-level=critical"),
   "Go-live docs should mention the current online vulnerability audit that cannot be proven from the lockfile alone."
 );
 

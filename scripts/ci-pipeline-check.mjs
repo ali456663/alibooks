@@ -20,6 +20,7 @@ function includesAll(source, values) {
 
 const ci = read(".github/workflows/ci.yml");
 const dockerhub = read(".github/workflows/dockerhub.yml");
+const releaseGate = read("scripts/release-gate.mjs");
 
 check("CI triggers on push to main", ci.includes("branches:") && ci.includes("- main"), "CI should run when main is updated.");
 check("CI supports manual run", ci.includes("workflow_dispatch:"), "CI should be runnable manually before demos.");
@@ -31,11 +32,15 @@ check("Backend CI uses Java 21", includesAll(ci, ["actions/setup-java@v4", 'java
 check("Backend CI runs Maven tests", ci.includes("run: mvn test"), "Backend job must run Maven tests.");
 check("Backend CI has JWT secret", ci.includes("JWT_SECRET: ci_test_secret_must_be_long_enough_for_demo"), "Backend tests should use a non-empty CI JWT secret.");
 check("Backend CI has explicit schema mode", ci.includes("SPRING_JPA_HIBERNATE_DDL_AUTO: update"), "Backend CI should run with an explicit Hibernate ddl-auto mode.");
+check("Backend CI has explicit schema patch flag", ci.includes('APP_SCHEMA_PATCH_ENABLED: "true"'), "Backend CI should declare whether startup schema patches run during tests.");
 
 check("Frontend CI uses Node 24", includesAll(ci, ["actions/setup-node@v4", 'node-version: "24"']), "Frontend CI should avoid deprecated Node 20 warnings.");
 check("Frontend CI caches npm", includesAll(ci, ["cache: npm", "frontend/package-lock.json"]), "Frontend CI should cache npm dependencies from the frontend lockfile.");
 check("Frontend CI installs with npm ci", includesAll(ci, ["working-directory: frontend", "run: npm ci"]), "Frontend CI should install reproducibly.");
+check("Frontend CI audits dependencies", ci.includes("run: npm run check:audit"), "Frontend CI should run a live npm audit before the release gate.");
 check("Frontend CI runs release gate", ci.includes("run: npm run check:release"), "Frontend CI must run the same release gate used locally.");
+check("Frontend CI release gate includes migration proof", releaseGate.includes('"check:migrations"'), "CI release gate should fail if controlled schema migration proof is stale.");
+check("Frontend CI release gate includes schema bootstrap proof", releaseGate.includes('"check:schema-bootstrap"'), "CI release gate should fail if first RDS schema bootstrap proof is stale.");
 
 check("Docker CI waits for backend/frontend", includesAll(ci, ["needs:", "- backend", "- frontend"]), "Docker build should only run after test jobs pass.");
 check("Docker CI builds backend image", ci.includes("docker build -t cloudshop-backend:ci ./backend"), "CI should build backend Docker image.");

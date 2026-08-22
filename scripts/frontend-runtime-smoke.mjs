@@ -26,7 +26,9 @@ function chromeCandidates() {
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    .map((candidate) => String(candidate).trim().replace(/^["']|["']$/g, ""));
 }
 
 function findChrome() {
@@ -93,6 +95,15 @@ async function connectToAliBooksPage() {
   return { ws, send };
 }
 
+async function evaluateJson(send, expression) {
+  const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
+  if (result.result?.exceptionDetails) {
+    throw new Error(`Browser evaluation failed: ${result.result.exceptionDetails.text || "unknown error"}`);
+  }
+
+  return JSON.parse(result.result?.result?.value || "{}");
+}
+
 async function main() {
   let devServer = null;
   let chrome = null;
@@ -146,6 +157,8 @@ async function main() {
       hasCrashFallback: Boolean(document.querySelector('.app-crash-fallback')) || document.body.innerText.includes('kunde inte visa sidan'),
       hasAliBooks: document.body.innerText.includes('AliBooks'),
       hasLogin: document.body.innerText.includes('Logga in') || document.body.innerText.includes('Login'),
+      hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
+      authFormInlineCount: document.querySelectorAll('.auth-form-inline').length,
       activeView: localStorage.getItem('alibooks-active-view'),
       hasRenderRecoveryAttempt: localStorage.getItem('alibooks-render-recovery-attempted') === 'true',
       lastRenderError: sessionStorage.getItem('alibooks-last-render-error'),
@@ -155,10 +168,7 @@ async function main() {
       viewportHeight: document.documentElement.clientHeight,
       scrollHeight: document.documentElement.scrollHeight
     })`;
-    const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-    ws.close();
-
-    const value = JSON.parse(result.result?.result?.value || "{}");
+    const value = await evaluateJson(send, expression);
     if (value.hasCrashFallback) {
       throw new Error(`AliBooks render crash: ${value.lastRenderError || value.text}`);
     }
@@ -171,10 +181,39 @@ async function main() {
     if (!value.hasAliBooks || !value.hasLogin) {
       throw new Error(`AliBooks did not render the expected shell. Text: ${value.text || "-"}`);
     }
+    if (!value.hasAuthEntry || value.authFormInlineCount !== 0) {
+      throw new Error(`AliBooks logged-out overview should show compact auth buttons with a closed form: ${JSON.stringify(value)}`);
+    }
     if (value.bodyTextLength < 80 || value.rootChildCount < 1 || value.viewportWidth < 320 || value.viewportHeight < 300 || value.scrollHeight < 300) {
       throw new Error(`AliBooks rendered an unexpectedly small or blank page: ${JSON.stringify(value)}`);
     }
 
+    const navResult = await evaluateJson(send, `JSON.stringify((() => {
+      const buttons = [...document.querySelectorAll('button')];
+      const target = buttons.find((button) => ['Kunder', 'Customers'].includes(button.textContent.trim()));
+      if (target) target.click();
+      return { clicked: Boolean(target), label: target?.textContent?.trim() || '' };
+    })())`);
+    if (!navResult.clicked) {
+      throw new Error(`AliBooks smoke test could not find the Customers/Kunder navigation button.`);
+    }
+
+    await sleep(750);
+    const customersView = await evaluateJson(send, `JSON.stringify({
+      text: document.body.innerText.slice(0, 1200),
+      activeView: localStorage.getItem('alibooks-active-view'),
+      hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
+      hasAuthFormInline: Boolean(document.querySelector('.auth-form-inline')),
+      hasLanguageSelectInTopbar: Boolean(document.querySelector('.account-box .language-select'))
+    })`);
+    if (customersView.activeView !== "customers") {
+      throw new Error(`AliBooks did not navigate to customers during smoke test: ${JSON.stringify(customersView)}`);
+    }
+    if (customersView.hasAuthEntry || customersView.hasAuthFormInline || customersView.hasLanguageSelectInTopbar) {
+      throw new Error(`AliBooks auth/language controls must only appear on the logged-out overview: ${JSON.stringify(customersView)}`);
+    }
+
+    ws.close();
     console.log("AliBooks frontend smoke test passed.");
   } finally {
     if (chrome) chrome.kill("SIGKILL");

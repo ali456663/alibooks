@@ -33,11 +33,14 @@ const ignoredExtensions = new Set([
 ]);
 
 const patterns = [
+  { name: "OpenAI-compatible API key", regex: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g },
   { name: "Stripe secret key", regex: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
   { name: "Stripe webhook secret", regex: /\bwhsec_[A-Za-z0-9]{16,}\b/g },
   { name: "Hugging Face token", regex: /\bhf_[A-Za-z0-9]{20,}\b/g },
   { name: "Google/Gemini API key", regex: /\bAIzaSy[A-Za-z0-9_-]{20,}\b/g },
   { name: "AWS access key", regex: /\bAKIA[0-9A-Z]{16}\b/g },
+  { name: "GitHub token", regex: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b/g },
+  { name: "JWT token", regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
   { name: "Private key", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g }
 ];
 
@@ -46,7 +49,18 @@ const requiredIgnoreRules = [
   ".env",
   ".env.*",
   "!.env.example",
-  "!.env.production.example"
+  "!.env.production.example",
+  "*.dump",
+  "*.backup",
+  "*.bak",
+  "*.db",
+  "*.sqlite",
+  "*.sqlite3",
+  "*.csv",
+  "*.xls",
+  "*.xlsx",
+  "*.ofx",
+  "*.qif"
 ];
 
 const missingIgnoreRules = requiredIgnoreRules.filter((rule) => !gitignore.split(/\r?\n/).includes(rule));
