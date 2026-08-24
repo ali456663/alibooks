@@ -168,6 +168,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:first-real-data`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "Pilot readiness evidence count matches script",
+    script: "scripts/pilot-readiness-check.mjs",
+    outputLabel: "AliBooks pilot readiness check",
+    evidencePattern: /`check:pilot`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Calculation integrity evidence count matches script",
     script: "scripts/calculation-integrity-check.mjs",
     outputLabel: "AliBooks calculation integrity check",
@@ -320,6 +326,12 @@ check(
 );
 
 check(
+  "Package exposes pilot check",
+  packageJson.scripts?.["check:pilot"] === "node ../scripts/pilot-readiness-check.mjs",
+  "frontend/package.json should expose npm run check:pilot."
+);
+
+check(
   "Package exposes go-live decision check",
   packageJson.scripts?.["check:go-live-decision"] === "node ../scripts/go-live-decision-check.mjs",
   "frontend/package.json should expose npm run check:go-live-decision."
@@ -455,6 +467,12 @@ check(
   "Release gate runs first-real-data check",
   releaseGate.includes('"check:first-real-data"'),
   "The release gate should fail when first-real-data proof becomes stale."
+);
+
+check(
+  "Release gate runs pilot readiness check",
+  releaseGate.includes('"check:pilot"'),
+  "The release gate should fail when pilot readiness proof becomes stale."
 );
 
 check(

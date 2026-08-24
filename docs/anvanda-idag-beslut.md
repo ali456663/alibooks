@@ -12,6 +12,7 @@ AliBooks kan anvandas lokalt for MVP-arbete nar detta ar sant:
 - `npm run check:release` ar gron.
 - `npm run check:calculations` ar gron.
 - `npm run check:first-real-data` ar gron innan riktiga kunder, fakturor, kvitton eller bankrader registreras.
+- `npm run check:pilot` ar gron innan du startar begransad pilotdrift med riktiga kunder.
 - `npm run check:git -- --strict` ar gron efter senaste commit.
 - `npm run doctor`, `npm run check:views` och `npm run smoke:runtime` ar grona.
 - Backup ar kontrollerad innan du importerar eller skapar mycket data.
@@ -59,6 +60,7 @@ Skarp produktion vantar tills externa bevis finns:
 ```bash
 npm run check:use-today
 npm run check:first-real-data
+npm run check:pilot
 npm run check:calculations
 npm run check:go-live-decision
 ```
@@ -67,6 +69,7 @@ Beslutet ska lasa tillsammans med:
 
 - [anvandningsklar-mvp.md](anvandningsklar-mvp.md)
 - [forsta-riktiga-data.md](forsta-riktiga-data.md)
+- [pilotdrift-mvp.md](pilotdrift-mvp.md)
 - [drift-runbook.md](drift-runbook.md)
 - [go-live-riskregister.md](go-live-riskregister.md)
 - [go-live-beslut.md](go-live-beslut.md)

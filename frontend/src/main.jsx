@@ -20797,6 +20797,20 @@ function App() {
       action: () => setActiveView("settings")
     },
     {
+      key: "pilot",
+      status: goLiveSystemOk && calculationCriticalCount === 0 && unbalancedJournalGroups.length === 0 && backupValidation?.ok ? "ok" : goLiveSystemKnown && (!goLiveSystemOk || calculationCriticalCount > 0 || unbalancedJournalGroups.length > 0) ? "critical" : "warning",
+      title: language === "sv" ? "Pilotvecka" : "Pilot week",
+      statusLabel: goLiveSystemOk && calculationCriticalCount === 0 && unbalancedJournalGroups.length === 0 && backupValidation?.ok ? "OK" : (language === "sv" ? "Kontrollera" : "Check"),
+      score: goLiveSystemOk && calculationCriticalCount === 0 && unbalancedJournalGroups.length === 0 && backupValidation?.ok ? 100 : goLiveSystemKnown && (!goLiveSystemOk || calculationCriticalCount > 0 || unbalancedJournalGroups.length > 0) ? 40 : 70,
+      detail: language === "sv"
+        ? `Pilotdrift: backup ${backupValidation?.ok ? "OK" : "saknas"}, kritiska berakningar ${calculationCriticalCount}, obalanserade verifikat ${unbalancedJournalGroups.length}`
+        : `Pilot mode: backup ${backupValidation?.ok ? "OK" : "missing"}, critical calculations ${calculationCriticalCount}, unbalanced vouchers ${unbalancedJournalGroups.length}`,
+      recommendation: language === "sv"
+        ? "Starta pilot med max 1-3 riktiga kunder forst nar backup, berakning, verifikat, PDF, e-post, betalning och export ar testade."
+        : "Start pilot with at most 1-3 real customers only after backup, calculations, vouchers, PDF, email, payments and export are tested.",
+      action: () => setActiveView("goLive")
+    },
+    {
       key: "compliance",
       status: complianceCriticalCount === 0 && complianceScore >= 80 ? "ok" : complianceCriticalCount > 0 ? "critical" : "warning",
       title: language === "sv" ? "Regelkontroll" : "Compliance",

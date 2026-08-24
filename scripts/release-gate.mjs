@@ -46,6 +46,7 @@ const frontendSteps = [
   ["check:operations", "Check operations and incident readiness"],
   ["check:use-today", "Check final local use decision"],
   ["check:first-real-data", "Check first real data readiness"],
+  ["check:pilot", "Check MVP pilot readiness"],
   ["check:calculations", "Check calculation integrity"],
   ["check:retention", "Check retention and immutability"],
   ["check:audit-integrity", "Check audit trail integrity"],

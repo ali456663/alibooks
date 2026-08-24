@@ -19,6 +19,7 @@ npm run check:mvp-use
 npm run check:operations
 npm run check:use-today
 npm run check:first-real-data
+npm run check:pilot
 npm run check:calculations
 npm run check:retention
 npm run check:audit-integrity
@@ -55,6 +56,7 @@ Detta bevisar lokalt att:
 - redovisningspaket kan exportera SIE, kvittenser, huvudbok, saldobalans, rapporter, kontroller och arsarkiv for saker konsultoverlamning
 - slutligt go-live-beslut skiljer lokal MVP fran skarp drift och kraver externa bevis innan riktig kunddata
 - forsta riktiga data-grinden stoppar om backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin eller export inte ar kontrollerade
+- pilotdrift-grinden begransar forsta riktiga veckan till fa kunder, daglig backup, daglig avstamning, manuella klickbevis och tydliga stoppregler
 - externa go-live-bevis for GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket ar dokumenterade
 - backendtester passerar
 - backend Docker-image kan byggas
@@ -64,13 +66,14 @@ Detta bevisar lokalt att:
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 201 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 146/146 readiness, 79/79 evidence, 55/55 data safety, 44/44 production readiness, 33/33 env-go-live, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
+- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 55/55 data safety, 44/44 production readiness, 33/33 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:env-go-live`: 33/33, go-live-miljo for JWT, CORS, RDS, schemaflaggor, Stripe, SMTP, AI-nycklar och hemlighetshantering.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
 - `npm run check:use-today`: 30/30, slutligt lokalt anvandningsbeslut med stoppsignaler och produktionsblockerare.
 - `npm run check:first-real-data`: 33/33, forsta riktiga data-grind for backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export.
+- `npm run check:pilot`: 25/25, begransad pilotdrift for forsta veckan med daglig rutin, backup, restore drill, manuell klickkontroll, export och stoppregler.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
 - `npm run check:retention`: 23/23, arkiv och andringsspar for fakturor, kunder, leverantorsfakturor, kvitton, bankreset, periodlasning, hard delete, rattelser och backendtester.
 - `npm run check:audit-integrity`: 25/25, revisionsspar, SHA-256-kedja, auditstampel, CSV-export, backupkoppling, JWT-krav och backendtester som visar att andrad historik ger ny fingerprint.
@@ -91,9 +94,9 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 146/146
+- `check:ready`: 150/150
 - `check:acceptance`: 18/18
-- `check:evidence`: 79/79
+- `check:evidence`: 82/82
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:env-go-live`: 33/33
@@ -111,6 +114,7 @@ Detta bevisar lokalt att:
 - `check:operations`: 23/23
 - `check:use-today`: 30/30
 - `check:first-real-data`: 33/33
+- `check:pilot`: 25/25
 - `check:calculations`: 46/46
 - `check:retention`: 23/23
 - `check:audit-integrity`: 25/25

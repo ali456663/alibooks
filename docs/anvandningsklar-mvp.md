@@ -35,6 +35,8 @@ Statusnivaer:
 
 AliBooks ar anvandningsklar som lokal MVP nar alla 20 steg ovan ar grona och manuella bevis for PDF, e-post, Stripe, bank/betalningsflode, underlag, backup och restore drill ar sparade.
 
+Innan bredare anvandning ska en begransad pilotdrift kontrolleras med `npm run check:pilot` och [pilotdrift-mvp.md](pilotdrift-mvp.md). Pilotdrift betyder max 1-3 riktiga kunder forst, daglig backup, daglig avstamning och stopp om fakturanummer, verifikat, moms, backup eller persondata verkar fel.
+
 AliBooks ar inte skarp produktionsklar for riktig kunddata innan:
 
 - GitHub Actions ar gron efter push.

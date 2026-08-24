@@ -40,6 +40,7 @@ const requiredFiles = [
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
   "docs/forsta-riktiga-data.md",
+  "docs/pilotdrift-mvp.md",
   "docs/ci-handoff-efter-push.md",
   "docs/post-push-verifiering.md",
   "docs/berakningskontroll.md",
@@ -70,6 +71,7 @@ const requiredFiles = [
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
   "scripts/first-real-data-check.mjs",
+  "scripts/pilot-readiness-check.mjs",
   "scripts/calculation-integrity-check.mjs",
   "scripts/retention-immutability-check.mjs",
   "scripts/audit-integrity-check.mjs",
@@ -117,6 +119,7 @@ check(
     "check:operations",
     "check:use-today",
     "check:first-real-data",
+    "check:pilot",
     "check:calculations",
     "check:retention",
     "check:audit-integrity",
@@ -137,7 +140,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:external-go-live, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:audit-integrity, check:prod, check:env-go-live, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:external-go-live, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:first-real-data, check:pilot, check:calculations, check:audit-integrity, check:prod, check:env-go-live, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -178,6 +181,7 @@ check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-
 check("Release gate checks operations readiness", releaseGate.includes('"check:operations"'), "Release gate should run the operations and incident readiness check");
 check("Release gate checks final local use decision", releaseGate.includes('"check:use-today"'), "Release gate should run the final local use decision check");
 check("Release gate checks first real data readiness", releaseGate.includes('"check:first-real-data"'), "Release gate should run first real data readiness check");
+check("Release gate checks pilot readiness", releaseGate.includes('"check:pilot"'), "Release gate should run pilot readiness check");
 check("Release gate checks calculation integrity", releaseGate.includes('"check:calculations"'), "Release gate should run calculation integrity check");
 check("Release gate checks retention and immutability", releaseGate.includes('"check:retention"'), "Release gate should run retention and immutability check");
 check("Release gate checks audit trail integrity", releaseGate.includes('"check:audit-integrity"'), "Release gate should run audit trail integrity check");
@@ -266,7 +270,7 @@ for (const file of backendFiles) {
 const releaseEvidence = read("docs/release-evidence.md");
 const backupRunbook = read("docs/backup-restore-runbook.md");
 const riskRegister = read("docs/go-live-riskregister.md");
-const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${read("docs/externa-go-live-bevis.md")}\n${read("docs/miljovariabler-go-live.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
+const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${read("docs/externa-go-live-bevis.md")}\n${read("docs/miljovariabler-go-live.md")}\n${read("docs/pilotdrift-mvp.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
 check("Docs include local doctor", includesAll(docs, ["npm run doctor", "/system/status", "5432"]), "Docs should explain the local startup diagnosis command.");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
@@ -281,6 +285,7 @@ check("Docs include go-live env variables", docs.includes("npm run check:env-go-
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
 check("Docs include first real data decision", docs.includes("npm run check:first-real-data") && docs.includes("forsta-riktiga-data.md"), "Docs should expose the first real data decision command");
+check("Docs include pilot readiness", docs.includes("npm run check:pilot") && docs.includes("pilotdrift-mvp.md"), "Docs should expose pilot readiness rules.");
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");
 check("Docs include retention and immutability", docs.includes("npm run check:retention") && docs.includes("hard delete"), "Docs should expose retention and hard-delete rules");
 check("Docs include audit trail integrity", docs.includes("npm run check:audit-integrity") && docs.includes("revisionsspar"), "Docs should expose audit trail integrity rules");

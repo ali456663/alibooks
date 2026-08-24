@@ -34,6 +34,7 @@
     "check:operations": "npm --prefix frontend run check:operations --",
     "check:use-today": "npm --prefix frontend run check:use-today --",
     "check:first-real-data": "npm --prefix frontend run check:first-real-data --",
+    "check:pilot": "npm --prefix frontend run check:pilot --",
     "check:calculations": "npm --prefix frontend run check:calculations --",
     "check:retention": "npm --prefix frontend run check:retention --",
     "check:audit-integrity": "npm --prefix frontend run check:audit-integrity --",
