@@ -65,8 +65,8 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
-- `npm run test:backend`: passed 2026-08-24, 203 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 55/55 data safety, 44/44 production readiness, 35/35 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
+- `npm run test:backend`: passed 2026-08-24, 204 tests, 0 failures, 0 errors
+- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 57/57 data safety, 44/44 production readiness, 35/35 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:env-go-live`: 35/35, go-live-miljo for JWT, CORS, RDS, schemaflaggor, Stripe, SMTP, AI-nycklar och hemlighetshantering.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
@@ -82,7 +82,7 @@ Detta bevisar lokalt att:
 - `npm run check:go-live-decision`: 17/17, slutligt beslut for lokal MVP kontra skarp drift, externa bevis, backup/restore, Stripe, SMTP, release-sparbarhet och redovisningskonsult-export.
 - `npm run check:external-go-live`: 29/29, externa bevis for GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket.
 - `npm run check:post-push`: 29/29, post-push-verifiering for GitHub sync, Actions, Dockerhub, sparbara image-taggar och strikt efter-push-lage.
-- `npm run check:release:full`: passed 2026-08-24, frontend build, runtime smoke, backendtester 203 tests / 0 failures / 0 errors, release gate och Docker image builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
+- `npm run check:release:full`: passed 2026-08-24, frontend build, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, release gate och Docker image builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
@@ -97,7 +97,7 @@ Detta bevisar lokalt att:
 - `check:ready`: 150/150
 - `check:acceptance`: 18/18
 - `check:evidence`: 82/82
-- `check:data-safety`: 55/55
+- `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 35/35
 - `check:ci`: 29/29

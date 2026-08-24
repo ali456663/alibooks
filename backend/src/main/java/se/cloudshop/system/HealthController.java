@@ -33,6 +33,8 @@ public class HealthController {
   private final boolean corsLocalDevEnabled;
   private final int authMaxFailedLoginAttempts;
   private final int authLoginLockMinutes;
+  private final boolean testDataResetEnabled;
+  private final boolean bankReconciliationResetEnabled;
 
   public HealthController(
       JdbcTemplate jdbcTemplate,
@@ -54,7 +56,9 @@ public class HealthController {
       @Value("${app.cors.allowed-origins:}") String corsAllowedOrigins,
       @Value("${app.cors.local-dev-enabled:true}") boolean corsLocalDevEnabled,
       @Value("${app.auth.max-failed-login-attempts:5}") int authMaxFailedLoginAttempts,
-      @Value("${app.auth.login-lock-minutes:15}") int authLoginLockMinutes
+      @Value("${app.auth.login-lock-minutes:15}") int authLoginLockMinutes,
+      @Value("${app.test-data-reset.enabled:false}") boolean testDataResetEnabled,
+      @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled
   ) {
     this.jdbcTemplate = jdbcTemplate;
     this.mailHost = mailHost;
@@ -76,6 +80,8 @@ public class HealthController {
     this.corsLocalDevEnabled = corsLocalDevEnabled;
     this.authMaxFailedLoginAttempts = authMaxFailedLoginAttempts;
     this.authLoginLockMinutes = authLoginLockMinutes;
+    this.testDataResetEnabled = testDataResetEnabled;
+    this.bankReconciliationResetEnabled = bankReconciliationResetEnabled;
   }
 
   @GetMapping("/health")
@@ -139,6 +145,11 @@ public class HealthController {
         "invoiceRemindersConfigured", hasText(reminderCron),
         "invoiceRemindersCron", hasText(reminderCron) ? reminderCron : "",
         "timeZone", hasText(timeZone) ? timeZone : ""
+    ));
+    status.put("maintenance", Map.of(
+        "testDataResetEnabled", testDataResetEnabled,
+        "bankReconciliationResetEnabled", bankReconciliationResetEnabled,
+        "safeForProduction", !testDataResetEnabled && !bankReconciliationResetEnabled
     ));
     return status;
   }

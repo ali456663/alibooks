@@ -47,7 +47,30 @@ class HealthControllerTest {
         .containsExactly("https://app.alibooks.example");
   }
 
+  @Test
+  void systemStatusExposesMaintenanceResetFlags() {
+    when(jdbcTemplate.queryForObject("select 1", Integer.class)).thenReturn(1);
+
+    HealthController controller = controller("https://app.alibooks.example", false, true, false);
+
+    Map<String, Object> status = controller.systemStatus();
+    Map<String, Object> maintenance = nested(status, "maintenance");
+
+    assertThat(maintenance.get("testDataResetEnabled")).isEqualTo(true);
+    assertThat(maintenance.get("bankReconciliationResetEnabled")).isEqualTo(false);
+    assertThat(maintenance.get("safeForProduction")).isEqualTo(false);
+  }
+
   private HealthController controller(String corsAllowedOrigins, boolean corsLocalDevEnabled) {
+    return controller(corsAllowedOrigins, corsLocalDevEnabled, false, false);
+  }
+
+  private HealthController controller(
+      String corsAllowedOrigins,
+      boolean corsLocalDevEnabled,
+      boolean testDataResetEnabled,
+      boolean bankReconciliationResetEnabled
+  ) {
     return new HealthController(
         jdbcTemplate,
         "",
@@ -68,7 +91,9 @@ class HealthControllerTest {
         corsAllowedOrigins,
         corsLocalDevEnabled,
         5,
-        15
+        15,
+        testDataResetEnabled,
+        bankReconciliationResetEnabled
     );
   }
 

@@ -204,6 +204,25 @@ check(
   "Voucher approval resets must not change review state for locked accounting periods."
 );
 
+const healthController = read("backend/src/main/java/se/cloudshop/system/HealthController.java");
+check(
+  "System status exposes destructive reset flags",
+  healthController.includes('"maintenance"')
+    && healthController.includes("testDataResetEnabled")
+    && healthController.includes("bankReconciliationResetEnabled")
+    && healthController.includes("safeForProduction"),
+  "Settings and Security views should not guess whether destructive reset endpoints are active."
+);
+
+const frontend = read("frontend/src/main.jsx");
+check(
+  "Frontend disables test-data reset unless backend flag is enabled",
+  frontend.includes("maintenanceTestDataResetEnabled")
+    && frontend.includes("disabled={!maintenanceTestDataResetEnabled}")
+    && frontend.includes("APP_TEST_DATA_RESET_ENABLED=true bara i lokal testmiljo"),
+  "The test-data reset button should not look available when the backend reset feature flag is off."
+);
+
 const failed = results.filter((result) => !result.ok);
 for (const result of results) {
   console.log(`${result.ok ? "OK" : "FAIL"} - ${result.name}: ${result.detail}`);

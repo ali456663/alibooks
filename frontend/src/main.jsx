@@ -5571,6 +5571,13 @@ function App() {
     setError("");
     setSettingsMessage("");
 
+    if (!maintenanceTestDataResetEnabled) {
+      setError(language === "sv"
+        ? "Testdata-rensning ar avstangd. Aktivera APP_TEST_DATA_RESET_ENABLED=true bara i lokal testmiljo."
+        : "Test data reset is disabled. Enable APP_TEST_DATA_RESET_ENABLED=true only in a local test environment.");
+      return;
+    }
+
     const confirmed = window.confirm(
       language === "sv"
         ? "Rensa alla kunder, fakturor, kostnader och bokforingsrader? Detta ar bara for testdata."
@@ -20278,6 +20285,9 @@ function App() {
     : systemStatus?.cors?.allowedOrigins || "";
   const corsLocalDevelopmentReady = Boolean(systemStatus?.cors?.localDevelopmentReady || systemStatus?.cors?.localDevEnabled);
   const corsReadyForCurrentMode = Boolean(systemStatus?.cors?.productionReady || corsLocalDevelopmentReady);
+  const maintenanceTestDataResetEnabled = Boolean(systemStatus?.maintenance?.testDataResetEnabled);
+  const maintenanceBankResetEnabled = Boolean(systemStatus?.maintenance?.bankReconciliationResetEnabled);
+  const maintenanceSafeForProduction = Boolean(systemStatus?.maintenance?.safeForProduction);
   const securityPrivacyControlRows = [
     {
       key: "jwt",
@@ -40533,6 +40543,15 @@ function App() {
                           : `Schedule: ${systemStatus?.automation?.invoiceRemindersCron || "-"} (${systemStatus?.automation?.timeZone || "Europe/Stockholm"})`)
                         : (language === "sv" ? "Inget schema hittades." : "No schedule found.")
                     )}
+                    {renderSystemStatusItem(
+                      language === "sv" ? "Reset-skydd" : "Reset protection",
+                      maintenanceSafeForProduction,
+                      maintenanceSafeForProduction
+                        ? (language === "sv" ? "Testdata- och bankreset ar avstangda." : "Test data and bank reset are disabled.")
+                        : (language === "sv"
+                          ? `Testdata-reset: ${maintenanceTestDataResetEnabled ? "pa" : "av"}, bankreset: ${maintenanceBankResetEnabled ? "pa" : "av"}. Bara for lokal testmiljo.`
+                          : `Test data reset: ${maintenanceTestDataResetEnabled ? "on" : "off"}, bank reset: ${maintenanceBankResetEnabled ? "on" : "off"}. Local test only.`)
+                    )}
                   </div>
                   {systemStatus && (!systemStatus?.security?.jwtStrong || !systemStatus?.stripe?.configured || !systemStatus?.stripe?.webhookConfigured || !systemStatus?.ai?.configured || !systemStatus?.email?.configured) && (
                     <div className="config-guide">
@@ -41179,11 +41198,25 @@ function App() {
                 <div className="danger-zone">
                   <strong>{language === "sv" ? "Utveckling / test" : "Development / test"}</strong>
                   <p>
-                    {language === "sv"
-                      ? "Rensa demo- och testdata nar du vill borja om."
-                      : "Clear demo and test data when you want to start over."}
+                    {maintenanceTestDataResetEnabled
+                      ? (language === "sv"
+                        ? "Testdata-rensning ar aktiverad for lokal testmiljo. Anvand aldrig detta lage med riktig kund- eller bokforingsdata."
+                        : "Test data reset is enabled for local testing. Never use this mode with real customer or accounting data.")
+                      : (language === "sv"
+                        ? "Testdata-rensning ar avstangd. Det ar ratt lage for riktig data och skarpare drift."
+                        : "Test data reset is disabled. This is the right mode for real data and more serious operation.")}
                   </p>
-                  <button type="button" className="danger-button" onClick={clearTestData}>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={clearTestData}
+                    disabled={!maintenanceTestDataResetEnabled}
+                    title={maintenanceTestDataResetEnabled
+                      ? ""
+                      : (language === "sv"
+                        ? "Aktivera APP_TEST_DATA_RESET_ENABLED=true bara i lokal testmiljo."
+                        : "Enable APP_TEST_DATA_RESET_ENABLED=true only in a local test environment.")}
+                  >
                     {t.clearTestData}
                   </button>
                   <button type="button" className="secondary-button" onClick={clearLocalPreferences}>
