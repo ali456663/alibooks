@@ -1,7 +1,7 @@
 # AliBooks release evidence
 
 Senast komplett lokalt releasebevis: 2026-08-24 12:14 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-22 21:43 +02:00.
+Senast standard-release och backendtest verifierat: 2026-08-24 15:08 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
