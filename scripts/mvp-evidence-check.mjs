@@ -112,6 +112,12 @@ const countedEvidenceChecks = [
     script: "scripts/manual-go-live-evidence-check.mjs",
     outputLabel: "Manual go-live evidence check",
     evidencePattern: /`check:manual-go-live`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "MVP use readiness evidence count matches script",
+    script: "scripts/mvp-use-readiness-check.mjs",
+    outputLabel: "AliBooks MVP use readiness check",
+    evidencePattern: /`check:mvp-use`:\s*(\d+)\/(\d+)/
   }
 ];
 
@@ -194,6 +200,12 @@ check(
 );
 
 check(
+  "Package exposes MVP use readiness check",
+  packageJson.scripts?.["check:mvp-use"] === "node ../scripts/mvp-use-readiness-check.mjs",
+  "frontend/package.json should expose npm run check:mvp-use."
+);
+
+check(
   "Package exposes git parser check",
   packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
   "frontend/package.json should expose npm run check:git-parser."
@@ -239,6 +251,12 @@ check(
   "Release gate runs evidence check",
   releaseGate.includes('"check:evidence"'),
   "The release gate should fail when MVP evidence becomes stale."
+);
+
+check(
+  "Release gate runs MVP use readiness check",
+  releaseGate.includes('"check:mvp-use"'),
+  "The release gate should fail when 20-step MVP use evidence becomes stale."
 );
 
 check(

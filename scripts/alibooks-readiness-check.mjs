@@ -36,6 +36,7 @@ const requiredFiles = [
   ".env.example",
   ".env.production.example",
   "docs/mvp-testprotokoll.md",
+  "docs/anvandningsklar-mvp.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/speedledger-paritet.md",
@@ -49,7 +50,8 @@ const requiredFiles = [
   "scripts/restore-postgres.sh",
   "scripts/restore-postgres.ps1",
   "scripts/schema-migration-check.mjs",
-  "scripts/schema-bootstrap-check.mjs"
+  "scripts/schema-bootstrap-check.mjs",
+  "scripts/mvp-use-readiness-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -81,6 +83,7 @@ check(
     "check:go-live-risks",
     "check:manual-go-live",
     "check:startklar",
+    "check:mvp-use",
     "check:prod",
     "check:prepush",
     "smoke:runtime",
@@ -95,7 +98,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:mvp-use, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -127,6 +130,7 @@ check("Release gate checks production readiness", releaseGate.includes('"check:p
 check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
 check("Release gate checks manual go-live evidence", releaseGate.includes('"check:manual-go-live"'), "Release gate should run manual external evidence check");
 check("Release gate checks Startklar readiness", releaseGate.includes('"check:startklar"'), "Release gate should run the short local MVP start readiness check");
+check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-use"'), "Release gate should run the 20-step MVP use readiness check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
