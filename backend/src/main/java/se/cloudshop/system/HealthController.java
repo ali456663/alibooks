@@ -1,6 +1,9 @@
 package se.cloudshop.system;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -113,10 +116,13 @@ public class HealthController {
         "configured", hasText(frontendUrl),
         "url", hasText(frontendUrl) ? frontendUrl : ""
     ));
+    List<String> effectiveAllowedOrigins = allowedOriginPatterns();
     status.put("cors", Map.of(
         "configured", hasText(corsAllowedOrigins),
         "allowedOrigins", hasText(corsAllowedOrigins) ? corsAllowedOrigins : "",
+        "effectiveAllowedOrigins", effectiveAllowedOrigins,
         "localDevEnabled", corsLocalDevEnabled,
+        "localDevelopmentReady", corsLocalDevEnabled && effectiveAllowedOrigins.stream().anyMatch(origin -> origin.contains("localhost")),
         "productionReady", hasText(corsAllowedOrigins) && !corsLocalDevEnabled
     ));
     status.put("security", Map.of(
@@ -148,6 +154,26 @@ public class HealthController {
 
   private boolean hasText(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private List<String> allowedOriginPatterns() {
+    List<String> patterns = new ArrayList<>();
+    Arrays.stream(corsAllowedOrigins.split(","))
+        .map(String::trim)
+        .filter(origin -> !origin.isBlank())
+        .forEach(patterns::add);
+
+    if (corsLocalDevEnabled) {
+      patterns.add("http://localhost:*");
+      patterns.add("http://127.0.0.1:*");
+    }
+
+    if (patterns.isEmpty()) {
+      patterns.add("http://localhost:*");
+      patterns.add("http://127.0.0.1:*");
+    }
+
+    return patterns.stream().distinct().toList();
   }
 
   private boolean jwtIsConfigured() {

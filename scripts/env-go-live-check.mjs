@@ -29,6 +29,7 @@ function includesAll(source, values) {
 const docPath = "docs/miljovariabler-go-live.md";
 const doc = exists(docPath) ? read(docPath) : "";
 const applicationProperties = read("backend/src/main/resources/application.properties");
+const healthController = read("backend/src/main/java/se/cloudshop/system/HealthController.java");
 const productionCheck = read("scripts/production-readiness-check.mjs");
 const secretCheck = read("scripts/secret-placeholder-check.mjs");
 const riskRegister = read("docs/go-live-riskregister.md");
@@ -97,6 +98,8 @@ check("Backend exposes env placeholders", includesAll(applicationProperties, req
 check("Production check validates required vars", includesAll(productionCheck, productionRuntimeEnv), "Production check should validate runtime env.");
 check("Production check validates same-origin API", includesAll(productionCheck, ["VITE_API_URL", "/api"]), "Frontend API routing should be checked.");
 check("Production check validates CORS hardening", includesAll(productionCheck, ["APP_CORS_ALLOWED_ORIGINS", "APP_CORS_LOCAL_DEV_ENABLED", "Strict CORS is not localhost"]), "CORS hardening should be checked.");
+check("Backend status exposes effective CORS origins", includesAll(healthController, ["effectiveAllowedOrigins", "allowedOriginPatterns", "localDevelopmentReady"]), "System status should show the actual local/prod CORS mode.");
+check("Security view separates local and production CORS", includesAll(mainSource, ["localDevelopmentReady", "Effektiva origins", "APP_CORS_LOCAL_DEV_ENABLED=false"]), "Frontend should show local CORS as dev-ready without overclaiming production.");
 check("Production check validates JWT strength", includesAll(productionCheck, ["Strict JWT secret is strong", "32"]), "JWT strength should be checked.");
 check("Production check validates schema safety", includesAll(productionCheck, ["validate", "none", "APP_SCHEMA_PATCH_ENABLED should be false"]), "Schema safety should be checked.");
 check("Production check validates Stripe and SMTP", includesAll(productionCheck, ["sk_test_", "sk_live_", "whsec_", "SMTP config is complete"]), "Integration config should be checked.");

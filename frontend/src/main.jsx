@@ -20273,6 +20273,11 @@ function App() {
     dataProtectionRows.reduce((sum, row) => sum + row.score, 0) / Math.max(dataProtectionRows.length, 1)
       - dataProtectionRiskRows.length * 2
   ));
+  const corsEffectiveOrigins = Array.isArray(systemStatus?.cors?.effectiveAllowedOrigins)
+    ? systemStatus.cors.effectiveAllowedOrigins.join(", ")
+    : systemStatus?.cors?.allowedOrigins || "";
+  const corsLocalDevelopmentReady = Boolean(systemStatus?.cors?.localDevelopmentReady || systemStatus?.cors?.localDevEnabled);
+  const corsReadyForCurrentMode = Boolean(systemStatus?.cors?.productionReady || corsLocalDevelopmentReady);
   const securityPrivacyControlRows = [
     {
       key: "jwt",
@@ -20306,18 +20311,22 @@ function App() {
     },
     {
       key: "cors",
-      status: systemStatus?.cors?.productionReady || (systemStatus?.cors?.configured && systemStatus?.cors?.localDevEnabled) ? "ok" : "warning",
+      status: corsReadyForCurrentMode ? "ok" : "warning",
       title: language === "sv" ? "CORS och frontend-origin" : "CORS and frontend origin",
       statusLabel: systemStatus?.cors?.productionReady ? "OK" : (systemStatus?.cors?.localDevEnabled ? (language === "sv" ? "Lokal dev" : "Local dev") : (language === "sv" ? "Kontrollera" : "Check")),
-      score: systemStatus?.cors?.productionReady ? 100 : systemStatus?.cors?.configured ? 82 : 55,
-      detail: systemStatus?.cors?.configured
+      score: systemStatus?.cors?.productionReady ? 100 : corsLocalDevelopmentReady ? 82 : systemStatus?.cors?.configured ? 78 : 55,
+      detail: corsReadyForCurrentMode || systemStatus?.cors?.configured
         ? (language === "sv"
-          ? `Tillatna origins: ${systemStatus?.cors?.allowedOrigins || "-"}. Lokal dev: ${systemStatus?.cors?.localDevEnabled ? "pa" : "av"}.`
-          : `Allowed origins: ${systemStatus?.cors?.allowedOrigins || "-"}. Local dev: ${systemStatus?.cors?.localDevEnabled ? "on" : "off"}.`)
+          ? `Effektiva origins: ${corsEffectiveOrigins || "-"}. Lokal dev: ${systemStatus?.cors?.localDevEnabled ? "pa" : "av"}.`
+          : `Effective origins: ${corsEffectiveOrigins || "-"}. Local dev: ${systemStatus?.cors?.localDevEnabled ? "on" : "off"}.`)
         : (language === "sv" ? "CORS-origin saknas i backendstatus." : "CORS origin is missing in backend status."),
       recommendation: language === "sv"
-        ? "For produktion: satt APP_CORS_ALLOWED_ORIGINS till publik frontend-URL och APP_CORS_LOCAL_DEV_ENABLED=false."
-        : "For production: set APP_CORS_ALLOWED_ORIGINS to the public frontend URL and APP_CORS_LOCAL_DEV_ENABLED=false."
+        ? (systemStatus?.cors?.productionReady
+          ? "Produktions-CORS ar last till konfigurerad frontend-origin."
+          : "Lokalt kan appen fungera. For produktion: satt APP_CORS_ALLOWED_ORIGINS till publik frontend-URL och APP_CORS_LOCAL_DEV_ENABLED=false.")
+        : (systemStatus?.cors?.productionReady
+          ? "Production CORS is locked to the configured frontend origin."
+          : "The app can work locally. For production: set APP_CORS_ALLOWED_ORIGINS to the public frontend URL and APP_CORS_LOCAL_DEV_ENABLED=false.")
     },
     {
       key: "personal-data",
