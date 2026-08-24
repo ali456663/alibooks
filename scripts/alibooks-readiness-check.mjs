@@ -39,6 +39,7 @@ const requiredFiles = [
   "docs/anvandningsklar-mvp.md",
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
+  "docs/ci-handoff-efter-push.md",
   "docs/berakningskontroll.md",
   "docs/arkiv-och-andringsspar.md",
   "docs/revisionsspar-integritet.md",
@@ -59,6 +60,7 @@ const requiredFiles = [
   "scripts/restore-postgres.ps1",
   "scripts/schema-migration-check.mjs",
   "scripts/schema-bootstrap-check.mjs",
+  "scripts/ci-handoff-check.mjs",
   "scripts/mvp-use-readiness-check.mjs",
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
@@ -89,6 +91,7 @@ check(
     "check:backend-wiring",
     "check:backup",
     "check:ci",
+    "check:ci-handoff",
     "check:docs",
     "check:docker",
     "check:data-safety",
@@ -122,7 +125,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:audit-integrity, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:audit-integrity, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -141,6 +144,7 @@ check("Release gate checks backend wiring", releaseGate.includes('"check:backend
 check("Release gate checks git parser regression", releaseGate.includes('"check:git-parser"'), "Release gate should run git status parser regression check");
 check("Release gate checks backup readiness", releaseGate.includes('"check:backup"'), "Release gate should run backup readiness check");
 check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Release gate should run GitHub Actions pipeline check");
+check("Release gate checks CI handoff", releaseGate.includes('"check:ci-handoff"'), "Release gate should run CI handoff check");
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
 check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
 check("Release gate checks schema policy", releaseGate.includes('"check:schema"'), "Release gate should run database schema policy check");
@@ -250,6 +254,7 @@ const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read(
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
 check("Docs include local doctor", includesAll(docs, ["npm run doctor", "/system/status", "5432"]), "Docs should explain the local startup diagnosis command.");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
+check("Docs include CI handoff", docs.includes("npm run check:ci-handoff") && docs.includes("ci-handoff-efter-push.md"), "Docs should explain what to do after git push.");
 check("Docs include cash/card payment review", includesAll(docs, ["kort", "Swish", "Stripe"]), "Docs should remind about electronic payment review");
 check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release:full"), "Release evidence should document the full local verification command");
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");

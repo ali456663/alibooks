@@ -17,6 +17,7 @@
     "check:backend-wiring": "node ../scripts/backend-wiring-check.mjs",
     "check:backup": "node ../scripts/backup-readiness-check.mjs",
     "check:ci": "node ../scripts/ci-pipeline-check.mjs",
+    "check:ci-handoff": "node ../scripts/ci-handoff-check.mjs",
     "check:docs": "node ../scripts/docs-consistency-check.mjs",
     "check:docker": "node ../scripts/docker-config-check.mjs",
     "check:data-safety": "node ../scripts/data-safety-check.mjs",

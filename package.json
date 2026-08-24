@@ -14,6 +14,7 @@
     "check:backend-wiring": "npm --prefix frontend run check:backend-wiring --",
     "check:backup": "npm --prefix frontend run check:backup --",
     "check:ci": "npm --prefix frontend run check:ci --",
+    "check:ci-handoff": "npm --prefix frontend run check:ci-handoff --",
     "check:docs": "npm --prefix frontend run check:docs --",
     "check:docker": "npm --prefix frontend run check:docker --",
     "check:data-safety": "npm --prefix frontend run check:data-safety --",
