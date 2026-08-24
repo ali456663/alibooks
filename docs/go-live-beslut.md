@@ -35,6 +35,7 @@ Kor fran projektets rotmapp:
 ```bash
 npm run check:release:full
 npm run check:secrets
+npm run check:external-go-live
 npm run check:git -- --strict
 git push
 npm run check:sync

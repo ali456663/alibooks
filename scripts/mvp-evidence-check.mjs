@@ -120,6 +120,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:go-live-decision`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "External go-live evidence count matches script",
+    script: "scripts/external-go-live-proof-check.mjs",
+    outputLabel: "External go-live proof check",
+    evidencePattern: /`check:external-go-live`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Manual go-live evidence count matches script",
     script: "scripts/manual-go-live-evidence-check.mjs",
     outputLabel: "Manual go-live evidence check",
@@ -290,6 +296,12 @@ check(
 );
 
 check(
+  "Package exposes external go-live proof check",
+  packageJson.scripts?.["check:external-go-live"] === "node ../scripts/external-go-live-proof-check.mjs",
+  "frontend/package.json should expose npm run check:external-go-live."
+);
+
+check(
   "Package exposes calculation integrity check",
   packageJson.scripts?.["check:calculations"] === "node ../scripts/calculation-integrity-check.mjs",
   "frontend/package.json should expose npm run check:calculations."
@@ -395,6 +407,12 @@ check(
   "Release gate runs go-live decision check",
   releaseGate.includes('"check:go-live-decision"'),
   "The release gate should fail when the final production decision becomes stale."
+);
+
+check(
+  "Release gate runs external go-live proof check",
+  releaseGate.includes('"check:external-go-live"'),
+  "The release gate should fail when external production proof becomes stale."
 );
 
 check(

@@ -27,6 +27,7 @@
     "check:git": "node ../scripts/git-release-status.mjs",
     "check:go-live-risks": "node ../scripts/go-live-risk-check.mjs",
     "check:go-live-decision": "node ../scripts/go-live-decision-check.mjs",
+    "check:external-go-live": "node ../scripts/external-go-live-proof-check.mjs",
     "check:manual-go-live": "node ../scripts/manual-go-live-evidence-check.mjs",
     "check:startklar": "node ../scripts/startklar-check.mjs",
     "check:mvp-use": "node ../scripts/mvp-use-readiness-check.mjs",

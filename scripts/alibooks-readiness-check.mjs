@@ -46,6 +46,7 @@ const requiredFiles = [
   "docs/periodstangning-och-bokslutskontroll.md",
   "docs/redovisningspaket-och-konsultexport.md",
   "docs/go-live-beslut.md",
+  "docs/externa-go-live-bevis.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/speedledger-paritet.md",
@@ -69,7 +70,8 @@ const requiredFiles = [
   "scripts/audit-integrity-check.mjs",
   "scripts/period-close-readiness-check.mjs",
   "scripts/accountant-handoff-check.mjs",
-  "scripts/go-live-decision-check.mjs"
+  "scripts/go-live-decision-check.mjs",
+  "scripts/external-go-live-proof-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -101,6 +103,7 @@ check(
     "check:git",
     "check:go-live-risks",
     "check:go-live-decision",
+    "check:external-go-live",
     "check:manual-go-live",
     "check:startklar",
     "check:mvp-use",
@@ -125,7 +128,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:audit-integrity, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:external-go-live, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:audit-integrity, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -157,6 +160,7 @@ check("Release gate checks Docker config", releaseGate.includes('"check:docker"'
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
 check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
 check("Release gate checks go-live decision", releaseGate.includes('"check:go-live-decision"'), "Release gate should run the final go-live decision check");
+check("Release gate checks external go-live proof", releaseGate.includes('"check:external-go-live"'), "Release gate should run the external production proof check");
 check("Release gate checks manual go-live evidence", releaseGate.includes('"check:manual-go-live"'), "Release gate should run manual external evidence check");
 check("Release gate checks Startklar readiness", releaseGate.includes('"check:startklar"'), "Release gate should run the short local MVP start readiness check");
 check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-use"'), "Release gate should run the 20-step MVP use readiness check");
@@ -250,7 +254,7 @@ for (const file of backendFiles) {
 const releaseEvidence = read("docs/release-evidence.md");
 const backupRunbook = read("docs/backup-restore-runbook.md");
 const riskRegister = read("docs/go-live-riskregister.md");
-const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
+const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${read("docs/externa-go-live-bevis.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
 check("Docs include local doctor", includesAll(docs, ["npm run doctor", "/system/status", "5432"]), "Docs should explain the local startup diagnosis command.");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
@@ -260,6 +264,7 @@ check("Release evidence includes full local gate", releaseEvidence.includes("npm
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");
 check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
 check("Docs include go-live decision", docs.includes("npm run check:go-live-decision") && docs.includes("go-live-beslut.md"), "Docs should expose the final production go-live decision.");
+check("Docs include external go-live proof", docs.includes("npm run check:external-go-live") && docs.includes("externa-go-live-bevis.md"), "Docs should expose the external production proof gate.");
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");

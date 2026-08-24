@@ -48,6 +48,7 @@ const externalProofs = [
   "Stripe",
   "SMTP",
   "check:sync",
+  "check:external-go-live",
   "check:release-traceability"
 ];
 
@@ -56,7 +57,7 @@ check("Decision separates local MVP from production", includesAll(decisionDoc, [
 check("Decision requires all external proofs", includesAll(decisionDoc, externalProofs), "The decision should name every external blocker before real data.");
 check("Decision blocks real data until proof", includesAll(decisionDoc, ["ska inte anvandas med riktig kunddata", "BLOCKERAR"]), "Real customers/bookkeeping data should stay blocked until proof exists.");
 check("Decision has a go/no-go matrix", includesAll(decisionDoc, ["GO lokalt", "NO-GO skarp drift", "Beslut"]), "The user needs a simple decision table.");
-check("Decision has exact command order", includesAll(decisionDoc, ["npm run check:release:full", "npm run check:git -- --strict", "npm run check:sync", "npm run check:prepush -- --allow-ahead"]), "Go-live should have runnable commands in order.");
+check("Decision has exact command order", includesAll(decisionDoc, ["npm run check:release:full", "npm run check:external-go-live", "npm run check:git -- --strict", "npm run check:sync", "npm run check:prepush -- --allow-ahead"]), "Go-live should have runnable commands in order.");
 check("Decision includes rollback and restore", includesAll(decisionDoc, ["rollback", "restore", "separat testdatabas"]), "Production use needs recovery proof, not only deploy proof.");
 check("Decision includes accountant review", includesAll(decisionDoc, ["redovisningskonsult", "SIE", "huvudbok", "saldobalans"]), "Accounting review/export should be visible before real use.");
 check("Risk register points to decision", riskRegister.includes("go-live-beslut.md") && riskRegister.includes("check:go-live-decision"), "Risk register should route to the final decision gate.");
