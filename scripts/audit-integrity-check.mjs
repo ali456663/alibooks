@@ -32,6 +32,7 @@ const auditService = read("backend/src/main/java/se/cloudshop/audit/AuditService
 const auditController = read("backend/src/main/java/se/cloudshop/audit/AuditController.java");
 const auditEvent = read("backend/src/main/java/se/cloudshop/audit/AuditEvent.java");
 const auditTest = read("backend/src/test/java/se/cloudshop/audit/AuditServiceTest.java");
+const auditControllerTest = read("backend/src/test/java/se/cloudshop/audit/AuditControllerTest.java");
 const frontend = read("frontend/src/main.jsx");
 const releaseGate = read("scripts/release-gate.mjs");
 const readiness = read("scripts/alibooks-readiness-check.mjs");
@@ -154,6 +155,24 @@ check(
   "Backend test covers actor from JWT",
   auditTest.includes("recordsActorEmailFromJwtSubject"),
   "Backend tests should prove audit actor is taken from JWT subject."
+);
+
+check(
+  "Backend controller test requires JWT",
+  auditControllerTest.includes("auditEventsRequireJwt"),
+  "Backend controller tests should prove audit endpoints require JWT."
+);
+
+check(
+  "Backend controller test covers integrity export",
+  includesAll(auditControllerTest, ["auditIntegrityExportIncludesFingerprintAndRecordsAuditEvent", "audit_integrity_exported", "Auditstampel"]),
+  "Backend controller tests should prove integrity export includes fingerprint and records audit event."
+);
+
+check(
+  "Backend controller test covers audit events export",
+  includesAll(auditControllerTest, ["auditEventsExportIncludesIntegrityControlValuesAndRecordsAuditEvent", "audit_events_exported", "Backend auditstampel"]),
+  "Backend controller tests should prove audit events export includes control values and records audit event."
 );
 
 check(
