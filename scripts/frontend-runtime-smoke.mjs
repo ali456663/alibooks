@@ -188,6 +188,34 @@ async function main() {
       throw new Error(`AliBooks rendered an unexpectedly small or blank page: ${JSON.stringify(value)}`);
     }
 
+    await evaluateJson(send, `JSON.stringify((() => {
+      localStorage.removeItem('alibooks-token');
+      localStorage.removeItem('alibooks-email');
+      localStorage.setItem('alibooks-active-view', 'customers');
+      location.reload();
+      return { seededSavedView: 'customers' };
+    })())`);
+    await sleep(2000);
+
+    const loggedOutSavedViewRecovery = await evaluateJson(send, `JSON.stringify({
+      activeView: localStorage.getItem('alibooks-active-view'),
+      hasCrashFallback: Boolean(document.querySelector('.app-crash-fallback')) || document.body.innerText.includes('kunde inte visa sidan'),
+      hasAliBooks: document.body.innerText.includes('AliBooks'),
+      hasLogin: document.body.innerText.includes('Logga in') || document.body.innerText.includes('Login'),
+      hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
+      authFormInlineCount: document.querySelectorAll('.auth-form-inline').length,
+      text: document.body.innerText.slice(0, 1200)
+    })`);
+    if (loggedOutSavedViewRecovery.hasCrashFallback) {
+      throw new Error(`AliBooks crashed after restoring a logged-out saved internal view: ${JSON.stringify(loggedOutSavedViewRecovery)}`);
+    }
+    if (loggedOutSavedViewRecovery.activeView !== "overview") {
+      throw new Error(`AliBooks should force logged-out startup to overview, not ${loggedOutSavedViewRecovery.activeView || "-"}: ${JSON.stringify(loggedOutSavedViewRecovery)}`);
+    }
+    if (!loggedOutSavedViewRecovery.hasAliBooks || !loggedOutSavedViewRecovery.hasLogin || !loggedOutSavedViewRecovery.hasAuthEntry || loggedOutSavedViewRecovery.authFormInlineCount !== 0) {
+      throw new Error(`AliBooks logged-out saved-view recovery should show compact overview auth controls: ${JSON.stringify(loggedOutSavedViewRecovery)}`);
+    }
+
     const navResult = await evaluateJson(send, `JSON.stringify((() => {
       const buttons = [...document.querySelectorAll('button')];
       const target = buttons.find((button) => ['Kunder', 'Customers'].includes(button.textContent.trim()));
@@ -199,18 +227,22 @@ async function main() {
     }
 
     await sleep(750);
-    const customersView = await evaluateJson(send, `JSON.stringify({
+    const loggedOutNavigationGuard = await evaluateJson(send, `JSON.stringify({
       text: document.body.innerText.slice(0, 1200),
       activeView: localStorage.getItem('alibooks-active-view'),
+      hasCrashFallback: Boolean(document.querySelector('.app-crash-fallback')) || document.body.innerText.includes('kunde inte visa sidan'),
       hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
       hasAuthFormInline: Boolean(document.querySelector('.auth-form-inline')),
       hasLanguageSelectInTopbar: Boolean(document.querySelector('.account-box .language-select'))
     })`);
-    if (customersView.activeView !== "customers") {
-      throw new Error(`AliBooks did not navigate to customers during smoke test: ${JSON.stringify(customersView)}`);
+    if (loggedOutNavigationGuard.hasCrashFallback) {
+      throw new Error(`AliBooks crashed after logged-out internal navigation: ${JSON.stringify(loggedOutNavigationGuard)}`);
     }
-    if (customersView.hasAuthEntry || customersView.hasAuthFormInline || customersView.hasLanguageSelectInTopbar) {
-      throw new Error(`AliBooks auth/language controls must only appear on the logged-out overview: ${JSON.stringify(customersView)}`);
+    if (loggedOutNavigationGuard.activeView !== "overview") {
+      throw new Error(`AliBooks should keep logged-out internal navigation on overview, not ${loggedOutNavigationGuard.activeView || "-"}: ${JSON.stringify(loggedOutNavigationGuard)}`);
+    }
+    if (!loggedOutNavigationGuard.hasAuthEntry || loggedOutNavigationGuard.hasAuthFormInline || !loggedOutNavigationGuard.hasLanguageSelectInTopbar) {
+      throw new Error(`AliBooks logged-out overview should keep compact auth/language controls after internal navigation: ${JSON.stringify(loggedOutNavigationGuard)}`);
     }
 
     ws.close();

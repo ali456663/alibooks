@@ -1548,6 +1548,16 @@ const viewKeys = [
   "settings"
 ];
 
+function readStoredActiveView(hasSessionToken) {
+  if (!hasSessionToken) {
+    localStorage.setItem("alibooks-active-view", "overview");
+    return "overview";
+  }
+
+  const savedView = localStorage.getItem("alibooks-active-view");
+  return viewKeys.includes(savedView) ? savedView : "overview";
+}
+
 const invoiceFilterKeys = ["all", "draft", "sent", "paid", "unpaid", "overdue", "dueSoon"];
 const expenseFilterKeys = ["all", "withReceipt", "missingReceipt"];
 const customerFilterKeys = ["active", "archived", "all", "outstanding"];
@@ -1908,10 +1918,7 @@ function App() {
     return savedLanguage === "en" ? "en" : "sv";
   });
   const [customerMessage, setCustomerMessage] = useState("");
-  const [activeView, setActiveView] = useState(() => {
-    const savedView = localStorage.getItem("alibooks-active-view");
-    return viewKeys.includes(savedView) ? savedView : "overview";
-  });
+  const [activeView, setActiveView] = useState(() => readStoredActiveView(Boolean(token)));
   const [mvpManualChecks, setMvpManualChecks] = useState(() => {
     try {
       const savedChecks = JSON.parse(localStorage.getItem("alibooks-mvp-manual-checks") || "{}");
@@ -2160,8 +2167,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!token && activeView !== "overview") {
+      localStorage.setItem("alibooks-active-view", "overview");
+      setActiveView("overview");
+      return;
+    }
+
     localStorage.setItem("alibooks-active-view", activeView);
-  }, [activeView]);
+  }, [activeView, token]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-mvp-manual-checks", JSON.stringify(mvpManualChecks));
@@ -14197,6 +14210,7 @@ function App() {
 
   function handleLogout() {
     clearAuthenticatedState();
+    setActiveView("overview");
     setAuthPanelOpen(false);
     setError("");
   }
