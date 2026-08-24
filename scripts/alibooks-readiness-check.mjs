@@ -39,6 +39,7 @@ const requiredFiles = [
   "docs/anvandningsklar-mvp.md",
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
+  "docs/forsta-riktiga-data.md",
   "docs/ci-handoff-efter-push.md",
   "docs/post-push-verifiering.md",
   "docs/berakningskontroll.md",
@@ -67,6 +68,7 @@ const requiredFiles = [
   "scripts/mvp-use-readiness-check.mjs",
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
+  "scripts/first-real-data-check.mjs",
   "scripts/calculation-integrity-check.mjs",
   "scripts/retention-immutability-check.mjs",
   "scripts/audit-integrity-check.mjs",
@@ -112,6 +114,7 @@ check(
     "check:mvp-use",
     "check:operations",
     "check:use-today",
+    "check:first-real-data",
     "check:calculations",
     "check:retention",
     "check:audit-integrity",
@@ -170,6 +173,7 @@ check("Release gate checks Startklar readiness", releaseGate.includes('"check:st
 check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-use"'), "Release gate should run the 20-step MVP use readiness check");
 check("Release gate checks operations readiness", releaseGate.includes('"check:operations"'), "Release gate should run the operations and incident readiness check");
 check("Release gate checks final local use decision", releaseGate.includes('"check:use-today"'), "Release gate should run the final local use decision check");
+check("Release gate checks first real data readiness", releaseGate.includes('"check:first-real-data"'), "Release gate should run first real data readiness check");
 check("Release gate checks calculation integrity", releaseGate.includes('"check:calculations"'), "Release gate should run calculation integrity check");
 check("Release gate checks retention and immutability", releaseGate.includes('"check:retention"'), "Release gate should run retention and immutability check");
 check("Release gate checks audit trail integrity", releaseGate.includes('"check:audit-integrity"'), "Release gate should run audit trail integrity check");
@@ -271,6 +275,7 @@ check("Docs include go-live decision", docs.includes("npm run check:go-live-deci
 check("Docs include external go-live proof", docs.includes("npm run check:external-go-live") && docs.includes("externa-go-live-bevis.md"), "Docs should expose the external production proof gate.");
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
+check("Docs include first real data decision", docs.includes("npm run check:first-real-data") && docs.includes("forsta-riktiga-data.md"), "Docs should expose the first real data decision command");
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");
 check("Docs include retention and immutability", docs.includes("npm run check:retention") && docs.includes("hard delete"), "Docs should expose retention and hard-delete rules");
 check("Docs include audit trail integrity", docs.includes("npm run check:audit-integrity") && docs.includes("revisionsspar"), "Docs should expose audit trail integrity rules");

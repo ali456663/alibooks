@@ -56,6 +56,7 @@ npm run check:startklar
 npm run check:mvp-use
 npm run check:operations
 npm run check:use-today
+npm run check:first-real-data
 npm run check:calculations
 npm run check:retention
 npm run check:audit-integrity
@@ -88,6 +89,7 @@ npm run test:backend
 `npm run check:mvp-use` kontrollerar 20 praktiska steg for anvandningsklar lokal MVP: lokal start, inloggning, kund/faktura, betalning, bokforing, bank-CSV, underlag, moms, rapporter, lon-MVP, bokslut, backup, restore, sakerhet, CI, git och go-live-beslut.
 `npm run check:operations` kontrollerar Driftcenter och drift-runbook: incidentlogg, releasejournal, rollback-plan, backup/smoke-test, local doctor, runtime smoke och produktions-smoke.
 `npm run check:use-today` ger sista lokala anvandningsbeslutet: vad som maste vara gront for att jobba i AliBooks idag, vilka stoppsignaler som betyder fixa forst, och varfor skarp produktion fortfarande kraver externa bevis.
+`npm run check:first-real-data` kontrollerar [forsta-riktiga-data.md](forsta-riktiga-data.md): backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export innan riktiga kunder eller bokforingsposter registreras.
 `npm run check:calculations` kontrollerar berakningsintegritet: netto+moms=total, negativa kreditfloden, delbetalningsavrundning, moms, verifikationsbalans, Stripe 1580, leverantorsfakturor och lonens arbetsunderlag.
 `npm run check:retention` kontrollerar arkiv och andringsspar: fakturor, verifikat, kvitton, kunder, leverantorsfakturor, bankimport, periodlasning och hard delete-regler.
 `npm run check:audit-integrity` kontrollerar revisionsspar-integritet: audit-handelser, SHA-256-kedja, CSV-export, backupkoppling och backendtester som visar att andrad historik ger ny auditstampel.

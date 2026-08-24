@@ -156,6 +156,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:use-today`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "First real data evidence count matches script",
+    script: "scripts/first-real-data-check.mjs",
+    outputLabel: "AliBooks first real data check",
+    evidencePattern: /`check:first-real-data`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Calculation integrity evidence count matches script",
     script: "scripts/calculation-integrity-check.mjs",
     outputLabel: "AliBooks calculation integrity check",
@@ -302,6 +308,12 @@ check(
 );
 
 check(
+  "Package exposes first-real-data check",
+  packageJson.scripts?.["check:first-real-data"] === "node ../scripts/first-real-data-check.mjs",
+  "frontend/package.json should expose npm run check:first-real-data."
+);
+
+check(
   "Package exposes go-live decision check",
   packageJson.scripts?.["check:go-live-decision"] === "node ../scripts/go-live-decision-check.mjs",
   "frontend/package.json should expose npm run check:go-live-decision."
@@ -419,6 +431,12 @@ check(
   "Release gate runs use-today check",
   releaseGate.includes('"check:use-today"'),
   "The release gate should fail when the final local use decision becomes stale."
+);
+
+check(
+  "Release gate runs first-real-data check",
+  releaseGate.includes('"check:first-real-data"'),
+  "The release gate should fail when first-real-data proof becomes stale."
 );
 
 check(

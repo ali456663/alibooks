@@ -34,6 +34,7 @@
     "check:mvp-use": "node ../scripts/mvp-use-readiness-check.mjs",
     "check:operations": "node ../scripts/operations-readiness-check.mjs",
     "check:use-today": "node ../scripts/use-today-check.mjs",
+    "check:first-real-data": "node ../scripts/first-real-data-check.mjs",
     "check:calculations": "node ../scripts/calculation-integrity-check.mjs",
     "check:retention": "node ../scripts/retention-immutability-check.mjs",
     "check:audit-integrity": "node ../scripts/audit-integrity-check.mjs",
