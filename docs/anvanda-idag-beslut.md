@@ -10,6 +10,7 @@ AliBooks kan anvandas lokalt for MVP-arbete nar detta ar sant:
 - Backend startar utan `Application failed to start`.
 - Frontend visar appen pa `http://localhost:5157` utan vit sida.
 - `npm run check:release` ar gron.
+- `npm run check:calculations` ar gron.
 - `npm run check:git -- --strict` ar gron efter senaste commit.
 - `npm run doctor`, `npm run check:views` och `npm run smoke:runtime` ar grona.
 - Backup ar kontrollerad innan du importerar eller skapar mycket data.
@@ -55,6 +56,7 @@ Skarp produktion vantar tills externa bevis finns:
 
 ```bash
 npm run check:use-today
+npm run check:calculations
 ```
 
 Beslutet ska lasa tillsammans med:

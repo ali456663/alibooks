@@ -50,6 +50,7 @@ npm run check:startklar
 npm run check:mvp-use
 npm run check:operations
 npm run check:use-today
+npm run check:calculations
 npm run check:dependencies
 npm run check:audit
 npm run check:release-traceability
@@ -73,6 +74,7 @@ npm run test:backend
 `npm run check:mvp-use` kontrollerar 20 praktiska steg for anvandningsklar lokal MVP: lokal start, inloggning, kund/faktura, betalning, bokforing, bank-CSV, underlag, moms, rapporter, lon-MVP, bokslut, backup, restore, sakerhet, CI, git och go-live-beslut.
 `npm run check:operations` kontrollerar Driftcenter och drift-runbook: incidentlogg, releasejournal, rollback-plan, backup/smoke-test, local doctor, runtime smoke och produktions-smoke.
 `npm run check:use-today` ger sista lokala anvandningsbeslutet: vad som maste vara gront for att jobba i AliBooks idag, vilka stoppsignaler som betyder fixa forst, och varfor skarp produktion fortfarande kraver externa bevis.
+`npm run check:calculations` kontrollerar berakningsintegritet: netto+moms=total, negativa kreditfloden, delbetalningsavrundning, moms, verifikationsbalans, Stripe 1580, leverantorsfakturor och lonens arbetsunderlag.
 `npm run check:dependencies` kontrollerar att frontend har lockfile, att direkta runtime-beroenden och buildverktyg ar lasta i `package-lock.json`, att Docker anvander `npm ci`, och att online-audit-kommandot ar dokumenterat fore skarp deploy.
 `npm run check:audit` kor live audit mot npm-registret och ska vara gron fore skarp deploy.
 `npm run check:release-traceability` kontrollerar att package-version, git branch/commit, GitHub-sync, Dockerhub `sha-*`/`v*`-taggar och EC2 `IMAGE_TAG` hanger ihop.

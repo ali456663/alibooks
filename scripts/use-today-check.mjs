@@ -65,6 +65,7 @@ check("Decision points to review views", includesAll(doc, ["Regelkontroll", "Red
 check("Decision points to accountant handoff", includesAll(doc, ["Exportera", "redovisningskonsult"]), "Use-today should keep accountant review/export visible.");
 check("Decision mentions payment compliance", includesAll(doc, ["kort", "Apple Pay", "Swish", "kassaregisterkrav"]), "Electronic payments should stay blocked for review before production.");
 check("Decision command is documented", doc.includes("npm run check:use-today"), "The short command should be visible in the doc.");
+check("Decision requires calculation integrity", doc.includes("npm run check:calculations"), "The final local use decision should require calculation integrity.");
 check("Decision links supporting docs", includesAll(doc, ["anvandningsklar-mvp.md", "drift-runbook.md", "go-live-riskregister.md"]), "The use-today decision should link to the deeper docs.");
 check("MVP use doc includes use-today decision", mvpUseDoc.includes("check:use-today"), "MVP use checklist should point to the final daily use decision.");
 check("Drift runbook includes use-today decision", driftRunbook.includes("check:use-today"), "Operations runbook should point to the daily use decision.");

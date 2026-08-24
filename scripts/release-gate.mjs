@@ -40,6 +40,7 @@ const frontendSteps = [
   ["check:mvp-use", "Check 20-step MVP use readiness"],
   ["check:operations", "Check operations and incident readiness"],
   ["check:use-today", "Check final local use decision"],
+  ["check:calculations", "Check calculation integrity"],
   ["check:finance-ui", "Check professional finance UI theme"],
   ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],

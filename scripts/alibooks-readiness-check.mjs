@@ -39,6 +39,7 @@ const requiredFiles = [
   "docs/anvandningsklar-mvp.md",
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
+  "docs/berakningskontroll.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/speedledger-paritet.md",
@@ -55,7 +56,8 @@ const requiredFiles = [
   "scripts/schema-bootstrap-check.mjs",
   "scripts/mvp-use-readiness-check.mjs",
   "scripts/operations-readiness-check.mjs",
-  "scripts/use-today-check.mjs"
+  "scripts/use-today-check.mjs",
+  "scripts/calculation-integrity-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -90,6 +92,7 @@ check(
     "check:mvp-use",
     "check:operations",
     "check:use-today",
+    "check:calculations",
     "check:prod",
     "check:prepush",
     "smoke:runtime",
@@ -104,7 +107,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:calculations, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -139,6 +142,7 @@ check("Release gate checks Startklar readiness", releaseGate.includes('"check:st
 check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-use"'), "Release gate should run the 20-step MVP use readiness check");
 check("Release gate checks operations readiness", releaseGate.includes('"check:operations"'), "Release gate should run the operations and incident readiness check");
 check("Release gate checks final local use decision", releaseGate.includes('"check:use-today"'), "Release gate should run the final local use decision check");
+check("Release gate checks calculation integrity", releaseGate.includes('"check:calculations"'), "Release gate should run calculation integrity check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
@@ -232,6 +236,7 @@ check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg
 check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
+check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");
 
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");
