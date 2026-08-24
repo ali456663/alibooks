@@ -41,6 +41,7 @@ check("Frontend CI audits dependencies", ci.includes("run: npm run check:audit")
 check("Frontend CI runs release gate", ci.includes("run: npm run check:release"), "Frontend CI must run the same release gate used locally.");
 check("Frontend CI release gate includes migration proof", releaseGate.includes('"check:migrations"'), "CI release gate should fail if controlled schema migration proof is stale.");
 check("Frontend CI release gate includes schema bootstrap proof", releaseGate.includes('"check:schema-bootstrap"'), "CI release gate should fail if first RDS schema bootstrap proof is stale.");
+check("Frontend CI release gate includes Startklar proof", releaseGate.includes('"check:startklar"'), "CI release gate should fail if local MVP start readiness proof is removed.");
 
 check("Docker CI waits for backend/frontend", includesAll(ci, ["needs:", "- backend", "- frontend"]), "Docker build should only run after test jobs pass.");
 check("Docker CI builds backend image", ci.includes("docker build -t cloudshop-backend:ci ./backend"), "CI should build backend Docker image.");

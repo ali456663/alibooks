@@ -55,7 +55,7 @@ Detta bevisar lokalt att:
 - `check:evidence`: 35/35
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
-- `check:ci`: 28/28
+- `check:ci`: 29/29
 - `check:schema`: 18/18
 - `check:migrations`: 5/5, passed 2026-08-16
 - `check:schema-bootstrap`: 10/10
