@@ -31,6 +31,7 @@
     "check:use-today": "npm --prefix frontend run check:use-today --",
     "check:calculations": "npm --prefix frontend run check:calculations --",
     "check:retention": "npm --prefix frontend run check:retention --",
+    "check:audit-integrity": "npm --prefix frontend run check:audit-integrity --",
     "check:finance-ui": "npm --prefix frontend run check:finance-ui --",
     "check:migrations": "npm --prefix frontend run check:migrations --",
     "check:sync": "npm --prefix frontend run check:sync --",

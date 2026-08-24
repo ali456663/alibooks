@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import se.cloudshop.auth.JwtService;
@@ -58,5 +60,46 @@ class AuditServiceTest {
     org.mockito.Mockito.verify(auditEventRepository).save(org.mockito.ArgumentMatchers.argThat(event ->
         "ali@example.com".equals(event.getActorEmail())
     ));
+  }
+
+  @Test
+  void changingAuditEventContentChangesFingerprint() {
+    Instant createdAt = Instant.parse("2026-07-01T10:00:00Z");
+    AuditEvent originalEvent = eventWithStableIdentity(1L, createdAt, "Invoice created");
+    AuditEvent changedEvent = eventWithStableIdentity(1L, createdAt, "Invoice changed after export");
+
+    when(auditEventRepository.findAllByOrderByCreatedAtAscIdAsc()).thenReturn(List.of(originalEvent));
+    String originalFingerprint = auditService.createIntegrityReport().auditFingerprint();
+
+    when(auditEventRepository.findAllByOrderByCreatedAtAscIdAsc()).thenReturn(List.of(changedEvent));
+    String changedFingerprint = auditService.createIntegrityReport().auditFingerprint();
+
+    assertThat(changedFingerprint).isNotEqualTo(originalFingerprint);
+  }
+
+  private AuditEvent eventWithStableIdentity(Long id, Instant createdAt, String message) {
+    AuditEvent event = new AuditEvent(
+        "invoice",
+        "invoice",
+        "F-2026-0001",
+        "created",
+        "F-2026-0001",
+        message,
+        1000,
+        "authenticated-user"
+    );
+    setField(event, "id", id);
+    setField(event, "createdAt", createdAt);
+    return event;
+  }
+
+  private void setField(AuditEvent event, String fieldName, Object value) {
+    try {
+      Field field = AuditEvent.class.getDeclaredField(fieldName);
+      field.setAccessible(true);
+      field.set(event, value);
+    } catch (ReflectiveOperationException exception) {
+      throw new IllegalStateException("Could not set audit event test field.", exception);
+    }
   }
 }

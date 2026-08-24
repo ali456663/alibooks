@@ -29,6 +29,7 @@ const psRestore = exists("scripts/restore-postgres.ps1") ? read("scripts/restore
 const runbook = exists("docs/backup-restore-runbook.md") ? read("docs/backup-restore-runbook.md") : "";
 const gitignore = read(".gitignore");
 const releaseEvidence = read("docs/release-evidence.md");
+const frontend = read("frontend/src/main.jsx");
 
 check("Shell backup script exists", exists("scripts/backup-postgres.sh"), "Linux/EC2 backup script should exist.");
 check("PowerShell backup script exists", exists("scripts/backup-postgres.ps1"), "Windows backup script should exist.");
@@ -95,6 +96,12 @@ check(
   "Release evidence mentions backup gate",
   releaseEvidence.includes("npm run check:backup"),
   "Release evidence should mention the backup readiness check."
+);
+
+check(
+  "Local JSON backup includes audit integrity proof",
+  includesAll(frontend, ["integrityProofs", "auditTrail", "auditFingerprint", "finalChainHash", "integrityManifest"]),
+  "Local backup should include audit trail fingerprint, final chain hash and integrity manifest."
 );
 
 const failed = results.filter((result) => !result.ok);

@@ -142,6 +142,12 @@ const countedEvidenceChecks = [
     script: "scripts/retention-immutability-check.mjs",
     outputLabel: "AliBooks retention and immutability check",
     evidencePattern: /`check:retention`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Audit integrity evidence count matches script",
+    script: "scripts/audit-integrity-check.mjs",
+    outputLabel: "AliBooks audit integrity check",
+    evidencePattern: /`check:audit-integrity`:\s*(\d+)\/(\d+)/
   }
 ];
 
@@ -254,6 +260,12 @@ check(
 );
 
 check(
+  "Package exposes audit integrity check",
+  packageJson.scripts?.["check:audit-integrity"] === "node ../scripts/audit-integrity-check.mjs",
+  "frontend/package.json should expose npm run check:audit-integrity."
+);
+
+check(
   "Package exposes git parser check",
   packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
   "frontend/package.json should expose npm run check:git-parser."
@@ -329,6 +341,12 @@ check(
   "Release gate runs retention check",
   releaseGate.includes('"check:retention"'),
   "The release gate should fail when retention and immutability proof becomes stale."
+);
+
+check(
+  "Release gate runs audit integrity check",
+  releaseGate.includes('"check:audit-integrity"'),
+  "The release gate should fail when audit integrity proof becomes stale."
 );
 
 check(

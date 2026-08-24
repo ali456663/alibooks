@@ -16,6 +16,7 @@ npm run check:operations
 npm run check:use-today
 npm run check:calculations
 npm run check:retention
+npm run check:audit-integrity
 npm run check:release-traceability
 npm run check:migrations
 npm run check:schema-bootstrap
@@ -36,6 +37,7 @@ Detta bevisar lokalt att:
 - startup-schema-patchar ar speglade i kontrollerad SQL-migration innan RDS-deploy
 - forsta RDS-basschema har en kontrollerad schema-bootstrap-runbook
 - destruktiva raderingar/reset-endpoints har JWT, feature flags, audit och periodlasningsskydd dar det kravs
+- revisionsspar har SHA-256-kedja, auditstampel, CSV-export, backupkoppling och backendtest mot andrad historik
 - backendtester passerar
 - backend Docker-image kan byggas
 - frontend Docker-image kan byggas
@@ -43,14 +45,15 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
-- `npm run test:backend`: passed 2026-08-24, 197 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-22 21:43 +02:00, standard gate fran projektroten med 18/18 acceptans, 90/90 readiness, 35/35 evidence, 55/55 data safety, 44/44 production readiness och runtime smoke
+- `npm run test:backend`: passed 2026-08-24, 198 tests, 0 failures, 0 errors
+- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 115/115 readiness, 54/54 evidence, 55/55 data safety, 44/44 production readiness, 23/23 retention, 22/22 audit-integritet och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
 - `npm run check:use-today`: 30/30, slutligt lokalt anvandningsbeslut med stoppsignaler och produktionsblockerare.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
 - `npm run check:retention`: 23/23, arkiv och andringsspar for fakturor, kunder, leverantorsfakturor, kvitton, bankreset, periodlasning, hard delete, rattelser och backendtester.
+- `npm run check:audit-integrity`: 22/22, revisionsspar, SHA-256-kedja, auditstampel, CSV-export, backupkoppling och backendtest som visar att andrad historik ger ny fingerprint.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
@@ -60,9 +63,9 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 111/111
+- `check:ready`: 115/115
 - `check:acceptance`: 18/18
-- `check:evidence`: 51/51
+- `check:evidence`: 54/54
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29
@@ -76,9 +79,10 @@ Detta bevisar lokalt att:
 - `check:use-today`: 30/30
 - `check:calculations`: 46/46
 - `check:retention`: 23/23
+- `check:audit-integrity`: 22/22
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
-- `npm run check:backup`: passed, 17/17
+- `npm run check:backup`: passed, 18/18
 - Docker images skapade lokalt 2026-08-17 09:59 +02:00:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
@@ -97,6 +101,7 @@ Detta bevisar lokalt att:
 - Sista lokala anvandningsbeslutet kontrolleras med `npm run check:use-today`, sa AliBooks visar nar lokal MVP kan anvandas och nar arbetet ska stoppas innan viktig data registreras.
 - Berakningsintegritet kontrolleras med `npm run check:calculations`, sa faktura, moms, delbetalning, Stripe, leverantorer, verifikat, rapporter och lon-MVP inte tappar sina skydd.
 - Arkiv och andringsspar kontrolleras med `npm run check:retention`, sa hard delete, kvittoersattning, kundhistorik, leverantorsfakturor, periodlasning och rattelsefloden inte tappar sina skydd.
+- Revisionsspar-integritet kontrolleras med `npm run check:audit-integrity`, sa auditkedja, auditstampel, CSV-export, backupkoppling och tamper-kansligt backendtest inte tappar sina skydd.
 - SpeedLedger-liknande funktionsparitet kontrolleras med `npm run check:speedledger-parity`, sa AliBooks inte overdriver extern bankkoppling, PEPPOL/e-faktura, NE-inlamning, arsredovisning, E-dagsavslut, factoring eller fullservice.
 - Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
 - Databasschema-lage kontrolleras med `npm run check:schema` sa `SPRING_JPA_HIBERNATE_DDL_AUTO` och `APP_SCHEMA_PATCH_ENABLED` ar explicita lokalt och produktion defaultar till `validate` plus avstangd startup-patch.
