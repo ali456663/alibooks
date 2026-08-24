@@ -31,6 +31,7 @@
     "check:operations": "node ../scripts/operations-readiness-check.mjs",
     "check:use-today": "node ../scripts/use-today-check.mjs",
     "check:calculations": "node ../scripts/calculation-integrity-check.mjs",
+    "check:retention": "node ../scripts/retention-immutability-check.mjs",
     "check:finance-ui": "node ../scripts/finance-ui-check.mjs",
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",

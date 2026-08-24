@@ -41,6 +41,7 @@ const frontendSteps = [
   ["check:operations", "Check operations and incident readiness"],
   ["check:use-today", "Check final local use decision"],
   ["check:calculations", "Check calculation integrity"],
+  ["check:retention", "Check retention and immutability"],
   ["check:finance-ui", "Check professional finance UI theme"],
   ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],

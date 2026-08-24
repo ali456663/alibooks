@@ -40,6 +40,7 @@ const requiredFiles = [
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
   "docs/berakningskontroll.md",
+  "docs/arkiv-och-andringsspar.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/speedledger-paritet.md",
@@ -57,7 +58,8 @@ const requiredFiles = [
   "scripts/mvp-use-readiness-check.mjs",
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
-  "scripts/calculation-integrity-check.mjs"
+  "scripts/calculation-integrity-check.mjs",
+  "scripts/retention-immutability-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -93,6 +95,7 @@ check(
     "check:operations",
     "check:use-today",
     "check:calculations",
+    "check:retention",
     "check:prod",
     "check:prepush",
     "smoke:runtime",
@@ -143,6 +146,7 @@ check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-
 check("Release gate checks operations readiness", releaseGate.includes('"check:operations"'), "Release gate should run the operations and incident readiness check");
 check("Release gate checks final local use decision", releaseGate.includes('"check:use-today"'), "Release gate should run the final local use decision check");
 check("Release gate checks calculation integrity", releaseGate.includes('"check:calculations"'), "Release gate should run calculation integrity check");
+check("Release gate checks retention and immutability", releaseGate.includes('"check:retention"'), "Release gate should run retention and immutability check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
@@ -237,6 +241,7 @@ check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub A
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");
+check("Docs include retention and immutability", docs.includes("npm run check:retention") && docs.includes("hard delete"), "Docs should expose retention and hard-delete rules");
 
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");
