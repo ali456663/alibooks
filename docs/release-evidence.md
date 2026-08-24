@@ -19,6 +19,7 @@ npm run check:retention
 npm run check:audit-integrity
 npm run check:period-close
 npm run check:handoff
+npm run check:go-live-decision
 npm run check:release-traceability
 npm run check:migrations
 npm run check:schema-bootstrap
@@ -42,6 +43,7 @@ Detta bevisar lokalt att:
 - revisionsspar har SHA-256-kedja, auditstampel, CSV-export, backupkoppling och backendtest mot andrad historik
 - periodstangning har backendkontroll for blockerare, varningar, attest, bankavstamning, momsbevis, periodstampel och slutlig kedjekod
 - redovisningspaket kan exportera SIE, kvittenser, huvudbok, saldobalans, rapporter, kontroller och arsarkiv for saker konsultoverlamning
+- slutligt go-live-beslut skiljer lokal MVP fran skarp drift och kraver externa bevis innan riktig kunddata
 - backendtester passerar
 - backend Docker-image kan byggas
 - frontend Docker-image kan byggas
@@ -50,7 +52,7 @@ Detta bevisar lokalt att:
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 201 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 123/123 readiness, 60/60 evidence, 55/55 data safety, 44/44 production readiness, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket och runtime smoke
+- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 127/127 readiness, 64/64 evidence, 55/55 data safety, 44/44 production readiness, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
@@ -60,6 +62,7 @@ Detta bevisar lokalt att:
 - `npm run check:audit-integrity`: 25/25, revisionsspar, SHA-256-kedja, auditstampel, CSV-export, backupkoppling, JWT-krav och backendtester som visar att andrad historik ger ny fingerprint.
 - `npm run check:period-close`: 30/30, periodstangning, blockerare, varningar, attest, bankavstamning, momsbevis, sena verifikat, periodstampel och slutlig kedjekod.
 - `npm run check:handoff`: 29/29, redovisningspaket, SIE, SIE-kvittens, resultat, balans, huvudbok, saldobalans, moms, bank, reskontra, arsarkiv, systemdokumentation och saker delning.
+- `npm run check:go-live-decision`: 17/17, slutligt beslut for lokal MVP kontra skarp drift, externa bevis, backup/restore, Stripe, SMTP, release-sparbarhet och redovisningskonsult-export.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
@@ -69,9 +72,9 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 123/123
+- `check:ready`: 127/127
 - `check:acceptance`: 18/18
-- `check:evidence`: 60/60
+- `check:evidence`: 64/64
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29
@@ -79,6 +82,7 @@ Detta bevisar lokalt att:
 - `check:migrations`: 5/5, passed 2026-08-16
 - `check:schema-bootstrap`: 10/10
 - `check:go-live-risks`: 20/20
+- `check:go-live-decision`: 17/17
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
@@ -103,6 +107,7 @@ Detta bevisar lokalt att:
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
+- Slutligt go-live-beslut foljs i [go-live-beslut.md](go-live-beslut.md) och kontrolleras lokalt med `npm run check:go-live-decision`.
 - Manuella externa go-live-bevis kontrolleras lokalt med `npm run check:manual-go-live`, sa PDF, SMTP, Stripe, bank/betalningsflode, backup/restore, publik URL och redovisningskonsult-export inte tappas bort.
 - Anvandningsklar lokal MVP kontrolleras med `npm run check:mvp-use`, som samlar 20 praktiska steg fran lokal start till go-live-beslut.
 - Driftberedskap kontrolleras med `npm run check:operations`, sa Driftcenter, incidentlogg, releasejournal, backup/smoke-test och rollback-plan inte tappas bort.

@@ -24,6 +24,7 @@
     "check:git": "npm --prefix frontend run check:git --",
     "check:git-parser": "npm --prefix frontend run check:git-parser --",
     "check:go-live-risks": "npm --prefix frontend run check:go-live-risks --",
+    "check:go-live-decision": "npm --prefix frontend run check:go-live-decision --",
     "check:manual-go-live": "npm --prefix frontend run check:manual-go-live --",
     "check:startklar": "npm --prefix frontend run check:startklar --",
     "check:mvp-use": "npm --prefix frontend run check:mvp-use --",

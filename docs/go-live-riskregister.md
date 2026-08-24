@@ -2,6 +2,7 @@
 
 Det har registret skiljer pa lokal MVP-stabilitet och riktig produktionsklarhet.
 Den sista lokala anvandningsgransen kontrolleras med `npm run check:use-today`.
+Det slutliga beslutet fore skarp drift finns i [go-live-beslut.md](go-live-beslut.md) och kontrolleras med `npm run check:go-live-decision`.
 AliBooks far inte anvandas med skarp kunddata, bokforingsdata eller betalningar innan blockerande externa kontroller ar verifierade.
 
 ## Statusnivaer

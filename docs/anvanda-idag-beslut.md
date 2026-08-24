@@ -51,12 +51,14 @@ Skarp produktion vantar tills externa bevis finns:
 - Stripe webhook och SMTP ar testade med riktiga testfloden.
 - Backup och restore drill ar testade utanfor produktion.
 - Betalningar via kort, Apple Pay, Swish eller kassaregisterkrav ar granskade.
+- Slutligt go-live-beslut ar kontrollerat med `npm run check:go-live-decision`.
 
 ## Snabb kommando
 
 ```bash
 npm run check:use-today
 npm run check:calculations
+npm run check:go-live-decision
 ```
 
 Beslutet ska lasa tillsammans med:
@@ -64,3 +66,4 @@ Beslutet ska lasa tillsammans med:
 - [anvandningsklar-mvp.md](anvandningsklar-mvp.md)
 - [drift-runbook.md](drift-runbook.md)
 - [go-live-riskregister.md](go-live-riskregister.md)
+- [go-live-beslut.md](go-live-beslut.md)

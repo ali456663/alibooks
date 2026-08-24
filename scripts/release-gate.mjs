@@ -35,6 +35,7 @@ const frontendSteps = [
   ["check:docker", "Check Docker config"],
   ["check:prod", "Check production readiness"],
   ["check:go-live-risks", "Check go-live risk register"],
+  ["check:go-live-decision", "Check final go-live decision"],
   ["check:manual-go-live", "Check manual go-live evidence requirements"],
   ["check:startklar", "Check local MVP start readiness"],
   ["check:mvp-use", "Check 20-step MVP use readiness"],

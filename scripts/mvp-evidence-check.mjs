@@ -108,6 +108,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:go-live-risks`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "Go-live decision evidence count matches script",
+    script: "scripts/go-live-decision-check.mjs",
+    outputLabel: "AliBooks go-live decision check",
+    evidencePattern: /`check:go-live-decision`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Manual go-live evidence count matches script",
     script: "scripts/manual-go-live-evidence-check.mjs",
     outputLabel: "Manual go-live evidence check",
@@ -212,6 +218,12 @@ check(
 );
 
 check(
+  "Release evidence links final go-live decision",
+  evidence.includes("go-live-beslut.md") && evidence.includes("check:go-live-decision"),
+  "The final production decision should be connected to release evidence."
+);
+
+check(
   "Release evidence keeps external blockers visible",
   includesAll(evidence, ["GitHub Actions", "Dockerhub workflow", "EC2", "RDS", "restore drill"]),
   "The evidence file should not claim production readiness before external checks are proven."
@@ -257,6 +269,12 @@ check(
   "Package exposes use-today check",
   packageJson.scripts?.["check:use-today"] === "node ../scripts/use-today-check.mjs",
   "frontend/package.json should expose npm run check:use-today."
+);
+
+check(
+  "Package exposes go-live decision check",
+  packageJson.scripts?.["check:go-live-decision"] === "node ../scripts/go-live-decision-check.mjs",
+  "frontend/package.json should expose npm run check:go-live-decision."
 );
 
 check(
@@ -353,6 +371,12 @@ check(
   "Release gate runs use-today check",
   releaseGate.includes('"check:use-today"'),
   "The release gate should fail when the final local use decision becomes stale."
+);
+
+check(
+  "Release gate runs go-live decision check",
+  releaseGate.includes('"check:go-live-decision"'),
+  "The release gate should fail when the final production decision becomes stale."
 );
 
 check(
