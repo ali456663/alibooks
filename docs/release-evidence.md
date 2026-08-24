@@ -12,6 +12,7 @@ npm run check:release:full
 npm run check:dependencies
 npm run check:startklar
 npm run check:mvp-use
+npm run check:operations
 npm run check:release-traceability
 npm run check:migrations
 npm run check:schema-bootstrap
@@ -43,6 +44,7 @@ Detta bevisar lokalt att:
 - `npm run check:release`: passed 2026-08-22 21:43 +02:00, standard gate fran projektroten med 18/18 acceptans, 90/90 readiness, 35/35 evidence, 55/55 data safety, 44/44 production readiness och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
+- `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
@@ -52,9 +54,9 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 96/96
+- `check:ready`: 99/99
 - `check:acceptance`: 18/18
-- `check:evidence`: 39/39
+- `check:evidence`: 42/42
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29
@@ -64,6 +66,7 @@ Detta bevisar lokalt att:
 - `check:go-live-risks`: 20/20
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
+- `check:operations`: 23/23
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
 - `npm run check:backup`: passed, 17/17
@@ -81,6 +84,7 @@ Detta bevisar lokalt att:
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
 - Manuella externa go-live-bevis kontrolleras lokalt med `npm run check:manual-go-live`, sa PDF, SMTP, Stripe, bank/betalningsflode, backup/restore, publik URL och redovisningskonsult-export inte tappas bort.
 - Anvandningsklar lokal MVP kontrolleras med `npm run check:mvp-use`, som samlar 20 praktiska steg fran lokal start till go-live-beslut.
+- Driftberedskap kontrolleras med `npm run check:operations`, sa Driftcenter, incidentlogg, releasejournal, backup/smoke-test och rollback-plan inte tappas bort.
 - SpeedLedger-liknande funktionsparitet kontrolleras med `npm run check:speedledger-parity`, sa AliBooks inte overdriver extern bankkoppling, PEPPOL/e-faktura, NE-inlamning, arsredovisning, E-dagsavslut, factoring eller fullservice.
 - Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
 - Databasschema-lage kontrolleras med `npm run check:schema` sa `SPRING_JPA_HIBERNATE_DDL_AUTO` och `APP_SCHEMA_PATCH_ENABLED` ar explicita lokalt och produktion defaultar till `validate` plus avstangd startup-patch.

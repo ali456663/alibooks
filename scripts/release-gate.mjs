@@ -38,6 +38,7 @@ const frontendSteps = [
   ["check:manual-go-live", "Check manual go-live evidence requirements"],
   ["check:startklar", "Check local MVP start readiness"],
   ["check:mvp-use", "Check 20-step MVP use readiness"],
+  ["check:operations", "Check operations and incident readiness"],
   ["check:finance-ui", "Check professional finance UI theme"],
   ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],
