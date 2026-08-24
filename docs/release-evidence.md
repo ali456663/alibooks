@@ -52,7 +52,7 @@ Detta bevisar lokalt att:
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
 - `check:ready`: 91/91
 - `check:acceptance`: 18/18
-- `check:evidence`: 35/35
+- `check:evidence`: 36/36
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29

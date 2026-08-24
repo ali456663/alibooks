@@ -106,6 +106,12 @@ const countedEvidenceChecks = [
     script: "scripts/go-live-risk-check.mjs",
     outputLabel: "Go-live risk check",
     evidencePattern: /`check:go-live-risks`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Manual go-live evidence count matches script",
+    script: "scripts/manual-go-live-evidence-check.mjs",
+    outputLabel: "Manual go-live evidence check",
+    evidencePattern: /`check:manual-go-live`:\s*(\d+)\/(\d+)/
   }
 ];
 
