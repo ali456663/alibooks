@@ -19,6 +19,7 @@
     "check:data-safety": "npm --prefix frontend run check:data-safety --",
     "check:prepush": "npm --prefix frontend run check:prepush --",
     "check:professional-loop": "npm --prefix frontend run check:professional-loop --",
+    "check:speedledger-parity": "npm --prefix frontend run check:speedledger-parity --",
     "check:evidence": "npm --prefix frontend run check:evidence --",
     "check:git": "npm --prefix frontend run check:git --",
     "check:git-parser": "npm --prefix frontend run check:git-parser --",

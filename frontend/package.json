@@ -31,6 +31,7 @@
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",
     "check:professional-loop": "node ../scripts/professional-loop-check.mjs",
+    "check:speedledger-parity": "node ../scripts/speedledger-parity-check.mjs",
     "check:release-traceability": "node ../scripts/release-traceability-check.mjs",
     "check:schema": "node ../scripts/schema-policy-check.mjs",
     "check:migrations": "node ../scripts/schema-migration-check.mjs",

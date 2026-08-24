@@ -38,6 +38,7 @@ const requiredFiles = [
   "docs/mvp-testprotokoll.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
+  "docs/speedledger-paritet.md",
   "docs/release-evidence.md",
   "docs/backup-restore-runbook.md",
   "docs/go-live-riskregister.md",
@@ -84,6 +85,7 @@ check(
     "check:prepush",
     "smoke:runtime",
     "check:professional-loop",
+    "check:speedledger-parity",
     "check:release-traceability",
     "check:schema",
     "check:migrations",
@@ -93,7 +95,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -104,6 +106,7 @@ check("CI runs frontend release gate", ci.includes("npm run check:release"), "Gi
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");
 check("Release gate runs frontend smoke", releaseGate.includes('"smoke:runtime"'), "Release gate should run smoke:runtime");
 check("Release gate checks professional loop", releaseGate.includes('"check:professional-loop"'), "Release gate should run professional-loop check");
+check("Release gate checks SpeedLedger-style parity", releaseGate.includes('"check:speedledger-parity"'), "Release gate should run feature parity check");
 check("Release gate checks MVP acceptance", releaseGate.includes('"check:acceptance"'), "Release gate should run MVP acceptance coverage check");
 check("Release gate checks API contract", releaseGate.includes('"check:api-contract"'), "Release gate should run API contract check");
 check("Release gate checks AliBooks readiness", releaseGate.includes('"check:ready"'), "Release gate should run check:ready");
