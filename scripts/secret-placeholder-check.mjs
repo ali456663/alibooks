@@ -34,6 +34,7 @@ const ignoredExtensions = new Set([
 
 const patterns = [
   { name: "OpenAI-compatible API key", regex: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g },
+  { name: "OpenRouter API key", regex: /\bsk-or-v1-[A-Za-z0-9]{32,}\b/g },
   { name: "Stripe secret key", regex: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
   { name: "Stripe webhook secret", regex: /\bwhsec_[A-Za-z0-9]{16,}\b/g },
   { name: "Hugging Face token", regex: /\bhf_[A-Za-z0-9]{20,}\b/g },

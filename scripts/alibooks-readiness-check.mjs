@@ -219,7 +219,7 @@ check(
 );
 check(
   "Secret scan protects AI tokens and bank files",
-  includesAll(secretCheck, ["OpenAI-compatible API key", "GitHub token", "JWT token"]) &&
+  includesAll(secretCheck, ["OpenAI-compatible API key", "OpenRouter API key", "GitHub token", "JWT token"]) &&
     includesAll(gitignore, ["*.csv", "*.xlsx", "*.ofx", "*.qif"]),
   "Secret scan should catch AI/API tokens and gitignore should block raw bank/export files."
 );

@@ -9,6 +9,7 @@ Kor fran projektets rotmapp:
 
 ```bash
 npm run check:release:full
+npm run check:secrets
 npm run check:dependencies
 npm run check:ci-handoff
 npm run check:startklar
@@ -36,6 +37,7 @@ Detta bevisar lokalt att:
 - viktiga frontend/backend API-kontrakt finns kvar
 - backend-konstruktorer och Java-records matchar testerna
 - dokumentation, secrets, Docker-konfig, vyer och produktionsmallar passerar kontroller
+- riktiga API-nycklar for Stripe, HF, Google, OpenRouter och OpenAI-liknande providers stoppas av `check:secrets`
 - frontend dependency-lockfile, buildverktyg och Docker-installation kontrolleras statiskt
 - CI-handoff efter push ar dokumenterad med GitHub Actions-jobb, Dockerhub-secrets, jobbnamn och felsokning
 - release-version, commit, Dockerhub-taggar och EC2 `IMAGE_TAG` gar att sparas som releasebevis
@@ -70,6 +72,7 @@ Detta bevisar lokalt att:
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
 - `npm run check:release`: passed 2026-08-16 23:37 +02:00, standard gate med schema-migration, schema-bootstrap och git-skydd for `db/`
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
+- `npm run check:secrets`: passed 2026-08-24, inga riktiga Stripe-, HF-, Google-, OpenRouter-, OpenAI-liknande, GitHub-, JWT- eller private-key-hemligheter hittades i tracked project files.
 - `npm run check:ci-handoff`: 32/32, GitHub Actions-jobb, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push

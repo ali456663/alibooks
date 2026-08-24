@@ -24,8 +24,9 @@ AliBooks kan vara starkt lokalt utan att vara klar for riktig kunddata. Skillnad
 7. Restore drill ar kord till separat testdatabas, inte produktion.
 8. Stripe test-webhook bokfor en betalning korrekt om Stripe ska anvandas skarpt.
 9. SMTP skickar testmail och faktura/paminnelsemail nar e-post ska anvandas skarpt.
-10. `npm run check:release-traceability` visar version, commit, Docker-taggar och EC2 `IMAGE_TAG`.
-11. SIE, huvudbok, saldobalans, resultat, balans och momsrapport kan lamnas till redovisningskonsult.
+10. `npm run check:secrets` stoppar riktiga Stripe-, HF-, Google-, OpenRouter- och OpenAI-liknande API-nycklar fran GitHub.
+11. `npm run check:release-traceability` visar version, commit, Docker-taggar och EC2 `IMAGE_TAG`.
+12. SIE, huvudbok, saldobalans, resultat, balans och momsrapport kan lamnas till redovisningskonsult.
 
 ## Kommandoordning
 
@@ -33,6 +34,7 @@ Kor fran projektets rotmapp:
 
 ```bash
 npm run check:release:full
+npm run check:secrets
 npm run check:git -- --strict
 git push
 npm run check:sync
