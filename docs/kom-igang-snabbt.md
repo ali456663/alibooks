@@ -197,6 +197,7 @@ npm run check:backend-wiring
 npm run check:docs
 npm run check:docker
 npm run check:prod
+npm run check:env-go-live
 npm run check:startklar
 npm run check:secrets
 npm run check:views

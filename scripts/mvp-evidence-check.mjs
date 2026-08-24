@@ -72,6 +72,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:prod`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "Env go-live evidence count matches script",
+    script: "scripts/env-go-live-check.mjs",
+    outputLabel: "AliBooks env go-live check",
+    evidencePattern: /`check:env-go-live`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "CI evidence count matches script",
     script: "scripts/ci-pipeline-check.mjs",
     outputLabel: "AliBooks CI pipeline check",
@@ -374,6 +380,12 @@ check(
 );
 
 check(
+  "Package exposes env-go-live check",
+  packageJson.scripts?.["check:env-go-live"] === "node ../scripts/env-go-live-check.mjs",
+  "frontend/package.json should expose npm run check:env-go-live."
+);
+
+check(
   "Package exposes full release gate",
   packageJson.scripts?.["check:release:full"] === "node ../scripts/release-gate.mjs --with-backend --with-docker-build",
   "frontend/package.json should expose npm run check:release:full."
@@ -401,6 +413,12 @@ check(
   "Release gate runs evidence check",
   releaseGate.includes('"check:evidence"'),
   "The release gate should fail when MVP evidence becomes stale."
+);
+
+check(
+  "Release gate runs env-go-live check",
+  releaseGate.includes('"check:env-go-live"'),
+  "The release gate should fail when go-live env variable proof becomes stale."
 );
 
 check(

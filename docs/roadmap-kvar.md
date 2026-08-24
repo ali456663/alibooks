@@ -50,6 +50,7 @@ npm run check:post-push
 npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
+npm run check:env-go-live
 npm run check:go-live-decision
 npm run check:external-go-live
 npm run check:startklar
@@ -83,6 +84,7 @@ npm run test:backend
 `npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.
+`npm run check:env-go-live` kontrollerar [miljovariabler-go-live.md](miljovariabler-go-live.md): JWT, CORS, RDS, schemaflaggor, Stripe, SMTP, AI-nycklar och var hemligheter far ligga innan publik demo eller riktig drift.
 `npm run check:go-live-decision` kontrollerar sista beslutet mellan lokal MVP och skarp drift: GitHub Actions, Dockerhub, EC2/RDS, backup/restore, Stripe, SMTP, release-sparbarhet och redovisningskonsult-export.
 `npm run check:external-go-live` kontrollerar de externa bevisen som maste finnas innan riktig kunddata: GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket.
 `npm run check:startklar` ger en kort lokal MVP-bedomning: vad som ar redo, vad som fortfarande kraver extern verifiering och varfor skarp drift maste vanta tills GitHub/Dockerhub/EC2/RDS/backup/Stripe/SMTP ar bevisade.

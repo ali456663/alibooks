@@ -43,6 +43,7 @@
     "check:migrations": "npm --prefix frontend run check:migrations --",
     "check:sync": "npm --prefix frontend run check:sync --",
     "check:prod": "npm --prefix frontend run check:prod --",
+    "check:env-go-live": "npm --prefix frontend run check:env-go-live --",
     "check:release-traceability": "npm --prefix frontend run check:release-traceability --",
     "check:schema": "npm --prefix frontend run check:schema --",
     "check:schema-bootstrap": "npm --prefix frontend run check:schema-bootstrap --",

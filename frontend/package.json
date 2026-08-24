@@ -42,6 +42,7 @@
     "check:handoff": "node ../scripts/accountant-handoff-check.mjs",
     "check:finance-ui": "node ../scripts/finance-ui-check.mjs",
     "check:prod": "node ../scripts/production-readiness-check.mjs",
+    "check:env-go-live": "node ../scripts/env-go-live-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",
     "check:professional-loop": "node ../scripts/professional-loop-check.mjs",
     "check:speedledger-parity": "node ../scripts/speedledger-parity-check.mjs",

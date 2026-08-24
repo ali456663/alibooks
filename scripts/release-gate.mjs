@@ -36,6 +36,7 @@ const frontendSteps = [
   ["check:data-safety", "Check destructive data safety"],
   ["check:docker", "Check Docker config"],
   ["check:prod", "Check production readiness"],
+  ["check:env-go-live", "Check go-live environment variables"],
   ["check:go-live-risks", "Check go-live risk register"],
   ["check:go-live-decision", "Check final go-live decision"],
   ["check:external-go-live", "Check external go-live proof"],
