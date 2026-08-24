@@ -148,6 +148,12 @@ const countedEvidenceChecks = [
     script: "scripts/audit-integrity-check.mjs",
     outputLabel: "AliBooks audit integrity check",
     evidencePattern: /`check:audit-integrity`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Period close evidence count matches script",
+    script: "scripts/period-close-readiness-check.mjs",
+    outputLabel: "AliBooks period close readiness check",
+    evidencePattern: /`check:period-close`:\s*(\d+)\/(\d+)/
   }
 ];
 
@@ -266,6 +272,12 @@ check(
 );
 
 check(
+  "Package exposes period close check",
+  packageJson.scripts?.["check:period-close"] === "node ../scripts/period-close-readiness-check.mjs",
+  "frontend/package.json should expose npm run check:period-close."
+);
+
+check(
   "Package exposes git parser check",
   packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
   "frontend/package.json should expose npm run check:git-parser."
@@ -347,6 +359,12 @@ check(
   "Release gate runs audit integrity check",
   releaseGate.includes('"check:audit-integrity"'),
   "The release gate should fail when audit integrity proof becomes stale."
+);
+
+check(
+  "Release gate runs period close readiness check",
+  releaseGate.includes('"check:period-close"'),
+  "The release gate should fail when period close readiness proof becomes stale."
 );
 
 check(

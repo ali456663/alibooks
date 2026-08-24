@@ -43,6 +43,7 @@ const frontendSteps = [
   ["check:calculations", "Check calculation integrity"],
   ["check:retention", "Check retention and immutability"],
   ["check:audit-integrity", "Check audit trail integrity"],
+  ["check:period-close", "Check period close readiness"],
   ["check:finance-ui", "Check professional finance UI theme"],
   ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],

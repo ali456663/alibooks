@@ -53,6 +53,7 @@ npm run check:use-today
 npm run check:calculations
 npm run check:retention
 npm run check:audit-integrity
+npm run check:period-close
 npm run check:dependencies
 npm run check:audit
 npm run check:release-traceability
@@ -79,6 +80,7 @@ npm run test:backend
 `npm run check:calculations` kontrollerar berakningsintegritet: netto+moms=total, negativa kreditfloden, delbetalningsavrundning, moms, verifikationsbalans, Stripe 1580, leverantorsfakturor och lonens arbetsunderlag.
 `npm run check:retention` kontrollerar arkiv och andringsspar: fakturor, verifikat, kvitton, kunder, leverantorsfakturor, bankimport, periodlasning och hard delete-regler.
 `npm run check:audit-integrity` kontrollerar revisionsspar-integritet: audit-handelser, SHA-256-kedja, CSV-export, backupkoppling och backendtester som visar att andrad historik ger ny auditstampel.
+`npm run check:period-close` kontrollerar periodstangning: blockerare, varningar, attest, bankavstamning, momsbevis, sena verifikat, periodstampel och slutlig kedjekod innan periodlasning eller bokslut.
 `npm run check:dependencies` kontrollerar att frontend har lockfile, att direkta runtime-beroenden och buildverktyg ar lasta i `package-lock.json`, att Docker anvander `npm ci`, och att online-audit-kommandot ar dokumenterat fore skarp deploy.
 `npm run check:audit` kor live audit mot npm-registret och ska vara gron fore skarp deploy.
 `npm run check:release-traceability` kontrollerar att package-version, git branch/commit, GitHub-sync, Dockerhub `sha-*`/`v*`-taggar och EC2 `IMAGE_TAG` hanger ihop.

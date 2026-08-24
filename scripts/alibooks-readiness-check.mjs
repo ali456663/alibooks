@@ -42,6 +42,7 @@ const requiredFiles = [
   "docs/berakningskontroll.md",
   "docs/arkiv-och-andringsspar.md",
   "docs/revisionsspar-integritet.md",
+  "docs/periodstangning-och-bokslutskontroll.md",
   "docs/roadmap-kvar.md",
   "docs/professionell-bokforing-loop.md",
   "docs/speedledger-paritet.md",
@@ -61,7 +62,8 @@ const requiredFiles = [
   "scripts/use-today-check.mjs",
   "scripts/calculation-integrity-check.mjs",
   "scripts/retention-immutability-check.mjs",
-  "scripts/audit-integrity-check.mjs"
+  "scripts/audit-integrity-check.mjs",
+  "scripts/period-close-readiness-check.mjs"
 ];
 
 for (const file of requiredFiles) {
@@ -99,6 +101,7 @@ check(
     "check:calculations",
     "check:retention",
     "check:audit-integrity",
+    "check:period-close",
     "check:prod",
     "check:prepush",
     "smoke:runtime",
@@ -151,6 +154,7 @@ check("Release gate checks final local use decision", releaseGate.includes('"che
 check("Release gate checks calculation integrity", releaseGate.includes('"check:calculations"'), "Release gate should run calculation integrity check");
 check("Release gate checks retention and immutability", releaseGate.includes('"check:retention"'), "Release gate should run retention and immutability check");
 check("Release gate checks audit trail integrity", releaseGate.includes('"check:audit-integrity"'), "Release gate should run audit trail integrity check");
+check("Release gate checks period close readiness", releaseGate.includes('"check:period-close"'), "Release gate should run period close readiness check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
@@ -247,6 +251,7 @@ check("Docs include use-today decision", docs.includes("npm run check:use-today"
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");
 check("Docs include retention and immutability", docs.includes("npm run check:retention") && docs.includes("hard delete"), "Docs should expose retention and hard-delete rules");
 check("Docs include audit trail integrity", docs.includes("npm run check:audit-integrity") && docs.includes("revisionsspar"), "Docs should expose audit trail integrity rules");
+check("Docs include period close readiness", docs.includes("npm run check:period-close") && docs.includes("periodstangning"), "Docs should expose period close readiness rules");
 
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");

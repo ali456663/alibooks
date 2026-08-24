@@ -33,6 +33,7 @@
     "check:calculations": "node ../scripts/calculation-integrity-check.mjs",
     "check:retention": "node ../scripts/retention-immutability-check.mjs",
     "check:audit-integrity": "node ../scripts/audit-integrity-check.mjs",
+    "check:period-close": "node ../scripts/period-close-readiness-check.mjs",
     "check:finance-ui": "node ../scripts/finance-ui-check.mjs",
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",
