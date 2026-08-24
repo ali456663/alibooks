@@ -154,6 +154,12 @@ const countedEvidenceChecks = [
     script: "scripts/period-close-readiness-check.mjs",
     outputLabel: "AliBooks period close readiness check",
     evidencePattern: /`check:period-close`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Accountant handoff evidence count matches script",
+    script: "scripts/accountant-handoff-check.mjs",
+    outputLabel: "AliBooks accountant handoff check",
+    evidencePattern: /`check:handoff`:\s*(\d+)\/(\d+)/
   }
 ];
 
@@ -278,6 +284,12 @@ check(
 );
 
 check(
+  "Package exposes accountant handoff check",
+  packageJson.scripts?.["check:handoff"] === "node ../scripts/accountant-handoff-check.mjs",
+  "frontend/package.json should expose npm run check:handoff."
+);
+
+check(
   "Package exposes git parser check",
   packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
   "frontend/package.json should expose npm run check:git-parser."
@@ -365,6 +377,12 @@ check(
   "Release gate runs period close readiness check",
   releaseGate.includes('"check:period-close"'),
   "The release gate should fail when period close readiness proof becomes stale."
+);
+
+check(
+  "Release gate runs accountant handoff check",
+  releaseGate.includes('"check:handoff"'),
+  "The release gate should fail when accountant handoff proof becomes stale."
 );
 
 check(
