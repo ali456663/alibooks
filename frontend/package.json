@@ -29,6 +29,7 @@
     "check:startklar": "node ../scripts/startklar-check.mjs",
     "check:mvp-use": "node ../scripts/mvp-use-readiness-check.mjs",
     "check:operations": "node ../scripts/operations-readiness-check.mjs",
+    "check:use-today": "node ../scripts/use-today-check.mjs",
     "check:finance-ui": "node ../scripts/finance-ui-check.mjs",
     "check:prod": "node ../scripts/production-readiness-check.mjs",
     "check:prepush": "node ../scripts/pre-push-gate.mjs",

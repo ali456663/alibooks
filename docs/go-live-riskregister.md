@@ -1,6 +1,7 @@
 # AliBooks go-live riskregister
 
 Det har registret skiljer pa lokal MVP-stabilitet och riktig produktionsklarhet.
+Den sista lokala anvandningsgransen kontrolleras med `npm run check:use-today`.
 AliBooks far inte anvandas med skarp kunddata, bokforingsdata eller betalningar innan blockerande externa kontroller ar verifierade.
 
 ## Statusnivaer

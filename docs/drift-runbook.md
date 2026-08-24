@@ -12,6 +12,7 @@ npm run check:views
 npm run smoke:runtime
 npm run check:startklar
 npm run check:mvp-use
+npm run check:use-today
 ```
 
 Tolka resultatet:
@@ -66,10 +67,11 @@ Incidenter ska anvandas for:
 Fore varje deploy eller stor lokal release:
 
 1. Kor `npm run check:release`.
-2. Vid push/deploy: kor `npm run check:prepush -- --allow-ahead`.
-3. Spara release i `Driftcenter` med version, commit, miljo, backupkontroll, smoke test och rollback-plan.
-4. Markera release som deployad endast nar backup och smoke test ar grona.
-5. Om nagot failar, markera release som rollback och skriv vad som gjordes.
+2. Kor `npm run check:use-today`.
+3. Vid push/deploy: kor `npm run check:prepush -- --allow-ahead`.
+4. Spara release i `Driftcenter` med version, commit, miljo, backupkontroll, smoke test och rollback-plan.
+5. Markera release som deployad endast nar backup och smoke test ar grona.
+6. Om nagot failar, markera release som rollback och skriv vad som gjordes.
 
 Rollback-planen ska minst innehalla:
 
@@ -90,4 +92,3 @@ Skarp produktion far inte anvandas med riktig kunddata innan:
 - `npm run check:manual-go-live` ar gron
 
 Driftbeslut ska sparas i Driftcenter och kopplas till releasebeviset.
-

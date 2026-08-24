@@ -124,6 +124,12 @@ const countedEvidenceChecks = [
     script: "scripts/operations-readiness-check.mjs",
     outputLabel: "AliBooks operations readiness check",
     evidencePattern: /`check:operations`:\s*(\d+)\/(\d+)/
+  },
+  {
+    name: "Use-today evidence count matches script",
+    script: "scripts/use-today-check.mjs",
+    outputLabel: "AliBooks use-today check",
+    evidencePattern: /`check:use-today`:\s*(\d+)\/(\d+)/
   }
 ];
 
@@ -218,6 +224,12 @@ check(
 );
 
 check(
+  "Package exposes use-today check",
+  packageJson.scripts?.["check:use-today"] === "node ../scripts/use-today-check.mjs",
+  "frontend/package.json should expose npm run check:use-today."
+);
+
+check(
   "Package exposes git parser check",
   packageJson.scripts?.["check:git-parser"] === "node ../scripts/git-release-status.mjs --self-test",
   "frontend/package.json should expose npm run check:git-parser."
@@ -275,6 +287,12 @@ check(
   "Release gate runs operations readiness check",
   releaseGate.includes('"check:operations"'),
   "The release gate should fail when operations readiness evidence becomes stale."
+);
+
+check(
+  "Release gate runs use-today check",
+  releaseGate.includes('"check:use-today"'),
+  "The release gate should fail when the final local use decision becomes stale."
 );
 
 check(

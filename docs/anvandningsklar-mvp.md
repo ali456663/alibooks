@@ -29,7 +29,7 @@ Statusnivaer:
 | 17 | Sakerhet | Secrets, JWT, CORS, AI-sakert lage och personuppgifter ar kontrollerade. | `npm run check:secrets`, `npm run check:prod`, Sakerhet-vyn |
 | 18 | CI/CD | GitHub Actions, Dockerhub workflow och release-gate finns och ar sparbara. | `npm run check:ci`, `npm run check:release-traceability` |
 | 19 | Git och release | Lokal kod ar commitad, syncad innan GitHub-bevis och image-taggar ar sparbara. | `npm run check:git`, `npm run check:sync`, `npm run check:prepush -- --allow-ahead` |
-| 20 | Go-live beslut | Startklar skiljer lokal MVP fran skarp produktion och blockerar skarp kunddata tills externa bevis finns. | `npm run check:startklar`, `npm run check:go-live-risks` |
+| 20 | Go-live beslut | Startklar skiljer lokal MVP fran skarp produktion och blockerar skarp kunddata tills externa bevis finns. | `npm run check:startklar`, `npm run check:go-live-risks`, `npm run check:use-today` |
 
 ## Beslut
 
@@ -43,4 +43,3 @@ AliBooks ar inte skarp produktionsklar for riktig kunddata innan:
 - Backup och restore drill ar testade utanfor produktion.
 - Stripe och SMTP ar testade med riktiga testfloden.
 - Extern bankkoppling, PEPPOL/e-faktura, NE-inlamning, arsredovisning, E-dagsavslut, factoring och fullservice hanteras via extern leverantor eller konsult.
-
