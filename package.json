@@ -23,6 +23,7 @@
     "check:git": "npm --prefix frontend run check:git --",
     "check:git-parser": "npm --prefix frontend run check:git-parser --",
     "check:go-live-risks": "npm --prefix frontend run check:go-live-risks --",
+    "check:manual-go-live": "npm --prefix frontend run check:manual-go-live --",
     "check:startklar": "npm --prefix frontend run check:startklar --",
     "check:finance-ui": "npm --prefix frontend run check:finance-ui --",
     "check:migrations": "npm --prefix frontend run check:migrations --",

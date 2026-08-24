@@ -78,6 +78,7 @@ check(
     "check:git-parser",
     "check:git",
     "check:go-live-risks",
+    "check:manual-go-live",
     "check:startklar",
     "check:prod",
     "check:prepush",
@@ -92,7 +93,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:manual-go-live, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -121,6 +122,7 @@ check("Release gate checks destructive data safety", releaseGate.includes('"chec
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
 check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
+check("Release gate checks manual go-live evidence", releaseGate.includes('"check:manual-go-live"'), "Release gate should run manual external evidence check");
 check("Release gate checks Startklar readiness", releaseGate.includes('"check:startklar"'), "Release gate should run the short local MVP start readiness check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
@@ -275,7 +277,7 @@ check(
 const mvpAcceptance = read("scripts/mvp-acceptance-check.mjs");
 check(
   "MVP acceptance check exists",
-  includesAll(mvpAcceptance, ["Automatiskt bevis", "Manuellt kvar fore go-live", "MVP acceptance check"]),
+  includesAll(mvpAcceptance, ["Automatiskt bevis", "Manuellt bevis kvar fore go-live", "MVP acceptance check"]),
   "MVP acceptance should separate automated release evidence from manual go-live checks."
 );
 

@@ -19,7 +19,7 @@ Det betyder inte att AliBooks saknar automatiska skydd. Foljande kontroller bevi
 - `check:api-contract` kontrollerar kritiska frontend/backend-kontrakt for registrering, login, kunder, fakturor, bokforing, moms och rapporter.
 - `check:backup`, `check:prod` och `check:go-live-risks` kontrollerar backup/restore, produktionsmallar och go-live-risker.
 
-## Manuellt kvar fore go-live
+## Manuellt bevis kvar fore go-live
 
 Detta ska fortfarande kontrolleras med riktig webblasare och testdata innan AliBooks anvands skarpt:
 

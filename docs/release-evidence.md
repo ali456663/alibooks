@@ -50,7 +50,7 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 90/90
+- `check:ready`: 91/91
 - `check:acceptance`: 18/18
 - `check:evidence`: 35/35
 - `check:data-safety`: 55/55
@@ -60,6 +60,7 @@ Detta bevisar lokalt att:
 - `check:migrations`: 5/5, passed 2026-08-16
 - `check:schema-bootstrap`: 10/10
 - `check:go-live-risks`: 20/20
+- `check:manual-go-live`: 18/18
 - `check:startklar`: 20/20
 - `npm run check:backup`: passed, 17/17
 - Docker images skapade lokalt 2026-08-17 09:59 +02:00:
@@ -74,6 +75,7 @@ Detta bevisar lokalt att:
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.
 - GitHub sync kan kontrolleras med `npm run check:sync` efter push. Den failar om lokala commits inte finns pa GitHub.
 - Go-live-risker foljs i [go-live-riskregister.md](go-live-riskregister.md) och kontrolleras lokalt med `npm run check:go-live-risks`.
+- Manuella externa go-live-bevis kontrolleras lokalt med `npm run check:manual-go-live`, sa PDF, SMTP, Stripe, bank/betalningsflode, backup/restore, publik URL och redovisningskonsult-export inte tappas bort.
 - Pre-push-kontrollen `npm run check:prepush -- --allow-ahead` kor full release gate och ren Git-status innan sjalva pushen. Utan `--allow-ahead` kraver den aven att GitHub redan ar i sync.
 - Databasschema-lage kontrolleras med `npm run check:schema` sa `SPRING_JPA_HIBERNATE_DDL_AUTO` och `APP_SCHEMA_PATCH_ENABLED` ar explicita lokalt och produktion defaultar till `validate` plus avstangd startup-patch.
 - Kontrollerad schema-migration kontrolleras med `npm run check:migrations`. Filen `db/migrations/001_startup_schema_patch.sql` speglar `DatabaseSchemaPatch` och ska testas mot restore/staging innan RDS-deploy.

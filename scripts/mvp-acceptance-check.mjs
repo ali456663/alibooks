@@ -45,7 +45,7 @@ const requiredProtocolSections = [
 
 const requiredAcceptanceTerms = [
   "Automatiskt bevis",
-  "Manuellt kvar fore go-live",
+  "Manuellt bevis kvar fore go-live",
   "Ej testat betyder",
   "npm run check:release",
   "npm run test:backend",
