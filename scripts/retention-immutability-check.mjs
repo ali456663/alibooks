@@ -90,6 +90,9 @@ const expenseController = read("backend/src/main/java/se/cloudshop/expense/Expen
 const settingsService = read("backend/src/main/java/se/cloudshop/settings/SettingsService.java");
 const accountingService = read("backend/src/main/java/se/cloudshop/accounting/AccountingService.java");
 const mainSource = read("frontend/src/main.jsx");
+const orderControllerTest = read("backend/src/test/java/se/cloudshop/order/OrderControllerTest.java");
+const customerControllerTest = read("backend/src/test/java/se/cloudshop/customer/CustomerControllerTest.java");
+const supplierControllerTest = read("backend/src/test/java/se/cloudshop/supplier/SupplierControllerTest.java");
 
 check(
   "Retention policy exists",
@@ -210,6 +213,24 @@ check(
   "Frontend warns against direct deletion",
   mainSource.includes("Do not directly delete invoices/vouchers") && mainSource.includes("archiveCenter"),
   "The UI should guide the user toward archive/correction instead of silent deletion."
+);
+
+check(
+  "Invoice deletion guard has backend test",
+  orderControllerTest.includes("deleteInvoiceRejectsSentInvoice"),
+  "Backend tests should protect the no-hard-delete rule for sent invoices."
+);
+
+check(
+  "Customer retention guard has backend test",
+  customerControllerTest.includes("deleteCustomerRejectsCustomerWithInvoices"),
+  "Backend tests should protect the archive-instead-of-delete rule for customers with invoices."
+);
+
+check(
+  "Supplier retention guards have backend tests",
+  includesAll(supplierControllerTest, ["deleteSupplierInvoiceRejectsBookedInvoice", "cancelSupplierInvoiceCreatesCorrectionVoucherForBookedInvoice"]),
+  "Backend tests should protect supplier invoice deletion and cancellation correction rules."
 );
 
 const failed = checks.filter((result) => !result.ok);

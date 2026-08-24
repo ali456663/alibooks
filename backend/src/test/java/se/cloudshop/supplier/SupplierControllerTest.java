@@ -16,7 +16,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
+import se.cloudshop.accounting.Account;
 import se.cloudshop.accounting.AccountingService;
+import se.cloudshop.accounting.JournalEntry;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
@@ -283,6 +285,64 @@ class SupplierControllerTest {
         1250,
         authorizationHeader
     );
+  }
+
+  @Test
+  void deleteSupplierInvoiceRejectsBookedInvoice() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 10L);
+    when(supplierInvoiceRepository.findById(10L)).thenReturn(Optional.of(invoice));
+    when(accountingService.hasSupplierInvoiceEntries(invoice)).thenReturn(true);
+
+    assertThatThrownBy(() -> supplierController.deleteSupplierInvoice("Bearer " + authHeaderToken(), 10L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Create a correction or cancellation instead of deleting it");
+
+    verify(supplierInvoiceRepository, never()).delete(invoice);
+  }
+
+  @Test
+  void cancelSupplierInvoiceCreatesCorrectionVoucherForBookedInvoice() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 10L);
+    JournalEntry correctionEntry = new JournalEntry(null, null, invoice, new Account("2440", "Leverantorsskulder"), "R-2026-0001", 1250, 0, "Cancellation", LocalDate.of(2026, 7, 10));
+    when(supplierInvoiceRepository.findById(10L)).thenReturn(Optional.of(invoice));
+    when(accountingService.hasSupplierInvoiceEntries(invoice)).thenReturn(true);
+    when(accountingService.createSupplierInvoiceCancellationEntries(invoice, LocalDate.of(2026, 7, 10)))
+        .thenReturn(List.of(correctionEntry));
+    when(supplierInvoiceRepository.save(invoice)).thenReturn(invoice);
+
+    SupplierInvoice cancelled = supplierController.cancelSupplierInvoice(
+        "Bearer " + authHeaderToken(),
+        10L,
+        new CancelSupplierInvoiceRequest(LocalDate.of(2026, 7, 10))
+    );
+
+    assertThat(cancelled.getStatus()).isEqualTo("cancelled");
+    assertThat(cancelled.getCancellationVoucherNumber()).isEqualTo("R-2026-0001");
+    verify(accountingService).requireUnlockedAccountingDate(LocalDate.of(2026, 7, 10));
+    verify(accountingService).createSupplierInvoiceCancellationEntries(invoice, LocalDate.of(2026, 7, 10));
+    verify(supplierInvoiceRepository).save(invoice);
   }
 
   private String authHeaderToken() {

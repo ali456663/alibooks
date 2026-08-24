@@ -10,13 +10,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
+import se.cloudshop.order.Order;
 import se.cloudshop.order.OrderRepository;
+import se.cloudshop.product.Product;
 
 class CustomerControllerTest {
 
@@ -114,6 +117,21 @@ class CustomerControllerTest {
         eq(0),
         any(String.class)
     );
+  }
+
+  @Test
+  void deleteCustomerRejectsCustomerWithInvoices() {
+    Customer customer = new Customer("Ali Wafa", "ali.wafa@gmail.com", "20010203-6598", "Byvagen 56", "0795565656", "123 45", "Sodertalje");
+    setCustomerId(customer, 15L);
+    Order invoice = new Order(customer, new Product("PT", "Training", 1000), java.time.Instant.now());
+    when(customerRepository.findById(15L)).thenReturn(Optional.of(customer));
+    when(orderRepository.findByCustomer(customer)).thenReturn(List.of(invoice));
+
+    assertThatThrownBy(() -> customerController.deleteCustomer("Bearer " + authHeaderToken(), 15L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("should be archived instead of deleted");
+
+    verify(customerRepository, never()).delete(customer);
   }
 
   private CreateCustomerRequest validCustomerRequest() {

@@ -43,14 +43,14 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
-- `npm run test:backend`: passed 2026-08-22 21:43 +02:00, 194 tests, 0 failures, 0 errors
+- `npm run test:backend`: passed 2026-08-24, 197 tests, 0 failures, 0 errors
 - `npm run check:release`: passed 2026-08-22 21:43 +02:00, standard gate fran projektroten med 18/18 acceptans, 90/90 readiness, 35/35 evidence, 55/55 data safety, 44/44 production readiness och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
 - `npm run check:use-today`: 30/30, slutligt lokalt anvandningsbeslut med stoppsignaler och produktionsblockerare.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
-- `npm run check:retention`: 20/20, arkiv och andringsspar for fakturor, kunder, leverantorsfakturor, kvitton, bankreset, periodlasning, hard delete och rattelser.
+- `npm run check:retention`: 23/23, arkiv och andringsspar for fakturor, kunder, leverantorsfakturor, kvitton, bankreset, periodlasning, hard delete, rattelser och backendtester.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
@@ -62,7 +62,7 @@ Detta bevisar lokalt att:
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
 - `check:ready`: 111/111
 - `check:acceptance`: 18/18
-- `check:evidence`: 48/48
+- `check:evidence`: 51/51
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29
@@ -75,7 +75,7 @@ Detta bevisar lokalt att:
 - `check:operations`: 23/23
 - `check:use-today`: 30/30
 - `check:calculations`: 46/46
-- `check:retention`: 20/20
+- `check:retention`: 23/23
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
 - `npm run check:backup`: passed, 17/17
