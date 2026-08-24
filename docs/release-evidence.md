@@ -10,6 +10,7 @@ Kor fran projektets rotmapp:
 ```bash
 npm run check:release:full
 npm run check:dependencies
+npm run check:startklar
 npm run check:release-traceability
 npm run check:migrations
 npm run check:schema-bootstrap
@@ -38,7 +39,9 @@ Detta bevisar lokalt att:
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-22 21:43 +02:00, 194 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-22 21:43 +02:00, standard gate fran projektroten med 18/18 acceptans, 88/88 readiness, 35/35 evidence, 55/55 data safety, 44/44 production readiness och runtime smoke
+- `npm run check:release`: passed 2026-08-22 21:43 +02:00, standard gate fran projektroten med 18/18 acceptans, 90/90 readiness, 35/35 evidence, 55/55 data safety, 44/44 production readiness och runtime smoke
+- `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
+- `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
 - `npm run check:release`: passed 2026-08-16 23:37 +02:00, standard gate med schema-migration, schema-bootstrap och git-skydd for `db/`
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
@@ -46,7 +49,7 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 88/88
+- `check:ready`: 90/90
 - `check:acceptance`: 18/18
 - `check:evidence`: 35/35
 - `check:data-safety`: 55/55
@@ -56,6 +59,7 @@ Detta bevisar lokalt att:
 - `check:migrations`: 5/5, passed 2026-08-16
 - `check:schema-bootstrap`: 10/10
 - `check:go-live-risks`: 20/20
+- `check:startklar`: 20/20
 - `npm run check:backup`: passed, 17/17
 - Docker images skapade lokalt 2026-08-17 09:59 +02:00:
   - `alibooks-backend:release-gate`

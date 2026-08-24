@@ -197,6 +197,7 @@ npm run check:backend-wiring
 npm run check:docs
 npm run check:docker
 npm run check:prod
+npm run check:startklar
 npm run check:secrets
 npm run check:views
 npm run smoke:runtime
@@ -204,3 +205,5 @@ npm run test:backend
 ```
 
 Om Maven inte finns pa datorn forsoker `npm run test:backend` anvanda Docker och en Maven Java 21-image. Det kan ta lite tid forsta gangen eftersom Docker kan behova hamta imagen.
+
+`npm run check:startklar` visar en kort lokal MVP-status och paminner om vad som fortfarande kraver extern verifiering fore skarp drift.

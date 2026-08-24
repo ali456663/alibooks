@@ -145,6 +145,12 @@ check(
 );
 
 check(
+  "Startklar command exists",
+  allDocs.includes("npm run check:startklar"),
+  "Docs should include the short local MVP readiness check."
+);
+
+check(
   "Backup verification is documented",
   allDocs.includes("Kontrollera backupfil") || allDocs.includes("Verify backup file") || allDocs.includes("pg_restore -l"),
   "Docs should remind the user to verify a backup before go-live."

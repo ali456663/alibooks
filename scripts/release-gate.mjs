@@ -34,6 +34,7 @@ const frontendSteps = [
   ["check:docker", "Check Docker config"],
   ["check:prod", "Check production readiness"],
   ["check:go-live-risks", "Check go-live risk register"],
+  ["check:startklar", "Check local MVP start readiness"],
   ["check:finance-ui", "Check professional finance UI theme"],
   ["check:release-traceability", "Check release traceability"],
   ["check:views", "Check frontend view routes"],

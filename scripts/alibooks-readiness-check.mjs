@@ -78,6 +78,7 @@ check(
     "check:git-parser",
     "check:git",
     "check:go-live-risks",
+    "check:startklar",
     "check:prod",
     "check:prepush",
     "smoke:runtime",
@@ -91,7 +92,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:startklar, check:prod, check:prepush, smoke:runtime, check:professional-loop, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -120,6 +121,7 @@ check("Release gate checks destructive data safety", releaseGate.includes('"chec
 check("Release gate checks Docker config", releaseGate.includes('"check:docker"'), "Release gate should run Docker config check");
 check("Release gate checks production readiness", releaseGate.includes('"check:prod"'), "Release gate should run production readiness check");
 check("Release gate checks go-live risks", releaseGate.includes('"check:go-live-risks"'), "Release gate should run go-live risk register check");
+check("Release gate checks Startklar readiness", releaseGate.includes('"check:startklar"'), "Release gate should run the short local MVP start readiness check");
 check("Release gate checks release traceability", releaseGate.includes('"check:release-traceability"'), "Release gate should run commit, image tag and sync traceability check");
 check("Release gate checks frontend views", releaseGate.includes('"check:views"'), "Release gate should run view route check");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images");
@@ -211,6 +213,7 @@ check("Docs include cash/card payment review", includesAll(docs, ["kort", "Swish
 check("Release evidence includes full local gate", releaseEvidence.includes("npm run check:release:full"), "Release evidence should document the full local verification command");
 check("Docs include backup and restore drill", includesAll(docs, ["pg_dump", "pg_restore", "restore drill", "RDS snapshot"]), "Docs should cover backup creation, verification and restore drill");
 check("Docs include go-live risk register", includesAll(riskRegister, ["GitHub Actions CI", "Dockerhub images", "RDS databas", "BLOCKERAR SKARP DRIFT"]), "Docs should track production blockers explicitly");
+check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 
 const prePushGate = read("scripts/pre-push-gate.mjs");
 check("Pre-push gate exists", includesAll(prePushGate, ["check:release", "check:git", "check:sync", "--with-backend", "--with-docker-build", "--allow-ahead"]), "Pre-push gate should run full local checks and explain the pre-push ahead case");

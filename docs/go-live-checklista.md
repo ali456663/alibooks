@@ -16,6 +16,7 @@ Kontrollera lokalt:
 Frontend bygger med npm run build
 Releasegrind gar igenom med npm run check:release:full
 Produktionskontroll gar igenom med npm run check:prod
+Startklar-kontroll gar igenom med npm run check:startklar
 Dependency-kontroll gar igenom med npm run check:dependencies
 Release-sparbarhet gar igenom med npm run check:release-traceability
 Schema-migration gar igenom med npm run check:migrations
@@ -66,6 +67,7 @@ Innan du pushar kod:
 cd frontend
 npm run check:release:full
 npm run check:go-live-risks
+npm run check:startklar
 npm run check:dependencies
 npm run check:audit
 npm run check:release-traceability
@@ -82,6 +84,7 @@ git push
 npm run check:sync
 ```
 
+Om `check:startklar` failar betyder det att AliBooks saknar ett lokalt MVP-bevis eller att externa go-live-blockerare inte ar tydliga.
 Om `check:git -- --strict` failar efter commit betyder det att viktiga filer fortfarande ligger utanfor git.
 Om `check:sync` failar efter push betyder det att lokal branch och GitHub inte ar i samma lage.
 Anvand inte punkt-formen av `git add` fore go-live. Kontrollera forst `git status -sb` och stage:a bara de filer som hor till AliBooks-andringen, sa att lokala underlag, exporter eller miljo filer inte foljer med av misstag.
