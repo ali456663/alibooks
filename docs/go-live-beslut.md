@@ -39,6 +39,7 @@ npm run check:external-go-live
 npm run check:git -- --strict
 git push
 npm run check:sync
+npm run check:post-push -- --require-pushed
 npm run check:prepush -- --allow-ahead
 npm run check:go-live-decision
 ```

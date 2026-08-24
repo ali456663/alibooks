@@ -20,7 +20,8 @@ origin https://github.com/ali456663/alibooks.git
    - `Frontend release gate`
    - `Docker build`
 7. Kor `npm run check:sync` lokalt efter push.
-8. Kor `npm run check:release-traceability`.
+8. Kor `npm run check:post-push -- --require-pushed`.
+9. Kor `npm run check:release-traceability`.
 
 ## Dockerhub efter CI
 
@@ -49,3 +50,5 @@ Vanliga fel och vad du gor:
 
 GitHub Actions bevisar bara att koden bygger i GitHub.
 Skarp drift kraver fortfarande Dockerhub-image, EC2/RDS-smoke, backup/restore drill, Stripe, SMTP och `npm run check:go-live-decision`.
+
+Se aven [post-push-verifiering.md](post-push-verifiering.md) for den korta checklistan efter `git push`.

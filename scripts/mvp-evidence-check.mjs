@@ -84,6 +84,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:ci-handoff`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "Post-push evidence count matches script",
+    script: "scripts/post-push-verification-check.mjs",
+    outputLabel: "AliBooks post-push verification check",
+    evidencePattern: /`check:post-push`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Schema policy evidence count matches script",
     script: "scripts/schema-policy-check.mjs",
     outputLabel: "Schema policy check",
@@ -272,6 +278,12 @@ check(
 );
 
 check(
+  "Package exposes post-push check",
+  packageJson.scripts?.["check:post-push"] === "node ../scripts/post-push-verification-check.mjs",
+  "frontend/package.json should expose npm run check:post-push."
+);
+
+check(
   "Package exposes MVP use readiness check",
   packageJson.scripts?.["check:mvp-use"] === "node ../scripts/mvp-use-readiness-check.mjs",
   "frontend/package.json should expose npm run check:mvp-use."
@@ -389,6 +401,12 @@ check(
   "Release gate runs CI handoff check",
   releaseGate.includes('"check:ci-handoff"'),
   "The release gate should fail when CI handoff proof becomes stale."
+);
+
+check(
+  "Release gate runs post-push check",
+  releaseGate.includes('"check:post-push"'),
+  "The release gate should fail when post-push proof becomes stale."
 );
 
 check(

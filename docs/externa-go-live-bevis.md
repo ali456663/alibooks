@@ -31,6 +31,7 @@ npm run check:external-go-live
 npm run check:git -- --strict
 git push
 npm run check:sync
+npm run check:post-push -- --require-pushed
 ```
 
 Efter push ska GitHub Actions och Dockerhub granskas manuellt. Nar EC2/RDS finns ska produktionskontrollen koras pa EC2:

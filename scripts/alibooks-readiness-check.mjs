@@ -40,6 +40,7 @@ const requiredFiles = [
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
   "docs/ci-handoff-efter-push.md",
+  "docs/post-push-verifiering.md",
   "docs/berakningskontroll.md",
   "docs/arkiv-och-andringsspar.md",
   "docs/revisionsspar-integritet.md",
@@ -62,6 +63,7 @@ const requiredFiles = [
   "scripts/schema-migration-check.mjs",
   "scripts/schema-bootstrap-check.mjs",
   "scripts/ci-handoff-check.mjs",
+  "scripts/post-push-verification-check.mjs",
   "scripts/mvp-use-readiness-check.mjs",
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
@@ -94,6 +96,7 @@ check(
     "check:backup",
     "check:ci",
     "check:ci-handoff",
+    "check:post-push",
     "check:docs",
     "check:docker",
     "check:data-safety",
@@ -148,6 +151,7 @@ check("Release gate checks git parser regression", releaseGate.includes('"check:
 check("Release gate checks backup readiness", releaseGate.includes('"check:backup"'), "Release gate should run backup readiness check");
 check("Release gate checks CI pipeline", releaseGate.includes('"check:ci"'), "Release gate should run GitHub Actions pipeline check");
 check("Release gate checks CI handoff", releaseGate.includes('"check:ci-handoff"'), "Release gate should run CI handoff check");
+check("Release gate checks post-push verification", releaseGate.includes('"check:post-push"'), "Release gate should run post-push checklist verification");
 check("Release gate checks docs consistency", releaseGate.includes('"check:docs"'), "Release gate should run documentation consistency check");
 check("Release gate checks MVP evidence", releaseGate.includes('"check:evidence"'), "Release gate should run MVP evidence freshness check");
 check("Release gate checks schema policy", releaseGate.includes('"check:schema"'), "Release gate should run database schema policy check");

@@ -46,6 +46,7 @@ npm run check:acceptance
 npm run build
 npm run check:ready
 npm run check:ci-handoff
+npm run check:post-push
 npm run check:backend-wiring
 npm run check:docker
 npm run check:prod
@@ -77,6 +78,7 @@ npm run test:backend
 `npm run check:acceptance` kontrollerar att MVP-testprotokollet skiljer automatiska bevis fran manuella go-live-tester.
 `npm run check:ready` ar en snabb statisk kontroll for att se att projektet fortfarande har de viktigaste byggstenarna for skarp MVP: CI, Docker, env-mallar, professionell 20-stegsplan, regelkontroll, Startklar, Stripe/SMTP/JWT-punkter och dokumentation.
 `npm run check:ci-handoff` kontrollerar [ci-handoff-efter-push.md](ci-handoff-efter-push.md): vad som ska granskas efter `git push`, GitHub Actions-jobb, Dockerhub workflow, secrets, jobbnamn, synk och vanliga CI-fel.
+`npm run check:post-push` kontrollerar [post-push-verifiering.md](post-push-verifiering.md): efter-push-kommandon, GitHub Actions, Dockerhub, sparbara image-taggar och att strikt lage kan krava att lokal branch inte ligger fore GitHub.
 `npm run check:backend-wiring` fangar vanliga Java-fel dar controller-constructors eller request-records har andrats men tester/kod inte har uppdaterats.
 `npm run check:docker` kontrollerar Dockerfiler, compose, port 5157, backend-port 3000 och nginx `/api`-proxy.
 `npm run check:prod` kontrollerar produktionsmallen for EC2/RDS: `.env`, CORS, `/api`, JWT, test-reset, Docker Compose och smoke scripts. Pa EC2 kan den koras strikt med `npm run check:prod -- --env-file ../.env --strict`.

@@ -25,6 +25,7 @@ const frontendSteps = [
   ["check:backup", "Check backup and restore readiness"],
   ["check:ci", "Check GitHub Actions pipeline"],
   ["check:ci-handoff", "Check CI handoff after push"],
+  ["check:post-push", "Check post-push verification checklist"],
   ["check:docs", "Check docs consistency"],
   ["check:evidence", "Check MVP release evidence"],
   ["check:schema", "Check database schema policy"],

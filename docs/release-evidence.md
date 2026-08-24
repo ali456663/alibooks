@@ -12,6 +12,7 @@ npm run check:release:full
 npm run check:secrets
 npm run check:dependencies
 npm run check:ci-handoff
+npm run check:post-push
 npm run check:startklar
 npm run check:mvp-use
 npm run check:operations
@@ -41,6 +42,7 @@ Detta bevisar lokalt att:
 - riktiga API-nycklar for Stripe, HF, Google, OpenRouter och OpenAI-liknande providers stoppas av `check:secrets`
 - frontend dependency-lockfile, buildverktyg och Docker-installation kontrolleras statiskt
 - CI-handoff efter push ar dokumenterad med GitHub Actions-jobb, Dockerhub-secrets, jobbnamn och felsokning
+- post-push-verifiering skiljer lokal release fran GitHub-sync, Actions, Dockerhub och externa go-live-bevis
 - release-version, commit, Dockerhub-taggar och EC2 `IMAGE_TAG` gar att sparas som releasebevis
 - startup-schema-patchar ar speglade i kontrollerad SQL-migration innan RDS-deploy
 - forsta RDS-basschema har en kontrollerad schema-bootstrap-runbook
@@ -58,7 +60,7 @@ Detta bevisar lokalt att:
 
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 201 tests, 0 failures, 0 errors
-- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 135/135 readiness, 70/70 evidence, 55/55 data safety, 44/44 production readiness, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis och runtime smoke
+- `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 138/138 readiness, 73/73 evidence, 55/55 data safety, 44/44 production readiness, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering och runtime smoke
 - `npm run check:startklar`: passed 2026-08-24, 20/20, lokal MVP redo enligt kort Startklar-kontroll. Skarp produktion vantar pa GitHub sync, Dockerhub, EC2/RDS, restore drill, Stripe och SMTP.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
@@ -70,6 +72,7 @@ Detta bevisar lokalt att:
 - `npm run check:handoff`: 29/29, redovisningspaket, SIE, SIE-kvittens, resultat, balans, huvudbok, saldobalans, moms, bank, reskontra, arsarkiv, systemdokumentation och saker delning.
 - `npm run check:go-live-decision`: 17/17, slutligt beslut for lokal MVP kontra skarp drift, externa bevis, backup/restore, Stripe, SMTP, release-sparbarhet och redovisningskonsult-export.
 - `npm run check:external-go-live`: 29/29, externa bevis for GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket.
+- `npm run check:post-push`: 29/29, post-push-verifiering for GitHub sync, Actions, Dockerhub, sparbara image-taggar och strikt efter-push-lage.
 - `npm run check:release:full`: passed 2026-08-24 15:49 +02:00, frontend build, runtime smoke, backendtester 201 tests / 0 failures / 0 errors, release gate och Docker image builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
@@ -82,13 +85,14 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 135/135
+- `check:ready`: 138/138
 - `check:acceptance`: 18/18
-- `check:evidence`: 70/70
+- `check:evidence`: 73/73
 - `check:data-safety`: 55/55
 - `check:prod`: 44/44
 - `check:ci`: 29/29
 - `check:ci-handoff`: 32/32
+- `check:post-push`: 29/29
 - `check:external-go-live`: 29/29
 - `check:schema`: 18/18
 - `check:migrations`: 5/5, passed 2026-08-16
@@ -112,6 +116,7 @@ Detta bevisar lokalt att:
   - `alibooks-frontend:release-gate`
 - CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten. GitHub Actions kor ocksa `npm run check:audit` innan frontend release-gate.
 - CI-handoff efter push kontrolleras lokalt med `npm run check:ci-handoff` och dokumenteras i [ci-handoff-efter-push.md](ci-handoff-efter-push.md), sa GitHub Actions-jobb, Dockerhub-secrets, push/sync och vanliga CI-fel inte tappas bort.
+- Post-push verifiering kontrolleras lokalt med `npm run check:post-push` och strikt efter push med `npm run check:post-push -- --require-pushed`, sa lokal MVP inte blandas ihop med GitHub/CI/Dockerhub-bevis.
 - MVP-acceptans kontrolleras lokalt med `npm run check:acceptance` och skiljer automatiskt bevis fran manuella go-live-klicktester.
 - Runtime-smoke kontrollerar att utloggad startsida visar kompakt login/register/sprak, och att dessa kontroller inte foljer med till andra menyvyer som Kunder.
 - CI kor backendtester med explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update` for testdatabasen, medan produktion defaultar till `validate` och `APP_SCHEMA_PATCH_ENABLED=false` sa RDS-schema inte andras automatiskt.
