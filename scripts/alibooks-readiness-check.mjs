@@ -145,7 +145,7 @@ check(
 
 const ci = read(".github/workflows/ci.yml");
 const releaseGate = read("scripts/release-gate.mjs");
-check("CI runs backend tests", ci.includes("mvn test"), "GitHub Actions should run mvn test");
+check("CI runs backend tests", ci.includes("mvn -B test"), "GitHub Actions should run Maven tests in batch mode");
 check("CI runs frontend dependency audit", ci.includes("npm run check:audit"), "GitHub Actions should run npm audit before frontend release gate");
 check("CI runs frontend release gate", ci.includes("npm run check:release"), "GitHub Actions should run the same frontend release gate as local verification");
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");

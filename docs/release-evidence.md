@@ -99,6 +99,7 @@ Detta bevisar lokalt att:
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
 - `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
 - `npm run check:ci-handoff`: 32/32, GitHub Actions-jobb, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
+- `npm run check:ci`: 29/29, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate och Docker image builds.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
@@ -140,7 +141,7 @@ Detta bevisar lokalt att:
 - Post-push verifiering kontrolleras lokalt med `npm run check:post-push` och strikt efter push med `npm run check:post-push -- --require-pushed`, sa lokal MVP inte blandas ihop med GitHub/CI/Dockerhub-bevis.
 - MVP-acceptans kontrolleras lokalt med `npm run check:acceptance` och skiljer automatiskt bevis fran manuella go-live-klicktester.
 - Runtime-smoke kontrollerar att utloggad startsida visar kompakt login/register/sprak, och att dessa kontroller inte foljer med till andra menyvyer som Kunder.
-- CI kor backendtester med explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update` for testdatabasen, medan produktion defaultar till `validate` och `APP_SCHEMA_PATCH_ENABLED=false` sa RDS-schema inte andras automatiskt.
+- CI kor backendtester med `mvn -B test` och explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update` for testdatabasen, medan produktion defaultar till `validate` och `APP_SCHEMA_PATCH_ENABLED=false` sa RDS-schema inte andras automatiskt.
 - Backup/restore-rutinen kontrolleras lokalt med `npm run check:backup` och ingar i release-gaten.
 - Restore drill har skyddade script for Linux/EC2 och Windows som kraver `RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE`.
 - Git release status kan kontrolleras med `npm run check:git` innan commit och `npm run check:git -- --strict` efter commit.

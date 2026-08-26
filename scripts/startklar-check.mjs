@@ -48,7 +48,7 @@ check("Startklar command exists in frontend", frontendScripts["check:startklar"]
 check("Startklar command exists in root", rootScripts["check:startklar"] === "npm --prefix frontend run check:startklar --", "package.json should expose npm run check:startklar from the repo root.");
 check("Release gate runs Startklar", releaseGate.includes('"check:startklar"'), "The release gate should include the user-facing readiness summary.");
 check("Pre-push gate runs full local proof", includesAll(prePushGate, ["--with-backend", "--with-docker-build", "check:git", "check:sync"]), "Pre-push should combine release, backend, Docker, git and sync checks.");
-check("CI tests backend with PostgreSQL", includesAll(ci, ["postgres:16", "mvn test", "SPRING_DATASOURCE_URL"]), "GitHub Actions should test backend against PostgreSQL.");
+check("CI tests backend with PostgreSQL", includesAll(ci, ["postgres:16", "mvn -B test", "SPRING_DATASOURCE_URL"]), "GitHub Actions should test backend against PostgreSQL in Maven batch mode.");
 check("CI runs frontend release gate", includesAll(ci, ["npm ci", "npm run check:audit", "npm run check:release"]), "GitHub Actions should install, audit and run the frontend release gate.");
 check("CI builds Docker images", includesAll(ci, ["docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should build backend and frontend Docker images.");
 check("Dockerhub workflow can publish images", includesAll(dockerhub, ["workflow_dispatch", "docker/login-action", "docker/build-push-action", "type=sha,prefix=sha-"]), "Dockerhub release should be manual and traceable by sha tag.");

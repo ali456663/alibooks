@@ -72,7 +72,7 @@ check("Roadmap links post-push command", roadmap.includes("npm run check:post-pu
 check("Release evidence links post-push check", releaseEvidence.includes("check:post-push"), "Release evidence should record the post-push verifier.");
 check("CI workflow runs on push to main", includesAll(ciWorkflow, ["push:", "main"]), "CI should run when main is pushed.");
 check("CI workflow supports manual run", ciWorkflow.includes("workflow_dispatch"), "CI should be manually rerunnable.");
-check("CI workflow runs backend and frontend gates", includesAll(ciWorkflow, ["mvn test", "npm run check:release", "docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should prove backend, frontend and Docker image builds.");
+check("CI workflow runs backend and frontend gates", includesAll(ciWorkflow, ["mvn -B test", "npm run check:release", "docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should prove backend, frontend and Docker image builds.");
 check("Dockerhub workflow supports manual and tag release", includesAll(dockerhubWorkflow, ["workflow_dispatch", '"v*"']), "Dockerhub release should be manually runnable and taggable.");
 check("Dockerhub workflow uses secrets", includesAll(dockerhubWorkflow, ["secrets.DOCKERHUB_USERNAME", "secrets.DOCKERHUB_TOKEN"]), "Dockerhub credentials should stay in GitHub secrets.");
 check("Dockerhub workflow publishes traceable tags", includesAll(dockerhubWorkflow, ["type=sha,prefix=sha-", "type=ref,event=tag"]), "Docker images should be traceable to commit/tag.");

@@ -60,7 +60,7 @@ check("Doc links go-live decision", doc.includes("npm run check:go-live-decision
 check("CI runs on push to main", includesAll(ci, ["push:", "main"]), "CI should start when main is pushed.");
 check("CI supports workflow_dispatch", ci.includes("workflow_dispatch"), "CI should be runnable manually.");
 check("CI backend uses Java 21 and PostgreSQL 16", includesAll(ci, ['java-version: "21"', "postgres:16"]), "Backend CI should match local/prod direction.");
-check("CI backend runs Maven tests", ci.includes("mvn test"), "Backend CI must run tests.");
+check("CI backend runs Maven tests in batch mode", ci.includes("mvn -B test"), "Backend CI must run tests without interactive Maven output.");
 check("CI frontend uses Node 24 and npm ci", includesAll(ci, ['node-version: "24"', "npm ci"]), "Frontend CI should be reproducible and current.");
 check("CI frontend runs audit and release gate", includesAll(ci, ["npm run check:audit", "npm run check:release"]), "Frontend CI should run security audit and release gate.");
 check("CI Docker waits for backend and frontend", includesAll(ci, ["needs:", "backend", "frontend"]), "Docker job should wait for test jobs.");

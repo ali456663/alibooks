@@ -131,7 +131,7 @@ Du ar redo att ga till moln/deployment nar:
 - inga vita sidor finns
 - inga backend-fel visas i IntelliJ
 - `npm run build` gar igenom
-- backendtester gar igenom i IntelliJ eller med `mvn test`
+- backendtester gar igenom i IntelliJ eller med `mvn -B test`
 - backendtester gar igenom med `npm run test:backend` om Maven saknas lokalt
 - Docker-databasen startar rent
 - JSON-backup har laddats ner och kontrollerats med `Kontrollera backupfil`
