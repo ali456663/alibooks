@@ -25882,58 +25882,62 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">AliBooks</div>
-        <button className="create-button" type="button">{t.createNew}</button>
-        <nav className="nav">
-          {navButton("overview", t.overview)}
-          {navButton("todoList", t.todoList)}
-          {navButton("dailyRoutine", t.dailyRoutine)}
-          {navButton("monthlyRoutine", t.monthlyRoutine)}
-          {navButton("annualRoutine", t.annualRoutine)}
-          {navButton("reconciliation", t.reconciliation)}
-          {navButton("declarationCenter", t.declarationCenter)}
-          {navButton("periodControl", t.periodControl)}
-          {navButton("correctionCenter", t.correctionCenter)}
-          {navButton("numberControl", t.numberControl)}
-          {navButton("verificationControl", t.verificationControl)}
-          {navButton("archiveCenter", t.archiveCenter)}
-          {navButton("migrationCenter", t.migrationCenter)}
-          {navButton("riskCenter", t.riskCenter)}
-          {navButton("receivablesCenter", t.receivablesCenter)}
-          {navButton("payablesCenter", t.payablesCenter)}
-          {navButton("closingCenter", t.closingCenter)}
-          {navButton("internalControl", t.internalControl)}
-          {navButton("taxCenter", t.taxCenter)}
-          {navButton("customers", t.customers)}
-          {navButton("invoices", t.invoices)}
-          {navButton("quotes", t.quotes)}
-          {navButton("suppliers", t.suppliers)}
-          {navButton("fixedAssets", t.fixedAssets)}
-          {navButton("ownerEquity", t.ownerEquity)}
-          {navButton("contracts", t.contracts)}
-          {navButton("serviceJobs", t.serviceJobs)}
-          {navButton("services", t.services)}
-          {navButton("activities", t.activities)}
-          {navButton("analytics", t.analytics)}
-          {navButton("security", t.security)}
-          {navButton("compliance", t.compliance)}
-          {navButton("accountingQuality", t.accountingQuality)}
-          {navButton("financialDiagnostics", t.financialDiagnostics)}
-          {navButton("accountantHandoff", t.accountantHandoff)}
-          {navButton("goLive", t.goLive)}
-          {navButton("testFlow", t.testFlow)}
-          {navButton("operationsCenter", t.operationsCenter)}
-          {navButton("paymentReconciliation", t.paymentReconciliation)}
-          {navButton("cashflow", t.cashflow)}
-          {navButton("budget", t.budget)}
-          {navButton("payroll", t.payroll)}
-          {navButton("payments", t.payments)}
-          {navButton("uploaded", t.uploaded)}
-          {navButton("bookkeeping", t.bookkeeping)}
-          {navButton("accounts", t.chartOfAccounts)}
-          {navButton("vat", t.vatReport)}
-          {navButton("reports", t.reports)}
-          {navButton("settings", t.settings)}
-        </nav>
+        {token && (
+          <>
+            <button className="create-button" type="button">{t.createNew}</button>
+            <nav className="nav">
+              {navButton("overview", t.overview)}
+              {navButton("todoList", t.todoList)}
+              {navButton("dailyRoutine", t.dailyRoutine)}
+              {navButton("monthlyRoutine", t.monthlyRoutine)}
+              {navButton("annualRoutine", t.annualRoutine)}
+              {navButton("reconciliation", t.reconciliation)}
+              {navButton("declarationCenter", t.declarationCenter)}
+              {navButton("periodControl", t.periodControl)}
+              {navButton("correctionCenter", t.correctionCenter)}
+              {navButton("numberControl", t.numberControl)}
+              {navButton("verificationControl", t.verificationControl)}
+              {navButton("archiveCenter", t.archiveCenter)}
+              {navButton("migrationCenter", t.migrationCenter)}
+              {navButton("riskCenter", t.riskCenter)}
+              {navButton("receivablesCenter", t.receivablesCenter)}
+              {navButton("payablesCenter", t.payablesCenter)}
+              {navButton("closingCenter", t.closingCenter)}
+              {navButton("internalControl", t.internalControl)}
+              {navButton("taxCenter", t.taxCenter)}
+              {navButton("customers", t.customers)}
+              {navButton("invoices", t.invoices)}
+              {navButton("quotes", t.quotes)}
+              {navButton("suppliers", t.suppliers)}
+              {navButton("fixedAssets", t.fixedAssets)}
+              {navButton("ownerEquity", t.ownerEquity)}
+              {navButton("contracts", t.contracts)}
+              {navButton("serviceJobs", t.serviceJobs)}
+              {navButton("services", t.services)}
+              {navButton("activities", t.activities)}
+              {navButton("analytics", t.analytics)}
+              {navButton("security", t.security)}
+              {navButton("compliance", t.compliance)}
+              {navButton("accountingQuality", t.accountingQuality)}
+              {navButton("financialDiagnostics", t.financialDiagnostics)}
+              {navButton("accountantHandoff", t.accountantHandoff)}
+              {navButton("goLive", t.goLive)}
+              {navButton("testFlow", t.testFlow)}
+              {navButton("operationsCenter", t.operationsCenter)}
+              {navButton("paymentReconciliation", t.paymentReconciliation)}
+              {navButton("cashflow", t.cashflow)}
+              {navButton("budget", t.budget)}
+              {navButton("payroll", t.payroll)}
+              {navButton("payments", t.payments)}
+              {navButton("uploaded", t.uploaded)}
+              {navButton("bookkeeping", t.bookkeeping)}
+              {navButton("accounts", t.chartOfAccounts)}
+              {navButton("vat", t.vatReport)}
+              {navButton("reports", t.reports)}
+              {navButton("settings", t.settings)}
+            </nav>
+          </>
+        )}
       </aside>
 
       <section className="workspace">

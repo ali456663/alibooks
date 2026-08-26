@@ -159,6 +159,7 @@ async function main() {
       hasLogin: document.body.innerText.includes('Logga in') || document.body.innerText.includes('Login'),
       hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
       authFormInlineCount: document.querySelectorAll('.auth-form-inline').length,
+      hasInternalCustomerNav: [...document.querySelectorAll('button')].some((button) => ['Kunder', 'Customers'].includes(button.textContent.trim())),
       activeView: localStorage.getItem('alibooks-active-view'),
       hasRenderRecoveryAttempt: localStorage.getItem('alibooks-render-recovery-attempted') === 'true',
       lastRenderError: sessionStorage.getItem('alibooks-last-render-error'),
@@ -184,6 +185,9 @@ async function main() {
     if (!value.hasAuthEntry || value.authFormInlineCount !== 0) {
       throw new Error(`AliBooks logged-out overview should show compact auth buttons with a closed form: ${JSON.stringify(value)}`);
     }
+    if (value.hasInternalCustomerNav) {
+      throw new Error(`AliBooks logged-out overview should not expose internal navigation before login: ${JSON.stringify(value)}`);
+    }
     if (value.bodyTextLength < 80 || value.rootChildCount < 1 || value.viewportWidth < 320 || value.viewportHeight < 300 || value.scrollHeight < 300) {
       throw new Error(`AliBooks rendered an unexpectedly small or blank page: ${JSON.stringify(value)}`);
     }
@@ -204,6 +208,7 @@ async function main() {
       hasLogin: document.body.innerText.includes('Logga in') || document.body.innerText.includes('Login'),
       hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
       authFormInlineCount: document.querySelectorAll('.auth-form-inline').length,
+      hasInternalCustomerNav: [...document.querySelectorAll('button')].some((button) => ['Kunder', 'Customers'].includes(button.textContent.trim())),
       text: document.body.innerText.slice(0, 1200)
     })`);
     if (loggedOutSavedViewRecovery.hasCrashFallback) {
@@ -215,15 +220,8 @@ async function main() {
     if (!loggedOutSavedViewRecovery.hasAliBooks || !loggedOutSavedViewRecovery.hasLogin || !loggedOutSavedViewRecovery.hasAuthEntry || loggedOutSavedViewRecovery.authFormInlineCount !== 0) {
       throw new Error(`AliBooks logged-out saved-view recovery should show compact overview auth controls: ${JSON.stringify(loggedOutSavedViewRecovery)}`);
     }
-
-    const navResult = await evaluateJson(send, `JSON.stringify((() => {
-      const buttons = [...document.querySelectorAll('button')];
-      const target = buttons.find((button) => ['Kunder', 'Customers'].includes(button.textContent.trim()));
-      if (target) target.click();
-      return { clicked: Boolean(target), label: target?.textContent?.trim() || '' };
-    })())`);
-    if (!navResult.clicked) {
-      throw new Error(`AliBooks smoke test could not find the Customers/Kunder navigation button.`);
+    if (loggedOutSavedViewRecovery.hasInternalCustomerNav) {
+      throw new Error(`AliBooks logged-out saved-view recovery should hide internal navigation before login: ${JSON.stringify(loggedOutSavedViewRecovery)}`);
     }
 
     await sleep(750);
@@ -233,7 +231,8 @@ async function main() {
       hasCrashFallback: Boolean(document.querySelector('.app-crash-fallback')) || document.body.innerText.includes('kunde inte visa sidan'),
       hasAuthEntry: Boolean(document.querySelector('.auth-entry')),
       hasAuthFormInline: Boolean(document.querySelector('.auth-form-inline')),
-      hasLanguageSelectInTopbar: Boolean(document.querySelector('.account-box .language-select'))
+      hasLanguageSelectInTopbar: Boolean(document.querySelector('.account-box .language-select')),
+      hasInternalCustomerNav: [...document.querySelectorAll('button')].some((button) => ['Kunder', 'Customers'].includes(button.textContent.trim()))
     })`);
     if (loggedOutNavigationGuard.hasCrashFallback) {
       throw new Error(`AliBooks crashed after logged-out internal navigation: ${JSON.stringify(loggedOutNavigationGuard)}`);
@@ -243,6 +242,9 @@ async function main() {
     }
     if (!loggedOutNavigationGuard.hasAuthEntry || loggedOutNavigationGuard.hasAuthFormInline || !loggedOutNavigationGuard.hasLanguageSelectInTopbar) {
       throw new Error(`AliBooks logged-out overview should keep compact auth/language controls after internal navigation: ${JSON.stringify(loggedOutNavigationGuard)}`);
+    }
+    if (loggedOutNavigationGuard.hasInternalCustomerNav) {
+      throw new Error(`AliBooks logged-out overview should not expose internal navigation after saved-view recovery: ${JSON.stringify(loggedOutNavigationGuard)}`);
     }
 
     ws.close();
