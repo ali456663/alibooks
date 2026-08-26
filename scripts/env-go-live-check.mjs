@@ -32,6 +32,7 @@ const applicationProperties = read("backend/src/main/resources/application.prope
 const healthController = read("backend/src/main/java/se/cloudshop/system/HealthController.java");
 const productionCheck = read("scripts/production-readiness-check.mjs");
 const secretCheck = read("scripts/secret-placeholder-check.mjs");
+const jwtSecretGenerator = read("scripts/generate-jwt-secret.mjs");
 const riskRegister = read("docs/go-live-riskregister.md");
 const goLiveDecision = read("docs/go-live-beslut.md");
 const externalProof = read("docs/externa-go-live-bevis.md");
@@ -88,6 +89,7 @@ check("Document requires public production URL", includesAll(doc, ["publik front
 check("Document requires RDS or managed PostgreSQL", includesAll(doc, ["RDS", "hanterad PostgreSQL", "localhost"]), "Database target should be explicit.");
 check("Document requires safe schema mode", includesAll(doc, ["SPRING_JPA_HIBERNATE_DDL_AUTO=validate", "APP_SCHEMA_PATCH_ENABLED=false"]), "Production schema mutation should be blocked.");
 check("Document requires strong JWT", includesAll(doc, ["JWT_SECRET", "minst 32 tecken"]), "JWT strength should be visible.");
+check("Document shows JWT secret generator", includesAll(doc, ["npm run generate:jwt-secret", "IntelliJ Run Configuration"]), "The user should have a safe local way to generate JWT_SECRET.");
 check("Document covers Stripe formats", includesAll(doc, ["sk_test_", "sk_live_", "whsec_"]), "Stripe key and webhook formats should be visible.");
 check("Document covers SMTP group", includesAll(doc, ["SPRING_MAIL_HOST", "SPRING_MAIL_PORT", "SPRING_MAIL_USERNAME", "SPRING_MAIL_PASSWORD"]), "SMTP settings should be configured together.");
 check("Document covers AI safe mode", includesAll(doc, ["AI-sakert lage", "anonymiserad", "personnummer", "extern AI"]), "AI provider settings should be tied to privacy.");
@@ -101,6 +103,7 @@ check("Production check validates CORS hardening", includesAll(productionCheck, 
 check("Backend status exposes effective CORS origins", includesAll(healthController, ["effectiveAllowedOrigins", "allowedOriginPatterns", "localDevelopmentReady"]), "System status should show the actual local/prod CORS mode.");
 check("Security view separates local and production CORS", includesAll(mainSource, ["localDevelopmentReady", "Effektiva origins", "APP_CORS_LOCAL_DEV_ENABLED=false"]), "Frontend should show local CORS as dev-ready without overclaiming production.");
 check("Production check validates JWT strength", includesAll(productionCheck, ["Strict JWT secret is strong", "32"]), "JWT strength should be checked.");
+check("JWT generator creates a strong random secret", includesAll(jwtSecretGenerator, ["randomBytes(48)", "JWT_SECRET=", "Do not paste this value"]), "JWT generator should create a strong secret without writing it to the repo.");
 check("Production check validates schema safety", includesAll(productionCheck, ["validate", "none", "APP_SCHEMA_PATCH_ENABLED should be false"]), "Schema safety should be checked.");
 check("Production check validates Stripe and SMTP", includesAll(productionCheck, ["sk_test_", "sk_live_", "whsec_", "SMTP config is complete"]), "Integration config should be checked.");
 check("Secret scanner knows external provider keys", includesAll(secretCheck, ["OpenRouter API key", "Google/Gemini API key", "Hugging Face token", "Stripe secret key"]), "Secret scanner should block real provider keys.");
@@ -110,7 +113,9 @@ check("Go-live decision includes external blockers", includesAll(goLiveDecision,
 check("External proof requires integration evidence", includesAll(externalProof, ["Stripe", "SMTP", "RDS", "GitHub", "Dockerhub"]), "External proof should require integration evidence.");
 check("First real data doc points to env safety", includesAll(firstRealData, ["API-nycklar", "GitHub", "check:first-real-data"]), "First real data gate should stop leaked or unsafe keys.");
 check("Frontend exposes env-go-live check", frontendPackage.scripts?.["check:env-go-live"] === "node ../scripts/env-go-live-check.mjs", "frontend/package.json should expose npm run check:env-go-live.");
+check("Frontend exposes JWT generator", frontendPackage.scripts?.["generate:jwt-secret"] === "node ../scripts/generate-jwt-secret.mjs", "frontend/package.json should expose npm run generate:jwt-secret.");
 check("Root exposes env-go-live check", rootPackage.scripts?.["check:env-go-live"] === "npm --prefix frontend run check:env-go-live --", "package.json should expose npm run check:env-go-live.");
+check("Root exposes JWT generator", rootPackage.scripts?.["generate:jwt-secret"] === "npm --prefix frontend run generate:jwt-secret --", "package.json should expose npm run generate:jwt-secret.");
 check("Release gate runs env-go-live check", releaseGate.includes('"check:env-go-live"'), "Release gate should fail if env-go-live proof disappears.");
 check("Readiness requires env-go-live check", includesAll(readiness, [docPath, "scripts/env-go-live-check.mjs", "check:env-go-live"]), "Readiness should protect env-go-live docs and script.");
 check("Evidence requires env-go-live check", includesAll(evidence, ["scripts/env-go-live-check.mjs", "check:env-go-live"]), "Evidence should keep env-go-live proof fresh.");

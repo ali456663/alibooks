@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev --",
     "doctor": "npm --prefix frontend run doctor --",
+    "generate:jwt-secret": "npm --prefix frontend run generate:jwt-secret --",
     "build": "npm --prefix frontend run build --",
     "check:release": "npm --prefix frontend run check:release --",
     "check:release:full": "npm --prefix frontend run check:release:full --",

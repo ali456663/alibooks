@@ -19,6 +19,14 @@ For lokal test kan AliBooks starta med standardvarden, men detta ska fortfarande
 - `JWT_SECRET` ska vara minst 32 tecken om du testar riktig inloggning.
 - `JWT_EXPIRATION_MINUTES=60` ar rimligt lokalt.
 
+Skapa en stark lokal JWT-hemlighet utan att spara den i kod:
+
+```bash
+npm run generate:jwt-secret
+```
+
+Kopiera bara resultatet till IntelliJ Run Configuration > Environment variables.
+
 ## Produktion eller publik demo
 
 For publik demo eller riktig drift ska detta vara satt:

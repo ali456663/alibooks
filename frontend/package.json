@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host :: --port 5157 --strictPort",
     "doctor": "node ../scripts/local-doctor.mjs",
+    "generate:jwt-secret": "node ../scripts/generate-jwt-secret.mjs",
     "build": "vite build",
     "check:audit": "npm audit --omit=dev --audit-level=high",
     "check:acceptance": "node ../scripts/mvp-acceptance-check.mjs",
