@@ -69,6 +69,8 @@ Detta bevisar lokalt att:
 - `npm run test:backend`: passed 2026-08-26 14:33 +02:00, 204 tests, 0 failures, 0 errors
 - `npm run check:frontend-hygiene`: passed 2026-08-26, inga demo-filer, fristaende landing page-experiment eller `alert()`-anrop i frontendens produktionskod
 - `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
+- `npm run check:secrets`: passed 2026-08-26, inga riktiga Stripe-, HF-, Google-, OpenRouter-, OpenAI-liknande, GitHub-, JWT- eller private-key-hemligheter hittades i tracked project files.
+- `npm run check:audit`: passed 2026-08-26, 0 vulnerabilities for frontend production dependencies
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 204 tests, 0 failures, 0 errors
 - `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 57/57 data safety, 44/44 production readiness, 35/35 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
@@ -93,9 +95,9 @@ Detta bevisar lokalt att:
 - `npm run check:release:full`: passed 2026-08-17 09:59 +02:00, frontend build, runtime smoke, backendtester och Docker image builds
 - `npm run check:release`: passed 2026-08-16 23:37 +02:00, standard gate med schema-migration, schema-bootstrap och git-skydd for `db/`
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
-- `npm run check:secrets`: passed 2026-08-24, inga riktiga Stripe-, HF-, Google-, OpenRouter-, OpenAI-liknande, GitHub-, JWT- eller private-key-hemligheter hittades i tracked project files.
+- `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
 - `npm run check:ci-handoff`: 32/32, GitHub Actions-jobb, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
-- `npm run check:audit`: passed 2026-08-17 09:54 +02:00, 0 vulnerabilities
+- `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
