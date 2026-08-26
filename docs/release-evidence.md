@@ -71,6 +71,8 @@ Detta bevisar lokalt att:
 - `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
 - `npm run check:secrets`: passed 2026-08-26, inga riktiga Stripe-, HF-, Google-, OpenRouter-, OpenAI-liknande, GitHub-, JWT- eller private-key-hemligheter hittades i tracked project files.
 - `npm run check:audit`: passed 2026-08-26, 0 vulnerabilities for frontend production dependencies
+- `npm run doctor -- --soft`: passed 2026-08-26, PostgreSQL, backend `/health`, backend `/system/status`, database connection and frontend `5157` OK; warnings kvar for lokal `JWT_SECRET` och Docker-behorighet i sandbox.
+- `npm run smoke:runtime`: passed 2026-08-26, frontend renderar utan vit sida eller render recovery.
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 204 tests, 0 failures, 0 errors
 - `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 57/57 data safety, 44/44 production readiness, 35/35 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
