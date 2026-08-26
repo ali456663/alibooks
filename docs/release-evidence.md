@@ -1,7 +1,7 @@
 # AliBooks release evidence
 
 Senast komplett lokalt releasebevis: 2026-08-24 15:49 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-24 15:08 +02:00.
+Senast standard-release och backendtest verifierat: 2026-08-26 14:33 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
@@ -9,6 +9,7 @@ Kor fran projektets rotmapp:
 
 ```bash
 npm run check:release:full
+npm run check:frontend-hygiene
 npm run check:secrets
 npm run check:dependencies
 npm run check:env-go-live
@@ -40,6 +41,7 @@ Detta bevisar lokalt att:
 - frontend bygger for produktion
 - frontend smoke-test kan rendera appen och kontrollerar att utloggad auth/sprak bara syns pa startsidan
 - viktiga frontend/backend API-kontrakt finns kvar
+- frontendens produktionskod saknar gamla demo-filer, fristaende landing page-experiment och `alert()`-anrop
 - backend-konstruktorer och Java-records matchar testerna
 - dokumentation, secrets, Docker-konfig, vyer och produktionsmallar passerar kontroller
 - riktiga API-nycklar for Stripe, HF, Google, OpenRouter och OpenAI-liknande providers stoppas av `check:secrets`
@@ -64,6 +66,9 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run test:backend`: passed 2026-08-26 14:33 +02:00, 204 tests, 0 failures, 0 errors
+- `npm run check:frontend-hygiene`: passed 2026-08-26, inga demo-filer, fristaende landing page-experiment eller `alert()`-anrop i frontendens produktionskod
+- `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
 - Rotkommandon verifierade 2026-08-22 21:43 +02:00: `npm run build`, `npm run check:docs`, `npm run check:release` och `npm run test:backend` fungerar fran projektets huvudmapp.
 - `npm run test:backend`: passed 2026-08-24, 204 tests, 0 failures, 0 errors
 - `npm run check:release`: passed 2026-08-24, standard gate fran projektroten med 18/18 acceptans, 150/150 readiness, 82/82 evidence, 57/57 data safety, 44/44 production readiness, 35/35 env-go-live, 25/25 pilotdrift, 23/23 retention, 25/25 audit-integritet, 30/30 periodstangning, 29/29 redovisningspaket, 17/17 go-live-beslut, 29/29 externa go-live-bevis, 29/29 post-push-verifiering, 33/33 forsta-riktiga-data och runtime smoke
@@ -96,7 +101,7 @@ Detta bevisar lokalt att:
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
 - `check:ready`: 150/150
 - `check:acceptance`: 18/18
-- `check:evidence`: 82/82
+- `check:evidence`: 85/85
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 35/35

@@ -248,6 +248,12 @@ check(
 );
 
 check(
+  "Release evidence documents frontend hygiene",
+  includesAll(evidence, ["check:frontend-hygiene", "demo-filer", "alert()"]),
+  "Frontend production hygiene should be visible in release evidence."
+);
+
+check(
   "Release evidence links go-live risk register",
   evidence.includes("go-live-riskregister.md") && evidence.includes("check:go-live-risks"),
   "Remaining go-live risk evidence should be connected to the automated risk check."
@@ -281,6 +287,12 @@ check(
   "Package exposes acceptance check",
   packageJson.scripts?.["check:acceptance"] === "node ../scripts/mvp-acceptance-check.mjs",
   "frontend/package.json should expose npm run check:acceptance."
+);
+
+check(
+  "Package exposes frontend hygiene check",
+  packageJson.scripts?.["check:frontend-hygiene"] === "node ../scripts/frontend-production-hygiene-check.mjs",
+  "frontend/package.json should expose npm run check:frontend-hygiene."
 );
 
 check(
@@ -521,6 +533,12 @@ check(
   "Release gate runs acceptance check",
   releaseGate.includes('"check:acceptance"'),
   "The release gate should fail when MVP acceptance coverage becomes stale."
+);
+
+check(
+  "Release gate runs frontend hygiene check",
+  releaseGate.includes('"check:frontend-hygiene"'),
+  "The release gate should fail when frontend production hygiene is removed."
 );
 
 check(
