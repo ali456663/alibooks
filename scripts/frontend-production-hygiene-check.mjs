@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const frontendSrc = path.join(repoRoot, "frontend", "src");
+const frontendDir = path.join(repoRoot, "frontend");
 const checkedExtensions = new Set([".js", ".jsx", ".ts", ".tsx"]);
+const disallowedRootFiles = [
+  "sustainability-landing.css",
+  "sustainability-landing.html",
+  "wellness-landing.css",
+  "wellness-landing.html"
+];
 const issues = [];
 
 function walk(directory) {
@@ -42,6 +49,13 @@ if (!existsSync(frontendSrc)) {
 }
 
 walk(frontendSrc);
+
+for (const fileName of disallowedRootFiles) {
+  const fullPath = path.join(frontendDir, fileName);
+  if (existsSync(fullPath)) {
+    issues.push(`frontend/${fileName}: old standalone landing-page experiment should not ship with the AliBooks MVP app.`);
+  }
+}
 
 if (issues.length > 0) {
   console.error("AliBooks frontend production hygiene check failed:");
