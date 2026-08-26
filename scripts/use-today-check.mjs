@@ -80,7 +80,14 @@ check("Root exposes use-today script", rootPackage.scripts?.["check:use-today"] 
 check("Release gate runs use-today check", releaseGate.includes('"check:use-today"'), "Release gate should fail if the use-today decision disappears.");
 check("Readiness includes use-today check", readiness.includes("scripts/use-today-check.mjs") && readiness.includes("check:use-today"), "Readiness should require the use-today doc, script and command.");
 check("Evidence includes use-today check", evidence.includes("scripts/use-today-check.mjs") && evidence.includes("check:use-today"), "Evidence should keep the use-today proof fresh.");
-check("Working tree status is visible", true, status ? `Local changes present while checking: ${status.split("\n").length} file(s).` : "Working tree is clean.", status ? "warn" : "fail");
+check(
+  "Working tree is clean or intentionally reviewed",
+  !status,
+  status
+    ? `Local changes present while checking: ${status.split("\n").length} file(s). Commit, discard or review them before relying on today's decision.`
+    : "Working tree is clean.",
+  "warn"
+);
 
 const failed = checks.filter((result) => !result.ok && result.severity === "fail");
 const warnings = checks.filter((result) => !result.ok && result.severity === "warn");
