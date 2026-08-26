@@ -19,6 +19,7 @@ const frontendSteps = [
   ["check:speedledger-parity", "Check SpeedLedger-style feature parity"],
   ["check:acceptance", "Check MVP acceptance coverage"],
   ["check:api-contract", "Check frontend/backend API contract"],
+  ["check:frontend-hygiene", "Check frontend production hygiene"],
   ["check:ready", "Check AliBooks readiness"],
   ["check:backend-wiring", "Check backend constructor and record wiring"],
   ["check:git-parser", "Check git status parser regression"],

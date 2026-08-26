@@ -10,6 +10,7 @@
     "check:audit": "npm audit --omit=dev --audit-level=high",
     "check:acceptance": "node ../scripts/mvp-acceptance-check.mjs",
     "check:api-contract": "node ../scripts/api-contract-check.mjs",
+    "check:frontend-hygiene": "node ../scripts/frontend-production-hygiene-check.mjs",
     "check:release": "node ../scripts/release-gate.mjs",
     "check:release:full": "node ../scripts/release-gate.mjs --with-backend --with-docker-build",
     "preview": "vite preview --host :: --port 5157 --strictPort",
