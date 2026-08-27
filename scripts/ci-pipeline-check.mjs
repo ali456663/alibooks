@@ -26,6 +26,7 @@ check("CI triggers on push to main", ci.includes("branches:") && ci.includes("- 
 check("CI supports manual run", ci.includes("workflow_dispatch:"), "CI should be runnable manually before demos.");
 check("CI cancels duplicate branch runs", ci.includes("cancel-in-progress: true"), "Repeated pushes should not leave stale CI runs active.");
 check("CI has read-only contents permission", ci.includes("contents: read"), "CI should use least-privilege repository permissions.");
+check("CI jobs have timeouts", includesAll(ci, ["timeout-minutes: 20", "timeout-minutes: 30"]), "Backend, frontend and Docker jobs should not hang indefinitely.");
 
 check("Backend CI uses PostgreSQL 16 service", includesAll(ci, ["postgres:16", "POSTGRES_DB: cloudshop", "pg_isready"]), "Backend tests should run against PostgreSQL 16 like local/prod direction.");
 check("Backend CI uses Java 21", includesAll(ci, ["actions/setup-java@v4", 'java-version: "21"']), "Backend CI should match the Spring Boot Java 21 build.");
@@ -50,6 +51,7 @@ check("Docker CI builds frontend prod image", ci.includes("docker build -f ./fro
 check("Dockerhub workflow supports manual release", dockerhub.includes("workflow_dispatch:"), "Dockerhub workflow should be runnable manually.");
 check("Dockerhub workflow runs on version tags", includesAll(dockerhub, ["push:", "tags:", '"v*"']), "Dockerhub workflow should publish tagged releases.");
 check("Dockerhub uses read-only contents permission", dockerhub.includes("contents: read"), "Dockerhub workflow should use least-privilege repository permissions.");
+check("Dockerhub workflow has timeout", dockerhub.includes("timeout-minutes: 45"), "Dockerhub image publishing should not hang indefinitely.");
 check("Dockerhub login uses secrets", includesAll(dockerhub, ["docker/login-action@v3", "secrets.DOCKERHUB_USERNAME", "secrets.DOCKERHUB_TOKEN"]), "Dockerhub credentials must come from GitHub secrets.");
 check("Dockerhub sets up Buildx", dockerhub.includes("docker/setup-buildx-action@v3"), "Dockerhub workflow should use Buildx.");
 check("Dockerhub tags backend and frontend", includesAll(dockerhub, ["cloudshop-backend", "cloudshop-frontend", "type=sha,prefix=sha-", "type=ref,event=tag"]), "Dockerhub images should receive latest, sha and tag metadata.");

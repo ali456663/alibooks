@@ -99,7 +99,7 @@ Detta bevisar lokalt att:
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
 - `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
 - `npm run check:ci-handoff`: 32/32, GitHub Actions-jobb, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
-- `npm run check:ci`: 29/29, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate och Docker image builds.
+- `npm run check:ci`: 31/31, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds och timeout-skydd.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
@@ -110,7 +110,7 @@ Detta bevisar lokalt att:
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 39/39
-- `check:ci`: 29/29
+- `check:ci`: 31/31
 - `check:ci-handoff`: 32/32
 - `check:post-push`: 29/29
 - `check:external-go-live`: 29/29
