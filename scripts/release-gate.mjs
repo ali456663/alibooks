@@ -15,6 +15,7 @@ const withDockerBuild = args.has("--with-docker-build");
 
 const frontendSteps = [
   ["build", "Build frontend"],
+  ["check:bundle", "Check frontend bundle budget"],
   ["check:professional-loop", "Check professional accounting loop"],
   ["check:speedledger-parity", "Check SpeedLedger-style feature parity"],
   ["check:acceptance", "Check MVP acceptance coverage"],

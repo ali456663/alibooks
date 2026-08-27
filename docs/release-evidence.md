@@ -9,6 +9,7 @@ Kor fran projektets rotmapp:
 
 ```bash
 npm run check:release:full
+npm run check:bundle
 npm run check:frontend-hygiene
 npm run check:secrets
 npm run check:dependencies
@@ -39,6 +40,7 @@ npm run check:prepush -- --allow-ahead
 Detta bevisar lokalt att:
 
 - frontend bygger for produktion
+- produktionsbundlen haller MVP-budget och tunga visuella paket ligger i separata chunks
 - frontend smoke-test kan rendera appen och kontrollerar att utloggad auth/sprak bara syns pa startsidan
 - viktiga frontend/backend API-kontrakt finns kvar
 - frontendens produktionskod saknar gamla demo-filer, fristaende landing page-experiment och `alert()`-anrop
@@ -68,6 +70,7 @@ Detta bevisar lokalt att:
 
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-27 19:25 +02:00, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release:full`: passed 2026-08-27 19:25 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester och Docker image builds.
+- `npm run check:bundle`: passed 2026-08-27, frontend production bundle budget och separata visual/motion/animation chunks verifierade.
 - `npm run test:backend`: passed 2026-08-26 14:33 +02:00, 204 tests, 0 failures, 0 errors
 - `npm run check:frontend-hygiene`: passed 2026-08-26, inga demo-filer, fristaende landing page-experiment eller `alert()`-anrop i frontendens produktionskod
 - `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
