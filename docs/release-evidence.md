@@ -1,7 +1,7 @@
 # AliBooks release evidence
 
-Senast komplett lokalt releasebevis: 2026-08-24 15:49 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-26 14:33 +02:00.
+Senast komplett lokalt releasebevis: 2026-08-27 19:25 +02:00.
+Senast standard-release och backendtest verifierat: 2026-08-27 19:25 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
@@ -66,6 +66,8 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:prepush -- --allow-ahead`: passed 2026-08-27 19:25 +02:00, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
+- `npm run check:release:full`: passed 2026-08-27 19:25 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester och Docker image builds.
 - `npm run test:backend`: passed 2026-08-26 14:33 +02:00, 204 tests, 0 failures, 0 errors
 - `npm run check:frontend-hygiene`: passed 2026-08-26, inga demo-filer, fristaende landing page-experiment eller `alert()`-anrop i frontendens produktionskod
 - `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
