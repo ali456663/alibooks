@@ -19,9 +19,13 @@ origin https://github.com/ali456663/alibooks.git
    - `Backend build and test`
    - `Frontend release gate`
    - `Docker build`
-7. Kor `npm run check:sync` lokalt efter push.
-8. Kor `npm run check:post-push -- --require-pushed`.
-9. Kor `npm run check:release-traceability`.
+7. Oppna jobbsummaries i GitHub Actions och kontrollera att de visar AliBooks-bevis.
+8. Ladda ner artifacts vid behov:
+   - `backend-surefire-reports` for Maven/Surefire-testloggar
+   - `frontend-dist` for byggd frontendbundle
+9. Kor `npm run check:sync` lokalt efter push.
+10. Kor `npm run check:post-push -- --require-pushed`.
+11. Kor `npm run check:release-traceability`.
 
 ## Dockerhub efter CI
 
@@ -43,6 +47,7 @@ Vanliga fel och vad du gor:
 - `npm audit`: frontend dependency-audit hittade en aktuell risk och maste granskas innan deploy.
 - `npm run check:release`: release-gaten stoppade en lokal MVP-regel, kontrollera loggen for forsta FAIL.
 - `Docker build`: kontrollera Dockerfile, `npm ci`, Java 21 och att inga lokala filer saknas i GitHub.
+- Artifacts saknas: kontrollera att workflow-steget med `actions/upload-artifact@v4` har korts och att jobben skriver `GITHUB_STEP_SUMMARY`.
 - Node-varning: CI ska anvanda Node 24, inte Node 20.
 - Databasfel: CI ska anvanda PostgreSQL 16 service och explicit `SPRING_JPA_HIBERNATE_DDL_AUTO=update`.
 

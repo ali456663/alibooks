@@ -103,8 +103,8 @@ Detta bevisar lokalt att:
 - `npm run check:release`: passed 2026-08-16 23:37 +02:00, standard gate med schema-migration, schema-bootstrap och git-skydd for `db/`
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
 - `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
-- `npm run check:ci-handoff`: 32/32, GitHub Actions-jobb, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
-- `npm run check:ci`: 31/31, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds och timeout-skydd.
+- `npm run check:ci-handoff`: 34/34, GitHub Actions-jobb, artifacts/summaries, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
+- `npm run check:ci`: 34/34, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds, artifacts/summaries och timeout-skydd.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
@@ -116,8 +116,8 @@ Detta bevisar lokalt att:
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 39/39
-- `check:ci`: 31/31
-- `check:ci-handoff`: 32/32
+- `check:ci`: 34/34
+- `check:ci-handoff`: 34/34
 - `check:post-push`: 29/29
 - `check:external-go-live`: 29/29
 - `check:schema`: 18/18
@@ -142,8 +142,8 @@ Detta bevisar lokalt att:
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
-- CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten. GitHub Actions kor ocksa `npm run check:audit` innan frontend release-gate.
-- CI-handoff efter push kontrolleras lokalt med `npm run check:ci-handoff` och dokumenteras i [ci-handoff-efter-push.md](ci-handoff-efter-push.md), sa GitHub Actions-jobb, Dockerhub-secrets, push/sync och vanliga CI-fel inte tappas bort.
+- CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten. GitHub Actions kor ocksa `npm run check:audit` innan frontend release-gate och sparar `backend-surefire-reports` samt `frontend-dist` som artifacts.
+- CI-handoff efter push kontrolleras lokalt med `npm run check:ci-handoff` och dokumenteras i [ci-handoff-efter-push.md](ci-handoff-efter-push.md), sa GitHub Actions-jobb, artifacts/summaries, Dockerhub-secrets, push/sync och vanliga CI-fel inte tappas bort.
 - Post-push verifiering kontrolleras lokalt med `npm run check:post-push` och strikt efter push med `npm run check:post-push -- --require-pushed`, sa lokal MVP inte blandas ihop med GitHub/CI/Dockerhub-bevis.
 - MVP-acceptans kontrolleras lokalt med `npm run check:acceptance` och skiljer automatiskt bevis fran manuella go-live-klicktester.
 - Runtime-smoke kontrollerar att utloggad startsida visar kompakt login/register/sprak, och att dessa kontroller inte foljer med till andra menyvyer som Kunder.

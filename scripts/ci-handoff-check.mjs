@@ -48,6 +48,7 @@ check("CI handoff doc names GitHub repo", includesAll(doc, ["https://github.com/
 check("Git remote points to AliBooks repo", remote.includes("https://github.com/ali456663/alibooks.git"), "Local push target should be visible and expected.");
 check("Doc has exact push flow", includesAll(doc, ["npm run check:release", "npm run check:git -- --strict", "git push", "npm run check:sync"]), "CI handoff should start from a clean local release.");
 check("Doc lists CI jobs", includesAll(doc, ["Backend build and test", "Frontend release gate", "Docker build"]), "The user should know which GitHub jobs must be green.");
+check("Doc lists CI artifacts and summaries", includesAll(doc, ["backend-surefire-reports", "frontend-dist", "GITHUB_STEP_SUMMARY"]), "The user should know where to find downloadable CI evidence and job summaries.");
 check("Doc lists Dockerhub secrets", includesAll(doc, ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"]), "Dockerhub publish requires GitHub secrets.");
 check("Doc lists Dockerhub image names", includesAll(doc, ["cloudshop-backend", "cloudshop-frontend"]), "Expected Dockerhub image names should be explicit.");
 check("Doc covers known backend test failure", includesAll(doc, ["OrderController", "CreateOrderRequest"]), "Past constructor/record CI failures should be easy to triage.");
@@ -65,6 +66,7 @@ check("CI frontend uses Node 24 and npm ci", includesAll(ci, ['node-version: "24
 check("CI frontend runs audit and release gate", includesAll(ci, ["npm run check:audit", "npm run check:release"]), "Frontend CI should run security audit and release gate.");
 check("CI Docker waits for backend and frontend", includesAll(ci, ["needs:", "backend", "frontend"]), "Docker job should wait for test jobs.");
 check("CI builds backend and frontend Docker images", includesAll(ci, ["cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should prove both images can build.");
+check("CI stores downloadable artifacts", includesAll(ci, ["backend-surefire-reports", "frontend-dist", "actions/upload-artifact@v4"]), "CI should preserve backend reports and frontend build output as artifacts.");
 check("Dockerhub workflow can run manually and by tag", includesAll(dockerhub, ["workflow_dispatch", '"v*"']), "Dockerhub workflow should support manual and tagged releases.");
 check("Dockerhub workflow uses secrets", includesAll(dockerhub, ["secrets.DOCKERHUB_USERNAME", "secrets.DOCKERHUB_TOKEN"]), "Dockerhub credentials must not be committed.");
 check("Dockerhub workflow publishes traceable tags", includesAll(dockerhub, ["type=raw,value=latest", "type=sha,prefix=sha-", "type=ref,event=tag"]), "Published images should be traceable.");

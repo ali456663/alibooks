@@ -60,6 +60,21 @@ jobs:
         working-directory: backend
         run: mvn -B test
 
+      - name: Upload backend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write backend summary
+        if: always()
+        run: |
+          echo "## AliBooks backend evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Maven test reports: backend-surefire-reports artifact" >> "$GITHUB_STEP_SUMMARY"
+
   frontend:
     name: Frontend release gate
     runs-on: ubuntu-latest
@@ -88,6 +103,22 @@ jobs:
         working-directory: frontend
         run: npm run check:release
 
+      - name: Upload frontend production bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write frontend summary
+        if: always()
+        run: |
+          echo "## AliBooks frontend evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release gate: npm run check:release" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production bundle: frontend-dist artifact" >> "$GITHUB_STEP_SUMMARY"
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest
@@ -105,3 +136,10 @@ jobs:
 
       - name: Build frontend image
         run: docker build -f ./frontend/Dockerfile.prod -t cloudshop-frontend:ci ./frontend
+
+      - name: Write Docker summary
+        if: always()
+        run: |
+          echo "## AliBooks Docker evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend image: cloudshop-backend:ci" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frontend image: cloudshop-frontend:ci" >> "$GITHUB_STEP_SUMMARY"
