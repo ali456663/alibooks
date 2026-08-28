@@ -63,6 +63,7 @@ const requiredFiles = [
   "scripts/backup-postgres.ps1",
   "scripts/restore-postgres.sh",
   "scripts/restore-postgres.ps1",
+  "scripts/frontend-bundle-budget-check.mjs",
   "scripts/schema-migration-check.mjs",
   "scripts/schema-bootstrap-check.mjs",
   "scripts/ci-handoff-check.mjs",
@@ -94,6 +95,7 @@ check(
     "check:audit",
     "check:acceptance",
     "check:api-contract",
+    "check:bundle",
     "check:release",
     "check:release:full",
     "doctor",
@@ -140,7 +142,7 @@ check(
     "check:views",
     "test:backend"
   ]),
-  "build, doctor, check:audit, check:acceptance, check:api-contract, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:external-go-live, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:first-real-data, check:pilot, check:calculations, check:audit-integrity, check:prod, check:env-go-live, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
+  "build, doctor, check:audit, check:acceptance, check:api-contract, check:bundle, check:release, check:release:full, check:ready, check:backend-wiring, check:backup, check:ci, check:ci-handoff, check:docs, check:docker, check:data-safety, check:dependencies, check:evidence, check:git-parser, check:git, check:go-live-risks, check:go-live-decision, check:external-go-live, check:manual-go-live, check:startklar, check:mvp-use, check:operations, check:use-today, check:first-real-data, check:pilot, check:calculations, check:audit-integrity, check:prod, check:env-go-live, check:prepush, smoke:runtime, check:professional-loop, check:speedledger-parity, check:release-traceability, check:schema, check:migrations, check:schema-bootstrap, check:secrets, check:sync, check:views and test:backend should exist"
 );
 
 const ci = read(".github/workflows/ci.yml");
@@ -149,6 +151,7 @@ check("CI runs backend tests", ci.includes("mvn -B test"), "GitHub Actions shoul
 check("CI runs frontend dependency audit", ci.includes("npm run check:audit"), "GitHub Actions should run npm audit before frontend release gate");
 check("CI runs frontend release gate", ci.includes("npm run check:release"), "GitHub Actions should run the same frontend release gate as local verification");
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");
+check("Release gate checks frontend bundle budget", releaseGate.includes('"check:bundle"'), "Release gate should run bundle budget check after frontend build");
 check("Release gate runs frontend smoke", releaseGate.includes('"smoke:runtime"'), "Release gate should run smoke:runtime");
 check("Release gate checks professional loop", releaseGate.includes('"check:professional-loop"'), "Release gate should run professional-loop check");
 check("Release gate checks SpeedLedger-style parity", releaseGate.includes('"check:speedledger-parity"'), "Release gate should run feature parity check");

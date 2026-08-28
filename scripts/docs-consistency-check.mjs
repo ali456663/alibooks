@@ -101,6 +101,12 @@ check(
 );
 
 check(
+  "Frontend bundle budget command exists",
+  allDocs.includes("npm run check:bundle") && allDocs.includes("bundle"),
+  "Docs should explain how the production bundle budget is checked."
+);
+
+check(
   "Dependency risk command exists",
   allDocs.includes("npm run check:dependencies") &&
     allDocs.includes("npm run check:audit") &&

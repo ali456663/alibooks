@@ -60,6 +60,12 @@ function countFromEvidence(pattern) {
 
 const countedEvidenceChecks = [
   {
+    name: "Frontend bundle budget evidence count matches script",
+    script: "scripts/frontend-bundle-budget-check.mjs",
+    outputLabel: "AliBooks frontend bundle budget check",
+    evidencePattern: /`check:bundle`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Data safety evidence count matches script",
     script: "scripts/data-safety-check.mjs",
     outputLabel: "AliBooks data safety check",
@@ -254,6 +260,12 @@ check(
 );
 
 check(
+  "Release evidence documents bundle budget",
+  includesAll(evidence, ["check:bundle", "bundle budget", "visual/motion/animation chunks"]),
+  "Frontend production bundle budget should be visible in release evidence."
+);
+
+check(
   "Release evidence links go-live risk register",
   evidence.includes("go-live-riskregister.md") && evidence.includes("check:go-live-risks"),
   "Remaining go-live risk evidence should be connected to the automated risk check."
@@ -293,6 +305,12 @@ check(
   "Package exposes frontend hygiene check",
   packageJson.scripts?.["check:frontend-hygiene"] === "node ../scripts/frontend-production-hygiene-check.mjs",
   "frontend/package.json should expose npm run check:frontend-hygiene."
+);
+
+check(
+  "Package exposes bundle budget check",
+  packageJson.scripts?.["check:bundle"] === "node ../scripts/frontend-bundle-budget-check.mjs",
+  "frontend/package.json should expose npm run check:bundle."
 );
 
 check(
@@ -539,6 +557,12 @@ check(
   "Release gate runs frontend hygiene check",
   releaseGate.includes('"check:frontend-hygiene"'),
   "The release gate should fail when frontend production hygiene is removed."
+);
+
+check(
+  "Release gate runs bundle budget check",
+  releaseGate.includes('"check:bundle"'),
+  "The release gate should fail when frontend production bundle budget protection is removed."
 );
 
 check(

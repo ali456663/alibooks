@@ -70,7 +70,7 @@ Detta bevisar lokalt att:
 
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-27 19:25 +02:00, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release:full`: passed 2026-08-27 19:25 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester och Docker image builds.
-- `npm run check:bundle`: passed 2026-08-27, frontend production bundle budget och separata visual/motion/animation chunks verifierade.
+- `npm run check:bundle`: 9/9, passed 2026-08-27, frontend production bundle budget och separata visual/motion/animation chunks verifierade.
 - `npm run test:backend`: passed 2026-08-26 14:33 +02:00, 204 tests, 0 failures, 0 errors
 - `npm run check:frontend-hygiene`: passed 2026-08-26, inga demo-filer, fristaende landing page-experiment eller `alert()`-anrop i frontendens produktionskod
 - `npm run check:release`: passed 2026-08-26, standard gate fran projektroten med frontend build, frontend-hygien, runtime smoke och alla lokala MVP-kontroller
@@ -109,9 +109,10 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 150/150
+- `check:ready`: 152/152
 - `check:acceptance`: 18/18
-- `check:evidence`: 85/85
+- `check:evidence`: 89/89
+- `check:bundle`: 9/9
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 39/39
