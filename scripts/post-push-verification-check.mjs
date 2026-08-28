@@ -59,6 +59,7 @@ check("Post-push doc names purpose", includesAll(doc, ["Lokal kod ar gron", "Git
 check("Post-push doc has exact command order", includesAll(doc, ["npm run check:release:full", "npm run check:git -- --strict", "git push", "npm run check:sync", "npm run check:post-push -- --require-pushed"]), "The user should be able to follow copy-pasteable commands.");
 check("Post-push doc names GitHub Actions URL", doc.includes("https://github.com/ali456663/alibooks/actions"), "GitHub Actions URL should be explicit.");
 check("Post-push doc names CI jobs", includesAll(doc, ["Backend build and test", "Frontend release gate", "Docker build"]), "CI job names should be explicit.");
+check("Post-push doc names CI artifacts", includesAll(doc, ["backend-surefire-reports", "frontend-dist", "jobbsummaries"]), "Post-push review should include downloadable test and build evidence.");
 check("Post-push doc names Dockerhub secrets", includesAll(doc, ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"]), "Dockerhub secrets should be visible but not values.");
 check("Post-push doc names Docker images", includesAll(doc, ["cloudshop-backend", "cloudshop-frontend"]), "Expected image names should be explicit.");
 check("Post-push doc requires traceable image tag", includesAll(doc, ["sha-*", "v*", "IMAGE_TAG"]), "Production should not rely on an untraceable image.");
@@ -73,6 +74,7 @@ check("Release evidence links post-push check", releaseEvidence.includes("check:
 check("CI workflow runs on push to main", includesAll(ciWorkflow, ["push:", "main"]), "CI should run when main is pushed.");
 check("CI workflow supports manual run", ciWorkflow.includes("workflow_dispatch"), "CI should be manually rerunnable.");
 check("CI workflow runs backend and frontend gates", includesAll(ciWorkflow, ["mvn -B test", "npm run check:release", "docker build -t cloudshop-backend:ci", "cloudshop-frontend:ci"]), "CI should prove backend, frontend and Docker image builds.");
+check("CI workflow uploads release evidence", includesAll(ciWorkflow, ["actions/upload-artifact@v4", "backend-surefire-reports", "frontend-dist", "GITHUB_STEP_SUMMARY"]), "Post-push verification should know that CI preserves test reports, bundle output and summaries.");
 check("Dockerhub workflow supports manual and tag release", includesAll(dockerhubWorkflow, ["workflow_dispatch", '"v*"']), "Dockerhub release should be manually runnable and taggable.");
 check("Dockerhub workflow uses secrets", includesAll(dockerhubWorkflow, ["secrets.DOCKERHUB_USERNAME", "secrets.DOCKERHUB_TOKEN"]), "Dockerhub credentials should stay in GitHub secrets.");
 check("Dockerhub workflow publishes traceable tags", includesAll(dockerhubWorkflow, ["type=sha,prefix=sha-", "type=ref,event=tag"]), "Docker images should be traceable to commit/tag.");

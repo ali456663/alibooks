@@ -95,7 +95,7 @@ Detta bevisar lokalt att:
 - `npm run check:handoff`: 29/29, redovisningspaket, SIE, SIE-kvittens, resultat, balans, huvudbok, saldobalans, moms, bank, reskontra, arsarkiv, systemdokumentation och saker delning.
 - `npm run check:go-live-decision`: 17/17, slutligt beslut for lokal MVP kontra skarp drift, externa bevis, backup/restore, Stripe, SMTP, release-sparbarhet och redovisningskonsult-export.
 - `npm run check:external-go-live`: 29/29, externa bevis for GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket.
-- `npm run check:post-push`: 29/29, post-push-verifiering for GitHub sync, Actions, Dockerhub, sparbara image-taggar och strikt efter-push-lage.
+- `npm run check:post-push`: 31/31, post-push-verifiering for GitHub sync, Actions, CI-artifacts/summaries, Dockerhub, sparbara image-taggar och strikt efter-push-lage.
 - `npm run check:release:full`: passed 2026-08-24, frontend build, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, release gate och Docker image builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-24 12:14 +02:00, AliBooks pre-push gate passed, backendtester 194 tests / 0 failures / 0 errors, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-22 21:58 +02:00, AliBooks pre-push gate passed, backendtester, runtime smoke, release gate, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`
@@ -118,7 +118,7 @@ Detta bevisar lokalt att:
 - `check:env-go-live`: 39/39
 - `check:ci`: 34/34
 - `check:ci-handoff`: 34/34
-- `check:post-push`: 29/29
+- `check:post-push`: 31/31
 - `check:external-go-live`: 29/29
 - `check:schema`: 18/18
 - `check:migrations`: 5/5, passed 2026-08-16

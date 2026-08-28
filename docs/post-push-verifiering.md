@@ -43,6 +43,12 @@ Alla dessa jobb ska vara grona:
 
 Om ett jobb ar rott ska du inte deploya.
 
+Kontrollera ocksa bevisen i samma workflow:
+
+- jobbsummaries ska visa AliBooks backend/frontend/Docker-bevis
+- artifact `backend-surefire-reports` ska finnas for backendens Maven-testloggar
+- artifact `frontend-dist` ska finnas for byggd frontendbundle
+
 ## Dockerhub
 
 Dockerhub workflow ska kunna koras manuellt eller via versionstagg.
@@ -83,6 +89,7 @@ Skarp drift vantar fortfarande pa:
 - Backendtest failar i CI: kontrollera Java 21, PostgreSQL 16 och controller/test-signaturer.
 - Frontend release gate failar: kor samma kommando lokalt och fixa forsta `FAIL`.
 - Docker build failar: kontrollera Dockerfile, lockfile och att filer ar commitade.
+- CI artifacts saknas: kontrollera `actions/upload-artifact@v4`, `backend-surefire-reports`, `frontend-dist` och jobbsummaries.
 - Dockerhub saknar tagg: kontrollera secrets och workflow `Dockerhub`.
 
 ## Beslut
