@@ -2,6 +2,7 @@
 
 Senast komplett lokalt releasebevis: 2026-08-28 22:28 +02:00.
 Senast standard-release och backendtest verifierat: 2026-08-28 22:28 +02:00.
+Senast standard-release efter CI-maintenance verifierat: 2026-08-29 22:07 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
@@ -69,6 +70,8 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:release`: passed 2026-08-29 22:07 +02:00 efter Dependabot/CI-maintenance-steget, standard release gate med frontend build, runtime smoke, vykontroll, readiness 154/154, CI 39/39, evidence 91/91, env-go-live 39/39 och externa go-live-bevis 29/29.
+- `npm run check:calculations`, `npm run check:mvp-use`, `npm run check:use-today`, `npm run check:speedledger-parity`, `npm run check:go-live-risks`, `npm run check:external-go-live`: passed 2026-08-29 22:07 +02:00 som extra snabbkontroll av professionell MVP-kärna efter commit `940cf4f`.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-28 22:28 +02:00, AliBooks pre-push gate passed, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release:full`: passed 2026-08-28 22:28 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker image builds.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-27 19:25 +02:00, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
