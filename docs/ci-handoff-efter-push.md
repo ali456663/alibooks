@@ -39,6 +39,21 @@ Krav:
 - Frontend image publiceras som `cloudshop-frontend`.
 - Taggar ska vara sparbara: `latest`, `sha-*` eller `v*`.
 
+## Beroendeunderhall
+
+Dependabot ar konfigurerad for:
+
+- frontend npm-beroenden i `frontend`
+- backend Maven-beroenden i `backend`
+- GitHub Actions-versioner i `.github/workflows`
+
+Nar Dependabot skapar en PR ska samma regel galla som for vanlig kod:
+
+1. Kontrollera CI.
+2. Las vad som andras.
+3. Kor lokal release-gate vid behov.
+4. Slapp inte igenom beroendeuppdateringar som bryter bokforingsflode, tester, Docker eller frontend-build.
+
 ## Om CI failar
 
 Vanliga fel och vad du gor:

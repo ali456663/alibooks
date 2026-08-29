@@ -20,6 +20,7 @@ function includesAll(source, values) {
 
 const ci = read(".github/workflows/ci.yml");
 const dockerhub = read(".github/workflows/dockerhub.yml");
+const dependabot = read(".github/dependabot.yml");
 const releaseGate = read("scripts/release-gate.mjs");
 
 check("CI triggers on push to main", ci.includes("branches:") && ci.includes("- main"), "CI should run when main is updated.");
@@ -60,6 +61,12 @@ check("Dockerhub sets up Buildx", dockerhub.includes("docker/setup-buildx-action
 check("Dockerhub tags backend and frontend", includesAll(dockerhub, ["cloudshop-backend", "cloudshop-frontend", "type=sha,prefix=sha-", "type=ref,event=tag"]), "Dockerhub images should receive latest, sha and tag metadata.");
 check("Dockerhub pushes backend image", includesAll(dockerhub, ["context: ./backend", "push: true", "steps.backend_meta.outputs.tags"]), "Backend Dockerhub image should be pushed.");
 check("Dockerhub pushes frontend prod image", includesAll(dockerhub, ["context: ./frontend", "file: ./frontend/Dockerfile.prod", "steps.frontend_meta.outputs.tags"]), "Frontend Dockerhub image should be pushed from the production Dockerfile.");
+
+check("Dependabot monitors frontend npm", includesAll(dependabot, ['package-ecosystem: "npm"', 'directory: "/frontend"']), "Frontend dependencies should be checked regularly.");
+check("Dependabot monitors backend Maven", includesAll(dependabot, ['package-ecosystem: "maven"', 'directory: "/backend"']), "Backend Java dependencies should be checked regularly.");
+check("Dependabot monitors GitHub Actions", includesAll(dependabot, ['package-ecosystem: "github-actions"', 'directory: "/"']), "Workflow action versions should be checked regularly.");
+check("Dependabot runs on weekly schedule", includesAll(dependabot, ['interval: "weekly"', 'timezone: "Europe/Stockholm"']), "Dependency update cadence should be predictable.");
+check("Dependabot limits update noise", includesAll(dependabot, ["open-pull-requests-limit: 5", "groups:"]), "Dependency update PRs should stay reviewable for a small MVP team.");
 
 const failed = results.filter((result) => !result.ok);
 for (const result of results) {

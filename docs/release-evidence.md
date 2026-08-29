@@ -50,6 +50,7 @@ Detta bevisar lokalt att:
 - go-live-miljo variabler for JWT, CORS, RDS, schema, Stripe, SMTP och AI ar dokumenterade och kontrollerade
 - frontend dependency-lockfile, buildverktyg och Docker-installation kontrolleras statiskt
 - CI-handoff efter push ar dokumenterad med GitHub Actions-jobb, Dockerhub-secrets, jobbnamn och felsokning
+- Dependabot bevakar frontend npm, backend Maven och GitHub Actions sa beroenderisker inte bara kontrolleras manuellt
 - post-push-verifiering skiljer lokal release fran GitHub-sync, Actions, Dockerhub och externa go-live-bevis
 - release-version, commit, Dockerhub-taggar och EC2 `IMAGE_TAG` gar att sparas som releasebevis
 - startup-schema-patchar ar speglade i kontrollerad SQL-migration innan RDS-deploy
@@ -106,19 +107,19 @@ Detta bevisar lokalt att:
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
 - `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
 - `npm run check:ci-handoff`: 34/34, GitHub Actions-jobb, artifacts/summaries, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
-- `npm run check:ci`: 34/34, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds, artifacts/summaries och timeout-skydd.
+- `npm run check:ci`: 39/39, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds, artifacts/summaries, Dependabot och timeout-skydd.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 152/152
+- `check:ready`: 154/154
 - `check:acceptance`: 18/18
 - `check:evidence`: 91/91
 - `check:bundle`: 9/9
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
 - `check:env-go-live`: 39/39
-- `check:ci`: 34/34
+- `check:ci`: 39/39
 - `check:ci-handoff`: 34/34
 - `check:post-push`: 31/31
 - `check:external-go-live`: 29/29
@@ -144,7 +145,7 @@ Detta bevisar lokalt att:
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`
-- CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten. GitHub Actions kor ocksa `npm run check:audit` innan frontend release-gate och sparar `backend-surefire-reports` samt `frontend-dist` som artifacts.
+- CI-konfigurationen kontrolleras lokalt med `npm run check:ci` och ingar i release-gaten. GitHub Actions kor ocksa `npm run check:audit` innan frontend release-gate, sparar `backend-surefire-reports` samt `frontend-dist` som artifacts, och Dependabot bevakar frontend, backend och workflow-beroenden.
 - CI-handoff efter push kontrolleras lokalt med `npm run check:ci-handoff` och dokumenteras i [ci-handoff-efter-push.md](ci-handoff-efter-push.md), sa GitHub Actions-jobb, artifacts/summaries, Dockerhub-secrets, push/sync och vanliga CI-fel inte tappas bort.
 - Post-push verifiering kontrolleras lokalt med `npm run check:post-push` och strikt efter push med `npm run check:post-push -- --require-pushed`, sa lokal MVP inte blandas ihop med GitHub/CI/Dockerhub-bevis.
 - MVP-acceptans kontrolleras lokalt med `npm run check:acceptance` och skiljer automatiskt bevis fran manuella go-live-klicktester.

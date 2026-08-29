@@ -33,6 +33,7 @@ const requiredFiles = [
   "docker-compose.prod.yml",
   ".github/workflows/ci.yml",
   ".github/workflows/dockerhub.yml",
+  ".github/dependabot.yml",
   ".env.example",
   ".env.production.example",
   "docs/mvp-testprotokoll.md",
@@ -146,10 +147,12 @@ check(
 );
 
 const ci = read(".github/workflows/ci.yml");
+const dependabot = read(".github/dependabot.yml");
 const releaseGate = read("scripts/release-gate.mjs");
 check("CI runs backend tests", ci.includes("mvn -B test"), "GitHub Actions should run Maven tests in batch mode");
 check("CI runs frontend dependency audit", ci.includes("npm run check:audit"), "GitHub Actions should run npm audit before frontend release gate");
 check("CI runs frontend release gate", ci.includes("npm run check:release"), "GitHub Actions should run the same frontend release gate as local verification");
+check("CI dependency maintenance exists", includesAll(dependabot, ['package-ecosystem: "npm"', 'package-ecosystem: "maven"', 'package-ecosystem: "github-actions"']), "Dependabot should monitor frontend, backend and workflow dependencies.");
 check("Release gate builds frontend", releaseGate.includes('"build"'), "Release gate should run frontend build");
 check("Release gate checks frontend bundle budget", releaseGate.includes('"check:bundle"'), "Release gate should run bundle budget check after frontend build");
 check("Release gate runs frontend smoke", releaseGate.includes('"smoke:runtime"'), "Release gate should run smoke:runtime");
