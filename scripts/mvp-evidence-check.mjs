@@ -254,6 +254,26 @@ check(
 );
 
 check(
+  "Release evidence documents current local proof timestamp",
+  /Senast komplett lokalt releasebevis:\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\+02:00/.test(evidence)
+    && /Senast standard-release och backendtest verifierat:\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\+02:00/.test(evidence),
+  "Release evidence should keep a dated local proof timestamp at the top."
+);
+
+check(
+  "Release evidence documents full pre-push proof",
+  includesAll(evidence, [
+    "AliBooks pre-push gate passed",
+    "full release gate",
+    "runtime smoke",
+    "backendtester 204 tests / 0 failures / 0 errors",
+    "git-clean check",
+    "Docker builds"
+  ]),
+  "The newest local proof should show the same chain that runs before push."
+);
+
+check(
   "Release evidence documents frontend hygiene",
   includesAll(evidence, ["check:frontend-hygiene", "demo-filer", "alert()"]),
   "Frontend production hygiene should be visible in release evidence."

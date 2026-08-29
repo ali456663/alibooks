@@ -1,7 +1,7 @@
 # AliBooks release evidence
 
-Senast komplett lokalt releasebevis: 2026-08-27 19:25 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-27 19:25 +02:00.
+Senast komplett lokalt releasebevis: 2026-08-28 22:28 +02:00.
+Senast standard-release och backendtest verifierat: 2026-08-28 22:28 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
@@ -68,6 +68,8 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:prepush -- --allow-ahead`: passed 2026-08-28 22:28 +02:00, AliBooks pre-push gate passed, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
+- `npm run check:release:full`: passed 2026-08-28 22:28 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker image builds.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-27 19:25 +02:00, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release:full`: passed 2026-08-27 19:25 +02:00 via pre-push gate, frontend build, runtime smoke, backendtester och Docker image builds.
 - `npm run check:bundle`: 9/9, passed 2026-08-27, frontend production bundle budget och separata visual/motion/animation chunks verifierade.
@@ -111,7 +113,7 @@ Detta bevisar lokalt att:
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
 - `check:ready`: 152/152
 - `check:acceptance`: 18/18
-- `check:evidence`: 89/89
+- `check:evidence`: 91/91
 - `check:bundle`: 9/9
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
