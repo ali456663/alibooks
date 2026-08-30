@@ -35,6 +35,7 @@
     "check:manual-go-live": "node ../scripts/manual-go-live-evidence-check.mjs",
     "check:startklar": "node ../scripts/startklar-check.mjs",
     "check:mvp-use": "node ../scripts/mvp-use-readiness-check.mjs",
+    "check:finish-line": "node ../scripts/mvp-finish-line-check.mjs",
     "check:operations": "node ../scripts/operations-readiness-check.mjs",
     "check:use-today": "node ../scripts/use-today-check.mjs",
     "check:first-real-data": "node ../scripts/first-real-data-check.mjs",

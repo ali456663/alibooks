@@ -34,6 +34,7 @@
     "check:manual-go-live": "npm --prefix frontend run check:manual-go-live --",
     "check:startklar": "npm --prefix frontend run check:startklar --",
     "check:mvp-use": "npm --prefix frontend run check:mvp-use --",
+    "check:finish-line": "npm --prefix frontend run check:finish-line --",
     "check:operations": "npm --prefix frontend run check:operations --",
     "check:use-today": "npm --prefix frontend run check:use-today --",
     "check:first-real-data": "npm --prefix frontend run check:first-real-data --",

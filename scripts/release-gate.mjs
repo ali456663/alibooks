@@ -45,6 +45,7 @@ const frontendSteps = [
   ["check:manual-go-live", "Check manual go-live evidence requirements"],
   ["check:startklar", "Check local MVP start readiness"],
   ["check:mvp-use", "Check 20-step MVP use readiness"],
+  ["check:finish-line", "Check MVP finish-line readiness"],
   ["check:operations", "Check operations and incident readiness"],
   ["check:use-today", "Check final local use decision"],
   ["check:first-real-data", "Check first real data readiness"],

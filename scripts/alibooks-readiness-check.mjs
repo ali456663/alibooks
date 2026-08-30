@@ -38,6 +38,7 @@ const requiredFiles = [
   ".env.production.example",
   "docs/mvp-testprotokoll.md",
   "docs/anvandningsklar-mvp.md",
+  "docs/mvp-slutspurt.md",
   "docs/drift-runbook.md",
   "docs/anvanda-idag-beslut.md",
   "docs/forsta-riktiga-data.md",
@@ -70,6 +71,7 @@ const requiredFiles = [
   "scripts/ci-handoff-check.mjs",
   "scripts/post-push-verification-check.mjs",
   "scripts/mvp-use-readiness-check.mjs",
+  "scripts/mvp-finish-line-check.mjs",
   "scripts/operations-readiness-check.mjs",
   "scripts/use-today-check.mjs",
   "scripts/first-real-data-check.mjs",
@@ -119,6 +121,7 @@ check(
     "check:manual-go-live",
     "check:startklar",
     "check:mvp-use",
+    "check:finish-line",
     "check:operations",
     "check:use-today",
     "check:first-real-data",
@@ -184,6 +187,7 @@ check("Release gate checks external go-live proof", releaseGate.includes('"check
 check("Release gate checks manual go-live evidence", releaseGate.includes('"check:manual-go-live"'), "Release gate should run manual external evidence check");
 check("Release gate checks Startklar readiness", releaseGate.includes('"check:startklar"'), "Release gate should run the short local MVP start readiness check");
 check("Release gate checks MVP use readiness", releaseGate.includes('"check:mvp-use"'), "Release gate should run the 20-step MVP use readiness check");
+check("Release gate checks MVP finish-line readiness", releaseGate.includes('"check:finish-line"'), "Release gate should run the final MVP finish-line readiness check");
 check("Release gate checks operations readiness", releaseGate.includes('"check:operations"'), "Release gate should run the operations and incident readiness check");
 check("Release gate checks final local use decision", releaseGate.includes('"check:use-today"'), "Release gate should run the final local use decision check");
 check("Release gate checks first real data readiness", releaseGate.includes('"check:first-real-data"'), "Release gate should run first real data readiness check");
@@ -276,7 +280,7 @@ for (const file of backendFiles) {
 const releaseEvidence = read("docs/release-evidence.md");
 const backupRunbook = read("docs/backup-restore-runbook.md");
 const riskRegister = read("docs/go-live-riskregister.md");
-const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${read("docs/externa-go-live-bevis.md")}\n${read("docs/miljovariabler-go-live.md")}\n${read("docs/pilotdrift-mvp.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
+const docs = `${read("README.md")}\n${read("docs/kom-igang-snabbt.md")}\n${read("docs/mvp-testprotokoll.md")}\n${read("docs/roadmap-kvar.md")}\n${read("docs/mvp-slutspurt.md")}\n${read("docs/professionell-bokforing-loop.md")}\n${read("docs/externa-go-live-bevis.md")}\n${read("docs/miljovariabler-go-live.md")}\n${read("docs/pilotdrift-mvp.md")}\n${releaseEvidence}\n${backupRunbook}\n${riskRegister}`;
 check("Docs include MVP flow", includesAll(docs, ["registrera", "logga in", "faktura", "betalning", "momsrapport"]), "Docs should cover the main MVP flow");
 check("Docs include local doctor", includesAll(docs, ["npm run doctor", "/system/status", "5432"]), "Docs should explain the local startup diagnosis command.");
 check("Docs include cloud/deployment path", includesAll(docs, ["EC2", "RDS", "GitHub Actions", "Dockerhub"]), "Docs should cover public cloud demo and CI/CD");
@@ -290,6 +294,7 @@ check("Docs include external go-live proof", docs.includes("npm run check:extern
 check("Docs include go-live env variables", docs.includes("npm run check:env-go-live") && docs.includes("miljovariabler-go-live.md"), "Docs should expose go-live environment variable rules.");
 check("Docs include Startklar check", docs.includes("npm run check:startklar"), "Docs should expose the short local MVP readiness command");
 check("Docs include use-today decision", docs.includes("npm run check:use-today"), "Docs should expose the final local use decision command");
+check("Docs include MVP finish-line decision", docs.includes("npm run check:finish-line") && docs.includes("mvp-slutspurt.md"), "Docs should expose the final MVP finish-line command and checklist.");
 check("Docs include first real data decision", docs.includes("npm run check:first-real-data") && docs.includes("forsta-riktiga-data.md"), "Docs should expose the first real data decision command");
 check("Docs include pilot readiness", docs.includes("npm run check:pilot") && docs.includes("pilotdrift-mvp.md"), "Docs should expose pilot readiness rules.");
 check("Docs include calculation integrity", docs.includes("npm run check:calculations"), "Docs should expose the calculation integrity command");

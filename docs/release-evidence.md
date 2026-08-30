@@ -1,8 +1,9 @@
 # AliBooks release evidence
 
-Senast komplett lokalt releasebevis: 2026-08-28 22:28 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-28 22:28 +02:00.
+Senast komplett lokalt releasebevis: 2026-08-30 18:56 +02:00.
+Senast standard-release och backendtest verifierat: 2026-08-30 18:56 +02:00.
 Senast standard-release efter CI-maintenance verifierat: 2026-08-29 22:07 +02:00.
+Senast standard-release efter MVP-slutspurt verifierat: 2026-08-30 18:49 +02:00.
 
 ## Kommandon som ska vara grona fore push/deploy
 
@@ -19,6 +20,7 @@ npm run check:ci-handoff
 npm run check:post-push
 npm run check:startklar
 npm run check:mvp-use
+npm run check:finish-line
 npm run check:operations
 npm run check:use-today
 npm run check:first-real-data
@@ -70,6 +72,7 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:release:full`: passed 2026-08-30 18:56 +02:00 efter MVP-slutspurt-steget, full release gate med frontend build, bundle 9/9, professionell loop 20/20, SpeedLedger-paritet 28/28, acceptans 18/18, readiness 158/158, evidence 94/94, finish-line 20/20, finance UI 100/100, vykontroll 49/49, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release`: passed 2026-08-29 22:07 +02:00 efter Dependabot/CI-maintenance-steget, standard release gate med frontend build, runtime smoke, vykontroll, readiness 154/154, CI 39/39, evidence 91/91, env-go-live 39/39 och externa go-live-bevis 29/29.
 - `npm run check:calculations`, `npm run check:mvp-use`, `npm run check:use-today`, `npm run check:speedledger-parity`, `npm run check:go-live-risks`, `npm run check:external-go-live`: passed 2026-08-29 22:07 +02:00 som extra snabbkontroll av professionell MVP-kärna efter commit `940cf4f`.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-28 22:28 +02:00, AliBooks pre-push gate passed, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
@@ -115,9 +118,9 @@ Detta bevisar lokalt att:
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-09 19:30 +02:00
-- `check:ready`: 154/154
+- `check:ready`: 158/158
 - `check:acceptance`: 18/18
-- `check:evidence`: 91/91
+- `check:evidence`: 94/94
 - `check:bundle`: 9/9
 - `check:data-safety`: 57/57
 - `check:prod`: 44/44
@@ -145,6 +148,7 @@ Detta bevisar lokalt att:
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
 - `npm run check:backup`: passed, 18/18
+- `check:finish-line`: 20/20
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`

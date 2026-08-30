@@ -55,6 +55,7 @@ npm run check:go-live-decision
 npm run check:external-go-live
 npm run check:startklar
 npm run check:mvp-use
+npm run check:finish-line
 npm run check:operations
 npm run check:use-today
 npm run check:first-real-data
@@ -90,6 +91,7 @@ npm run test:backend
 `npm run check:external-go-live` kontrollerar de externa bevisen som maste finnas innan riktig kunddata: GitHub sync, Actions, Dockerhub, EC2/RDS, schema, backup/restore, Stripe, SMTP, bank/Swish/kort, AI och redovisningspaket.
 `npm run check:startklar` ger en kort lokal MVP-bedomning: vad som ar redo, vad som fortfarande kraver extern verifiering och varfor skarp drift maste vanta tills GitHub/Dockerhub/EC2/RDS/backup/Stripe/SMTP ar bevisade.
 `npm run check:mvp-use` kontrollerar 20 praktiska steg for anvandningsklar lokal MVP: lokal start, inloggning, kund/faktura, betalning, bokforing, bank-CSV, underlag, moms, rapporter, lon-MVP, bokslut, backup, restore, sakerhet, CI, git och go-live-beslut.
+`npm run check:finish-line` kontrollerar [mvp-slutspurt.md](mvp-slutspurt.md): de 20 sista stegen fran ren git, push, GitHub Actions och Dockerhub till lokal start, fakturaflode, bokforing, Stripe/SMTP-test, backup/restore och slutligt go-live-beslut.
 `npm run check:operations` kontrollerar Driftcenter och drift-runbook: incidentlogg, releasejournal, rollback-plan, backup/smoke-test, local doctor, runtime smoke och produktions-smoke.
 `npm run check:use-today` ger sista lokala anvandningsbeslutet: vad som maste vara gront for att jobba i AliBooks idag, vilka stoppsignaler som betyder fixa forst, och varfor skarp produktion fortfarande kraver externa bevis.
 `npm run check:first-real-data` kontrollerar [forsta-riktiga-data.md](forsta-riktiga-data.md): backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export innan riktiga kunder eller bokforingsposter registreras.

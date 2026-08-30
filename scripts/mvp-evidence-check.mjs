@@ -156,6 +156,12 @@ const countedEvidenceChecks = [
     evidencePattern: /`check:mvp-use`:\s*(\d+)\/(\d+)/
   },
   {
+    name: "MVP finish-line evidence count matches script",
+    script: "scripts/mvp-finish-line-check.mjs",
+    outputLabel: "AliBooks MVP finish-line check",
+    evidencePattern: /`check:finish-line`:\s*(\d+)\/(\d+)/
+  },
+  {
     name: "Operations readiness evidence count matches script",
     script: "scripts/operations-readiness-check.mjs",
     outputLabel: "AliBooks operations readiness check",
@@ -358,6 +364,12 @@ check(
 );
 
 check(
+  "Package exposes MVP finish-line check",
+  packageJson.scripts?.["check:finish-line"] === "node ../scripts/mvp-finish-line-check.mjs",
+  "frontend/package.json should expose npm run check:finish-line."
+);
+
+check(
   "Package exposes operations readiness check",
   packageJson.scripts?.["check:operations"] === "node ../scripts/operations-readiness-check.mjs",
   "frontend/package.json should expose npm run check:operations."
@@ -487,6 +499,12 @@ check(
   "Release gate runs MVP use readiness check",
   releaseGate.includes('"check:mvp-use"'),
   "The release gate should fail when 20-step MVP use evidence becomes stale."
+);
+
+check(
+  "Release gate runs MVP finish-line check",
+  releaseGate.includes('"check:finish-line"'),
+  "The release gate should fail when final MVP finish-line evidence becomes stale."
 );
 
 check(
