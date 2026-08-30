@@ -73,8 +73,9 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - `npm run check:release:full`: passed 2026-08-30 18:56 +02:00 efter MVP-slutspurt-steget, full release gate med frontend build, bundle 9/9, professionell loop 20/20, SpeedLedger-paritet 28/28, acceptans 18/18, readiness 158/158, evidence 94/94, finish-line 20/20, finance UI 100/100, vykontroll 49/49, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
-- `npm run check:release`: passed 2026-08-30 19:13 +02:00 efter Startklar-panel for MVP-slutspurt, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, finish-line 21/21, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ar 71 commits fore `origin/main`.
+- `npm run check:release`: passed 2026-08-30 19:23 +02:00 efter Startklar-panel for forsta riktiga data, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, finish-line 21/21, first-real-data 34/34, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ar 72 commits fore `origin/main`.
 - `npm run check:finish-line`: passed 2026-08-30 19:13 +02:00 efter Startklar-panel for MVP-slutspurt, 21/21 inklusive UI-bevis for 20-stegslistan.
+- `npm run check:first-real-data`: passed 2026-08-30 19:18 +02:00 efter Startklar-panel for forsta riktiga data, 34/34 inklusive UI-grind for riktiga kunder, fakturor, kvitton, bankrader och bokforingsposter.
 - `npm run check:release`: passed 2026-08-29 22:07 +02:00 efter Dependabot/CI-maintenance-steget, standard release gate med frontend build, runtime smoke, vykontroll, readiness 154/154, CI 39/39, evidence 91/91, env-go-live 39/39 och externa go-live-bevis 29/29.
 - `npm run check:calculations`, `npm run check:mvp-use`, `npm run check:use-today`, `npm run check:speedledger-parity`, `npm run check:go-live-risks`, `npm run check:external-go-live`: passed 2026-08-29 22:07 +02:00 som extra snabbkontroll av professionell MVP-kärna efter commit `940cf4f`.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-28 22:28 +02:00, AliBooks pre-push gate passed, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
@@ -97,7 +98,7 @@ Detta bevisar lokalt att:
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
 - `npm run check:use-today`: 30/30, slutligt lokalt anvandningsbeslut med stoppsignaler och produktionsblockerare.
-- `npm run check:first-real-data`: 33/33, forsta riktiga data-grind for backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export.
+- `npm run check:first-real-data`: 34/34, forsta riktiga data-grind for backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export.
 - `npm run check:pilot`: 25/25, begransad pilotdrift for forsta veckan med daglig rutin, backup, restore drill, manuell klickkontroll, export och stoppregler.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
 - `npm run check:retention`: 23/23, arkiv och andringsspar for fakturor, kunder, leverantorsfakturor, kvitton, bankreset, periodlasning, hard delete, rattelser och backendtester.
@@ -140,7 +141,7 @@ Detta bevisar lokalt att:
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
 - `check:use-today`: 30/30
-- `check:first-real-data`: 33/33
+- `check:first-real-data`: 34/34
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46
 - `check:retention`: 23/23

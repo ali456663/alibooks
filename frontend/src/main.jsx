@@ -21366,6 +21366,113 @@ function App() {
   const mvpFinishLineBlockingCount = mvpFinishLineRows.filter((row) => row.status === "critical").length;
   const mvpFinishLineExternalCount = mvpFinishLineRows.filter((row) => row.status === "external" || row.status === "manual").length;
   const mvpFinishLineScore = Math.round(mvpFinishLineRows.reduce((sum, row) => sum + row.score, 0) / Math.max(mvpFinishLineRows.length, 1));
+  const firstRealDataGateRows = [
+    {
+      key: "local-release",
+      status: goLiveCriticalCount === 0 && calculationCriticalCount === 0 ? "ok" : "critical",
+      statusLabel: goLiveCriticalCount === 0 && calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: goLiveCriticalCount === 0 && calculationCriticalCount === 0 ? 100 : 20,
+      title: language === "sv" ? "Lokal release ar gron" : "Local release is green",
+      detail: language === "sv"
+        ? "Inga kritiska Startklar- eller berakningsfel innan riktiga kunduppgifter sparas."
+        : "No critical Go-live or calculation errors before saving real customer data.",
+      actionLabel: t.financialDiagnostics,
+      action: () => setActiveView("financialDiagnostics")
+    },
+    {
+      key: "manual-proof",
+      status: mvpManualFailCount > 0 ? "critical" : mvpManualUntestedCount > 0 ? "manual" : "ok",
+      statusLabel: mvpManualFailCount > 0 ? (language === "sv" ? "Fel" : "Fail") : mvpManualUntestedCount > 0 ? (language === "sv" ? "Testa" : "Test") : "OK",
+      score: mvpManualScore,
+      title: language === "sv" ? "Manuellt klicktest ar klart" : "Manual click proof is complete",
+      detail: language === "sv"
+        ? "Testa kund, faktura, PDF, betalning, underlag, backup och publik demo innan riktig data."
+        : "Test customer, invoice, PDF, payment, evidence, backup and public demo before real data.",
+      actionLabel: t.testFlow,
+      action: () => setActiveView("testFlow")
+    },
+    {
+      key: "backup-restore",
+      status: backupValidation?.ok && archivePackageWarnings === 0 ? "ok" : "warning",
+      statusLabel: backupValidation?.ok && archivePackageWarnings === 0 ? "OK" : (language === "sv" ? "Verifiera" : "Verify"),
+      score: backupValidation?.ok && archivePackageWarnings === 0 ? 100 : 65,
+      title: language === "sv" ? "Backup och restore drill finns" : "Backup and restore drill exist",
+      detail: language === "sv"
+        ? "Riktig data ska inte borja utan verifierad backup och planerad aterlasning i testdatabas."
+        : "Real data should not start without verified backup and restore rehearsal in a test database.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "company-settings",
+      status: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? "ok" : "warning",
+      statusLabel: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? "OK" : (language === "sv" ? "Komplettera" : "Complete"),
+      score: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? 100 : 65,
+      title: language === "sv" ? "Foretagsinstallningar ar riktiga" : "Company settings are real",
+      detail: language === "sv"
+        ? "Foretagsform, bokforingsmetod, momsperiod, F-skatt och betalningsinfo ska vara kontrollerade."
+        : "Company type, accounting method, VAT period, F-tax and payment details should be checked.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "test-data",
+      status: "manual",
+      statusLabel: language === "sv" ? "Manuell" : "Manual",
+      score: 70,
+      title: language === "sv" ? "Testdata ar rensad eller separerad" : "Test data is cleared or separated",
+      detail: language === "sv"
+        ? "Blanda inte demo-kunder, demo-fakturor eller gamla importer med riktiga bokforingsposter."
+        : "Do not mix demo customers, demo invoices or old imports with real accounting entries.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "number-series",
+      status: unbalancedJournalGroups.length === 0 && calculationCriticalCount === 0 ? "ok" : "critical",
+      statusLabel: unbalancedJournalGroups.length === 0 && calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: unbalancedJournalGroups.length === 0 && calculationCriticalCount === 0 ? 100 : 25,
+      title: language === "sv" ? "Nummer och verifikat ar foljbara" : "Numbers and vouchers are traceable",
+      detail: language === "sv"
+        ? "Fakturanummer, kreditfakturor, verifikat och perioder ska ga att folja utan glapp."
+        : "Invoice numbers, credit invoices, vouchers and periods should be traceable without gaps.",
+      actionLabel: t.numberControl,
+      action: () => setActiveView("numberControl")
+    },
+    {
+      key: "payment-routine",
+      status: systemStatus?.email?.configured && (systemStatus?.stripe?.configured || bankImportRows.length > 0 || bankImportRules.length > 0) ? "ok" : "external",
+      statusLabel: systemStatus?.email?.configured && (systemStatus?.stripe?.configured || bankImportRows.length > 0 || bankImportRules.length > 0) ? "OK" : (language === "sv" ? "Miljo/test" : "Env/test"),
+      score: systemStatus?.email?.configured && (systemStatus?.stripe?.configured || bankImportRows.length > 0 || bankImportRules.length > 0) ? 100 : 65,
+      title: language === "sv" ? "Betalningsrutin ar bestamd" : "Payment routine is decided",
+      detail: language === "sv"
+        ? "Bestam bank-CSV, Swish, Bankgiro/OCR eller Stripe och testa avstamning innan pengar kommer in."
+        : "Choose bank CSV, Swish, Bankgiro/OCR or Stripe and test reconciliation before money arrives.",
+      actionLabel: t.paymentReconciliation,
+      action: () => setActiveView("paymentReconciliation")
+    },
+    {
+      key: "privacy-ai",
+      status: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "ok" : "warning",
+      statusLabel: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "OK" : (language === "sv" ? "Kontrollera" : "Check"),
+      score: Math.round((securityPrivacyScore + (systemStatus?.security?.jwtStrong ? 100 : 55)) / 2),
+      title: language === "sv" ? "Persondata och AI-sakert lage ar kontrollerat" : "Personal data and AI safe mode are checked",
+      detail: language === "sv"
+        ? `${privacyPersonalDataRecords} poster med persondata. Skicka inte namn, personnummer, adress eller telefon till extern AI.`
+        : `${privacyPersonalDataRecords} records with personal data. Do not send names, identity numbers, addresses or phone numbers to external AI.`,
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    }
+  ];
+  const firstRealDataOkCount = firstRealDataGateRows.filter((row) => row.status === "ok").length;
+  const firstRealDataBlockingCount = firstRealDataGateRows.filter((row) => row.status === "critical").length;
+  const firstRealDataManualCount = firstRealDataGateRows.filter((row) => row.status === "manual" || row.status === "external" || row.status === "warning").length;
+  const firstRealDataScore = Math.round(firstRealDataGateRows.reduce((sum, row) => sum + row.score, 0) / Math.max(firstRealDataGateRows.length, 1));
+  const firstRealDataDecisionText = firstRealDataBlockingCount > 0
+    ? (language === "sv" ? "Vanta med riktig data" : "Wait with real data")
+    : firstRealDataManualCount > 0
+      ? (language === "sv" ? "Nara, gor manuella bevis forst" : "Close, finish manual proof first")
+      : (language === "sv" ? "Redo for forsta riktiga data" : "Ready for first real data");
   const testFlowRows = [
     {
       key: "system",
@@ -33145,6 +33252,42 @@ function App() {
                     <strong>{row.title}</strong>
                     <small>{row.detail}</small>
                     <em>{row.actionLabel}</em>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="first-real-data-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "Forsta riktiga data" : "First real data"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Den har grinden avgor om du kan borja lagga in riktiga kunder, fakturor, kvitton, bankrader och bokforingsposter."
+                      : "This gate decides whether you can start entering real customers, invoices, receipts, bank rows and accounting entries."}
+                  </p>
+                </div>
+                <span className={firstRealDataBlockingCount > 0 ? "status warning-status" : firstRealDataManualCount > 0 ? "status neutral-status" : "status success-status"}>
+                  {firstRealDataDecisionText}
+                </span>
+              </div>
+              <article className={firstRealDataBlockingCount > 0 ? "first-real-data-decision critical" : firstRealDataManualCount > 0 ? "first-real-data-decision warning" : "first-real-data-decision good"}>
+                <span>{language === "sv" ? "Beslut just nu" : "Decision right now"}</span>
+                <strong>{firstRealDataScore}%</strong>
+                <p>
+                  {language === "sv"
+                    ? `${firstRealDataOkCount}/${firstRealDataGateRows.length} klara. ${firstRealDataBlockingCount} stoppar och ${firstRealDataManualCount} manuella/miljo-punkter kvar.`
+                    : `${firstRealDataOkCount}/${firstRealDataGateRows.length} ready. ${firstRealDataBlockingCount} blocking and ${firstRealDataManualCount} manual/env items remain.`}
+                </p>
+              </article>
+              <div className="first-real-data-grid">
+                {firstRealDataGateRows.map((row) => (
+                  <button type="button" className={`first-real-data-card ${row.status}`} key={`first-real-data-${row.key}`} onClick={row.action}>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <em>{row.score}%</em>
+                    <p>{row.detail}</p>
+                    <small>{row.actionLabel}</small>
                   </button>
                 ))}
               </div>

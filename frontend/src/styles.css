@@ -12089,6 +12089,114 @@ button:focus-visible,
   font-style: normal;
 }
 
+.first-real-data-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d8eadf;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fff9 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.first-real-data-decision {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #1e8f5a;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.first-real-data-decision.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.first-real-data-decision.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.first-real-data-decision span,
+.first-real-data-card span,
+.first-real-data-card p,
+.first-real-data-card small {
+  margin: 0;
+  color: #51606d;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.first-real-data-decision strong {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.first-real-data-decision p {
+  margin: 0;
+}
+
+.first-real-data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.first-real-data-card {
+  display: grid;
+  gap: 6px;
+  min-height: 168px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.first-real-data-card.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.first-real-data-card.warning,
+.first-real-data-card.manual {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.first-real-data-card.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.first-real-data-card.external {
+  border-left-color: #155ee8;
+  background: #f8fbff;
+}
+
+.first-real-data-card:hover {
+  border-color: #155ee8;
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+}
+
+.first-real-data-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.first-real-data-card em {
+  color: #191815;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
 .go-live-manual-proof-panel {
   display: grid;
   gap: 14px;
@@ -15237,6 +15345,7 @@ button:focus-visible,
   .go-live-production-grid,
   .mvp-finish-line-summary,
   .mvp-finish-line-list,
+  .first-real-data-grid,
   .go-live-manual-proof-summary,
   .go-live-manual-proof-list,
   .go-live-layout,
@@ -15461,6 +15570,7 @@ button:focus-visible,
   .go-live-production-grid,
   .mvp-finish-line-summary,
   .mvp-finish-line-list,
+  .first-real-data-grid,
   .go-live-manual-proof-summary,
   .go-live-manual-proof-list,
   .go-live-layout,
