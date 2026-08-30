@@ -11976,6 +11976,119 @@ button:focus-visible,
   font-weight: 900;
 }
 
+.mvp-finish-line-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d7e6f6;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.mvp-finish-line-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mvp-finish-line-summary article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.mvp-finish-line-summary span,
+.mvp-finish-line-row small,
+.mvp-finish-line-row em,
+.mvp-finish-line-meta {
+  color: #51606d;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.mvp-finish-line-summary strong {
+  font-size: 22px;
+}
+
+.mvp-finish-line-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mvp-finish-line-row {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-height: 146px;
+  padding: 14px 14px 14px 56px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mvp-finish-line-row.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.mvp-finish-line-row.warning,
+.mvp-finish-line-row.manual {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.mvp-finish-line-row.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.mvp-finish-line-row.external {
+  border-left-color: #155ee8;
+  background: #f8fbff;
+}
+
+.mvp-finish-line-row:hover {
+  border-color: #155ee8;
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+}
+
+.mvp-finish-line-number {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef5ff;
+  color: #155ee8;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.mvp-finish-line-row strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.mvp-finish-line-row em {
+  align-self: end;
+  font-size: 12px;
+  font-style: normal;
+}
+
 .go-live-manual-proof-panel {
   display: grid;
   gap: 14px;
@@ -15122,6 +15235,8 @@ button:focus-visible,
   .go-live-kpi-grid,
   .go-live-control-grid,
   .go-live-production-grid,
+  .mvp-finish-line-summary,
+  .mvp-finish-line-list,
   .go-live-manual-proof-summary,
   .go-live-manual-proof-list,
   .go-live-layout,
@@ -15344,6 +15459,8 @@ button:focus-visible,
   .go-live-kpi-grid,
   .go-live-control-grid,
   .go-live-production-grid,
+  .mvp-finish-line-summary,
+  .mvp-finish-line-list,
   .go-live-manual-proof-summary,
   .go-live-manual-proof-list,
   .go-live-layout,

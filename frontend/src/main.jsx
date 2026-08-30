@@ -21080,6 +21080,292 @@ function App() {
   const mvpManualFailCount = mvpManualChecklistRows.filter((row) => row.status === "fail").length;
   const mvpManualUntestedCount = mvpManualChecklistRows.filter((row) => row.status === "untested").length;
   const mvpManualScore = Math.round((mvpManualOkCount / Math.max(mvpManualChecklistRows.length, 1)) * 100);
+  const mvpFinishLineRows = [
+    {
+      key: "git-clean",
+      number: "01",
+      group: language === "sv" ? "Kod" : "Code",
+      status: "manual",
+      statusLabel: language === "sv" ? "Terminal" : "Terminal",
+      score: 85,
+      title: language === "sv" ? "Git-status och lokal kod ar ren" : "Git status and local code are clean",
+      detail: language === "sv"
+        ? "Kor check:git innan release sa inga oavsiktliga filer foljer med."
+        : "Run check:git before release so no accidental files are included.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    },
+    {
+      key: "github-sync",
+      number: "02",
+      group: language === "sv" ? "Kod" : "Code",
+      status: "external",
+      statusLabel: language === "sv" ? "GitHub" : "GitHub",
+      score: 55,
+      title: language === "sv" ? "GitHub ar uppdaterad" : "GitHub is up to date",
+      detail: language === "sv"
+        ? "Pusha main och kontrollera att GitHub Actions kor senaste versionen."
+        : "Push main and verify GitHub Actions runs the latest version.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    },
+    {
+      key: "ci",
+      number: "03",
+      group: "CI",
+      status: "external",
+      statusLabel: "CI",
+      score: 55,
+      title: language === "sv" ? "CI/CD ar gron" : "CI/CD is green",
+      detail: language === "sv"
+        ? "Backend-test, frontend-build och Docker-build ska vara grona i GitHub."
+        : "Backend tests, frontend build and Docker build should be green in GitHub.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    },
+    {
+      key: "docker-images",
+      number: "04",
+      group: "CI",
+      status: "external",
+      statusLabel: "Docker",
+      score: 50,
+      title: language === "sv" ? "Docker-image ar byggd och sparad" : "Docker image is built and saved",
+      detail: language === "sv"
+        ? "Bygg backend/frontend-image och publicera bara nar release gate ar gron."
+        : "Build backend/frontend images and publish only when the release gate is green.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    },
+    {
+      key: "local-system",
+      number: "05",
+      group: language === "sv" ? "Stabilitet" : "Stability",
+      status: goLiveSystemOk ? "ok" : goLiveSystemKnown ? "critical" : "warning",
+      statusLabel: goLiveSystemOk ? "OK" : goLiveSystemKnown ? (language === "sv" ? "Stoppar" : "Blocking") : (language === "sv" ? "Kontroll" : "Check"),
+      score: goLiveSystemOk ? 100 : goLiveSystemKnown ? 20 : 60,
+      title: language === "sv" ? "Backend, databas och frontend startar" : "Backend, database and frontend start",
+      detail: language === "sv"
+        ? "AliBooks ska starta utan vit sida och utan ApplicationContext-fel."
+        : "AliBooks should start without a blank page or ApplicationContext error.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "system-status",
+      number: "06",
+      group: language === "sv" ? "Stabilitet" : "Stability",
+      status: systemStatus?.backend?.ok && systemStatus?.database?.ok ? "ok" : "warning",
+      statusLabel: systemStatus?.backend?.ok && systemStatus?.database?.ok ? "OK" : (language === "sv" ? "Kontroll" : "Check"),
+      score: systemStatus?.backend?.ok && systemStatus?.database?.ok ? 100 : 55,
+      title: language === "sv" ? "Systemstatus rapporterar korrekt" : "System status reports correctly",
+      detail: language === "sv"
+        ? "Driftcenter ska visa databas, API, SMTP, Stripe, CORS och sakerhet."
+        : "Operations should show database, API, SMTP, Stripe, CORS and security.",
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    },
+    {
+      key: "company-settings",
+      number: "07",
+      group: language === "sv" ? "Grunddata" : "Setup",
+      status: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? "ok" : "warning",
+      statusLabel: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? "OK" : (language === "sv" ? "Komplettera" : "Complete"),
+      score: settings?.companyName && settings?.contactEmail && settings?.plusGiro ? 100 : 65,
+      title: language === "sv" ? "Foretagsuppgifter ar klara" : "Company details are ready",
+      detail: language === "sv"
+        ? "Namn, e-post, bank/PlusGiro, moms och fakturatext ska vara korrekt."
+        : "Name, email, bank/PlusGiro, VAT and invoice text should be correct.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "manual-click-test",
+      number: "08",
+      group: language === "sv" ? "Test" : "Test",
+      status: mvpManualFailCount > 0 ? "critical" : mvpManualUntestedCount > 0 ? "manual" : "ok",
+      statusLabel: mvpManualFailCount > 0 ? (language === "sv" ? "Fel" : "Fail") : mvpManualUntestedCount > 0 ? (language === "sv" ? "Ej klart" : "Pending") : "OK",
+      score: mvpManualScore,
+      title: language === "sv" ? "Manuellt klicktest ar gjort" : "Manual click test is done",
+      detail: language === "sv"
+        ? "Testa sista flodet for kund, faktura, PDF, betalning, underlag och backup."
+        : "Test the final flow for customer, invoice, PDF, payment, evidence and backup.",
+      actionLabel: t.testFlow,
+      action: () => setActiveView("testFlow")
+    },
+    {
+      key: "customers",
+      number: "09",
+      group: language === "sv" ? "Kund" : "Customer",
+      status: customers.length > 0 ? "ok" : "warning",
+      statusLabel: customers.length > 0 ? "OK" : (language === "sv" ? "Saknas" : "Missing"),
+      score: customers.length > 0 ? 100 : 50,
+      title: language === "sv" ? "Kundflode fungerar" : "Customer flow works",
+      detail: language === "sv"
+        ? "Skapa, sok och validera kund med namn, e-post, personnummer och adress."
+        : "Create, search and validate customers with name, email, identity number and address.",
+      actionLabel: t.customers,
+      action: () => setActiveView("customers")
+    },
+    {
+      key: "invoice-flow",
+      number: "10",
+      group: language === "sv" ? "Faktura" : "Invoice",
+      status: invoices.length > 0 && testFlowSentInvoices.length > 0 ? "ok" : invoices.length > 0 ? "manual" : "warning",
+      statusLabel: invoices.length > 0 && testFlowSentInvoices.length > 0 ? "OK" : invoices.length > 0 ? (language === "sv" ? "Testa" : "Test") : (language === "sv" ? "Saknas" : "Missing"),
+      score: invoices.length > 0 && testFlowSentInvoices.length > 0 ? 100 : invoices.length > 0 ? 75 : 45,
+      title: language === "sv" ? "Faktura, PDF och utskick fungerar" : "Invoice, PDF and sending work",
+      detail: language === "sv"
+        ? "Skapa faktura, markera skickad, hamta PDF och kontrollera kundens e-post."
+        : "Create invoice, mark sent, download PDF and verify the customer's email.",
+      actionLabel: t.invoices,
+      action: () => setActiveView("invoices")
+    },
+    {
+      key: "payments",
+      number: "11",
+      group: language === "sv" ? "Betalning" : "Payment",
+      status: testFlowPaidInvoices.length > 0 ? "ok" : "manual",
+      statusLabel: testFlowPaidInvoices.length > 0 ? "OK" : (language === "sv" ? "Testa" : "Test"),
+      score: testFlowPaidInvoices.length > 0 ? 100 : 70,
+      title: language === "sv" ? "Betalningar och delbetalningar stammer" : "Payments and partial payments reconcile",
+      detail: language === "sv"
+        ? "Kontrollera belopp, referens, historik, kvar att betala och bokforing."
+        : "Check amount, reference, history, remaining balance and bookkeeping.",
+      actionLabel: t.payments,
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "bank-import",
+      number: "12",
+      group: language === "sv" ? "Bank" : "Bank",
+      status: bankImportRows.length > 0 || bankImportRules.length > 0 ? "ok" : "manual",
+      statusLabel: bankImportRows.length > 0 || bankImportRules.length > 0 ? "OK" : (language === "sv" ? "Valfritt" : "Optional"),
+      score: bankImportRows.length > 0 || bankImportRules.length > 0 ? 100 : 70,
+      title: language === "sv" ? "CSV-bankimport ar testad" : "CSV bank import is tested",
+      detail: language === "sv"
+        ? "Importera bankrad, matcha mot faktura och kontrollera att dubbletter stoppas."
+        : "Import a bank row, match it to an invoice and verify duplicates are blocked.",
+      actionLabel: t.payments,
+      action: () => setActiveView("payments")
+    },
+    {
+      key: "vouchers",
+      number: "13",
+      group: language === "sv" ? "Bokforing" : "Accounting",
+      status: journalGroups.length > 0 && unbalancedJournalGroups.length === 0 ? "ok" : unbalancedJournalGroups.length > 0 ? "critical" : "warning",
+      statusLabel: journalGroups.length > 0 && unbalancedJournalGroups.length === 0 ? "OK" : unbalancedJournalGroups.length > 0 ? (language === "sv" ? "Stoppar" : "Blocking") : (language === "sv" ? "Saknas" : "Missing"),
+      score: journalGroups.length > 0 && unbalancedJournalGroups.length === 0 ? 100 : unbalancedJournalGroups.length > 0 ? 10 : 55,
+      title: language === "sv" ? "Verifikat balanserar" : "Vouchers balance",
+      detail: language === "sv"
+        ? "Debet och kredit ska alltid vara lika och verifikationsnummer ska vara foljbara."
+        : "Debit and credit must always match and voucher numbers should be traceable.",
+      actionLabel: t.bookkeeping,
+      action: () => setActiveView("bookkeeping")
+    },
+    {
+      key: "evidence",
+      number: "14",
+      group: language === "sv" ? "Underlag" : "Evidence",
+      status: expensesMissingReceipt.length === 0 ? "ok" : "warning",
+      statusLabel: expensesMissingReceipt.length === 0 ? "OK" : (language === "sv" ? "Saknas" : "Missing"),
+      score: expensesMissingReceipt.length === 0 ? 100 : 60,
+      title: language === "sv" ? "Kvitton och underlag ar kopplade" : "Receipts and evidence are attached",
+      detail: language === "sv"
+        ? "Kvitton, leverantorsfakturor och andra underlag ska ga att spara, oppna och exportera."
+        : "Receipts, supplier invoices and evidence should save, open and export.",
+      actionLabel: t.uploaded,
+      action: () => setActiveView("uploaded")
+    },
+    {
+      key: "reports",
+      number: "15",
+      group: language === "sv" ? "Rapport" : "Report",
+      status: calculationCriticalCount === 0 ? "ok" : "critical",
+      statusLabel: calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: calculationCriticalCount === 0 ? 100 : 15,
+      title: language === "sv" ? "Rapporter och berakningar stammer" : "Reports and calculations reconcile",
+      detail: language === "sv"
+        ? "Resultat, balans, moms, skatt och negativt eget kapital ska rimlighetskontrolleras."
+        : "Profit, balance, VAT, tax and negative equity should be sanity-checked.",
+      actionLabel: t.financialDiagnostics,
+      action: () => setActiveView("financialDiagnostics")
+    },
+    {
+      key: "vat-tax",
+      number: "16",
+      group: language === "sv" ? "Skatt" : "Tax",
+      status: complianceCriticalCount === 0 && complianceScore >= 80 ? "ok" : complianceCriticalCount > 0 ? "critical" : "warning",
+      statusLabel: complianceCriticalCount === 0 && complianceScore >= 80 ? "OK" : complianceCriticalCount > 0 ? (language === "sv" ? "Stoppar" : "Blocking") : (language === "sv" ? "Kontroll" : "Check"),
+      score: complianceCriticalCount === 0 ? Math.max(complianceScore, 70) : 20,
+      title: language === "sv" ? "Moms och deklarationspaket ar kontrollerade" : "VAT and filing package are checked",
+      detail: language === "sv"
+        ? "Momsrapport, skattekonto, AGI och deklarationscenter ska inte visa kritiska fel."
+        : "VAT report, tax account, employer filing and filing center should show no critical issues.",
+      actionLabel: t.declarationCenter,
+      action: () => setActiveView("declarationCenter")
+    },
+    {
+      key: "email-stripe",
+      number: "17",
+      group: language === "sv" ? "Integration" : "Integration",
+      status: systemStatus?.email?.configured && systemStatus?.stripe?.configured ? "ok" : "external",
+      statusLabel: systemStatus?.email?.configured && systemStatus?.stripe?.configured ? "OK" : (language === "sv" ? "Miljo" : "Env"),
+      score: systemStatus?.email?.configured && systemStatus?.stripe?.configured ? 100 : 65,
+      title: language === "sv" ? "SMTP och Stripe ar redo" : "SMTP and Stripe are ready",
+      detail: language === "sv"
+        ? "Riktiga nycklar ska ligga i backend-miljo, aldrig i frontend eller GitHub."
+        : "Real keys belong in backend environment variables, never frontend or GitHub.",
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
+    {
+      key: "security",
+      number: "18",
+      group: language === "sv" ? "Sakerhet" : "Security",
+      status: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "ok" : "warning",
+      statusLabel: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "OK" : (language === "sv" ? "Hardning" : "Harden"),
+      score: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? 100 : 65,
+      title: language === "sv" ? "JWT, CORS och AI-sakert lage ar kontrollerat" : "JWT, CORS and AI safe mode are checked",
+      detail: language === "sv"
+        ? "Kontrollera inloggning, CORS, anonyma exporter och att AI inte far persondata."
+        : "Check login, CORS, anonymous exports and that AI does not receive personal data.",
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
+    {
+      key: "backup",
+      number: "19",
+      group: language === "sv" ? "Backup" : "Backup",
+      status: backupValidation?.ok && archivePackageWarnings === 0 ? "ok" : "warning",
+      statusLabel: backupValidation?.ok && archivePackageWarnings === 0 ? "OK" : (language === "sv" ? "Verifiera" : "Verify"),
+      score: backupValidation?.ok && archivePackageWarnings === 0 ? 100 : 65,
+      title: language === "sv" ? "Backup och aterlasning ar verifierad" : "Backup and restore are verified",
+      detail: language === "sv"
+        ? "Ladda ner backup och gor restore drill innan du litar pa systemet i skarp drift."
+        : "Download backup and run a restore drill before trusting production use.",
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "advisor-handoff",
+      number: "20",
+      group: language === "sv" ? "Go-live" : "Go-live",
+      status: goLiveCriticalCount === 0 && goLiveProductionBlockingRows.length === 0 && accountantHandoffWarnings === 0 ? "ok" : goLiveCriticalCount > 0 ? "critical" : "warning",
+      statusLabel: goLiveCriticalCount === 0 && goLiveProductionBlockingRows.length === 0 && accountantHandoffWarnings === 0 ? "OK" : goLiveCriticalCount > 0 ? (language === "sv" ? "Stoppar" : "Blocking") : (language === "sv" ? "Radgivare" : "Advisor"),
+      score: goLiveCriticalCount === 0 && goLiveProductionBlockingRows.length === 0 && accountantHandoffWarnings === 0 ? 100 : goLiveCriticalCount > 0 ? 20 : 75,
+      title: language === "sv" ? "Redovisningskonsult kan granska" : "Accountant can review",
+      detail: language === "sv"
+        ? "Exportera sakert redovisningspaket och lat en redovisningskonsult kontrollera innan skarp anvandning."
+        : "Export a safe accounting package and let an accountant review before production use.",
+      actionLabel: t.accountantHandoff,
+      action: () => setActiveView("accountantHandoff")
+    }
+  ];
+  const mvpFinishLineDoneCount = mvpFinishLineRows.filter((row) => row.status === "ok").length;
+  const mvpFinishLineBlockingCount = mvpFinishLineRows.filter((row) => row.status === "critical").length;
+  const mvpFinishLineExternalCount = mvpFinishLineRows.filter((row) => row.status === "external" || row.status === "manual").length;
+  const mvpFinishLineScore = Math.round(mvpFinishLineRows.reduce((sum, row) => sum + row.score, 0) / Math.max(mvpFinishLineRows.length, 1));
   const testFlowRows = [
     {
       key: "system",
@@ -32814,6 +33100,51 @@ function App() {
                     <em>{row.score}%</em>
                     <p>{row.detail}</p>
                     <small>{row.recommendation}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mvp-finish-line-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "MVP-slutspurt" : "MVP finish-line"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "De 20 viktigaste punkterna for att AliBooks ska bli nara anvandningsklar: stabilitet, kontroller, tester, CI och go-live-risker."
+                      : "The 20 most important items to make AliBooks close to usable: stability, controls, tests, CI and go-live risks."}
+                  </p>
+                </div>
+                <span className={mvpFinishLineBlockingCount > 0 ? "status warning-status" : mvpFinishLineExternalCount > 0 ? "status neutral-status" : "status success-status"}>
+                  {mvpFinishLineScore}% {language === "sv" ? "MVP-status" : "MVP status"}
+                </span>
+              </div>
+              <div className="mvp-finish-line-summary">
+                <article>
+                  <span>{language === "sv" ? "Klara" : "Done"}</span>
+                  <strong>{mvpFinishLineDoneCount}/{mvpFinishLineRows.length}</strong>
+                </article>
+                <article className={mvpFinishLineBlockingCount === 0 ? "balanced-summary" : "unbalanced-summary"}>
+                  <span>{language === "sv" ? "Stoppar" : "Blocking"}</span>
+                  <strong>{mvpFinishLineBlockingCount}</strong>
+                </article>
+                <article className={mvpFinishLineExternalCount === 0 ? "balanced-summary" : "warning-summary"}>
+                  <span>{language === "sv" ? "Terminal/miljo" : "Terminal/env"}</span>
+                  <strong>{mvpFinishLineExternalCount}</strong>
+                </article>
+                <article>
+                  <span>{language === "sv" ? "Score" : "Score"}</span>
+                  <strong>{mvpFinishLineScore}%</strong>
+                </article>
+              </div>
+              <div className="mvp-finish-line-list">
+                {mvpFinishLineRows.map((row) => (
+                  <button type="button" className={`mvp-finish-line-row ${row.status}`} key={`mvp-finish-line-${row.key}`} onClick={row.action}>
+                    <span className="mvp-finish-line-number">{row.number}</span>
+                    <span className="mvp-finish-line-meta">{row.group} / {row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <small>{row.detail}</small>
+                    <em>{row.actionLabel}</em>
                   </button>
                 ))}
               </div>

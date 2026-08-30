@@ -73,6 +73,8 @@ Detta bevisar lokalt att:
 ## Senaste lokala bevis
 
 - `npm run check:release:full`: passed 2026-08-30 18:56 +02:00 efter MVP-slutspurt-steget, full release gate med frontend build, bundle 9/9, professionell loop 20/20, SpeedLedger-paritet 28/28, acceptans 18/18, readiness 158/158, evidence 94/94, finish-line 20/20, finance UI 100/100, vykontroll 49/49, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
+- `npm run check:release`: passed 2026-08-30 19:13 +02:00 efter Startklar-panel for MVP-slutspurt, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, finish-line 21/21, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ar 71 commits fore `origin/main`.
+- `npm run check:finish-line`: passed 2026-08-30 19:13 +02:00 efter Startklar-panel for MVP-slutspurt, 21/21 inklusive UI-bevis for 20-stegslistan.
 - `npm run check:release`: passed 2026-08-29 22:07 +02:00 efter Dependabot/CI-maintenance-steget, standard release gate med frontend build, runtime smoke, vykontroll, readiness 154/154, CI 39/39, evidence 91/91, env-go-live 39/39 och externa go-live-bevis 29/29.
 - `npm run check:calculations`, `npm run check:mvp-use`, `npm run check:use-today`, `npm run check:speedledger-parity`, `npm run check:go-live-risks`, `npm run check:external-go-live`: passed 2026-08-29 22:07 +02:00 som extra snabbkontroll av professionell MVP-kärna efter commit `940cf4f`.
 - `npm run check:prepush -- --allow-ahead`: passed 2026-08-28 22:28 +02:00, AliBooks pre-push gate passed, full release gate, runtime smoke, backendtester 204 tests / 0 failures / 0 errors, git-clean check och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
@@ -148,7 +150,7 @@ Detta bevisar lokalt att:
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
 - `npm run check:backup`: passed, 18/18
-- `check:finish-line`: 20/20
+- `check:finish-line`: 21/21
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`
   - `alibooks-frontend:release-gate`

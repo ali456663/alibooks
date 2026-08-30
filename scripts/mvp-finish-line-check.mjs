@@ -38,6 +38,7 @@ const riskRegister = read("docs/go-live-riskregister.md");
 const goLiveDecision = read("docs/go-live-beslut.md");
 const externalProof = read("docs/externa-go-live-bevis.md");
 const mvpUse = read("docs/anvandningsklar-mvp.md");
+const frontend = read("frontend/src/main.jsx");
 
 const stepRows = Array.from(doc.matchAll(/^\|\s*(\d{2})\s*\|/gm)).map((match) => match[1]);
 const expectedSteps = Array.from({ length: 20 }, (_, index) => String(index + 1).padStart(2, "0"));
@@ -62,6 +63,7 @@ check("Readiness requires finish-line artifacts", readiness.includes(docPath) &&
 check("Release evidence documents finish-line proof", evidence.includes("check:finish-line"), "Release evidence should show finish-line proof.");
 check("Roadmap points to finish-line", roadmap.includes("npm run check:finish-line") && roadmap.includes("mvp-slutspurt.md"), "Roadmap should tell the user how to run the finish-line check.");
 check("Finish-line agrees with existing go-live docs", includesAll(`${riskRegister}\n${goLiveDecision}\n${externalProof}\n${mvpUse}`, ["check:sync", "GitHub Actions", "Dockerhub", "RDS", "Stripe", "SMTP", "restore drill"]), "Existing docs should support the same blockers.");
+check("Startklar UI exposes the 20-step finish-line", includesAll(frontend, ["mvpFinishLineRows", "MVP-slutspurt", "mvp-finish-line-panel", "mvp-finish-line-row", "01", "20"]), "The final MVP checklist should be visible in the AliBooks Startklar view.");
 
 const failures = checks.filter((result) => !result.ok);
 
