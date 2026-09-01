@@ -26412,6 +26412,7 @@ function App() {
             <button className="create-button" type="button">{t.createNew}</button>
             <nav className="nav">
               {navButton("overview", t.overview)}
+              {navButton("goLive", t.goLive)}
               {navButton("todoList", t.todoList)}
               {navButton("dailyRoutine", t.dailyRoutine)}
               {navButton("monthlyRoutine", t.monthlyRoutine)}
@@ -26446,7 +26447,6 @@ function App() {
               {navButton("accountingQuality", t.accountingQuality)}
               {navButton("financialDiagnostics", t.financialDiagnostics)}
               {navButton("accountantHandoff", t.accountantHandoff)}
-              {navButton("goLive", t.goLive)}
               {navButton("testFlow", t.testFlow)}
               {navButton("operationsCenter", t.operationsCenter)}
               {navButton("paymentReconciliation", t.paymentReconciliation)}

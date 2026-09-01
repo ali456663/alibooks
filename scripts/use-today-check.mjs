@@ -50,6 +50,9 @@ const evidence = read("scripts/mvp-evidence-check.mjs");
 const frontendPackage = json("frontend/package.json");
 const rootPackage = json("package.json");
 const status = gitStatus();
+const overviewNavIndex = mainSource.indexOf('{navButton("overview", t.overview)}');
+const goLiveNavIndex = mainSource.indexOf('{navButton("goLive", t.goLive)}');
+const todoNavIndex = mainSource.indexOf('{navButton("todoList", t.todoList)}');
 
 check("Use-today document exists", exists("docs/anvanda-idag-beslut.md"), "docs/anvanda-idag-beslut.md should exist.");
 check("Use-today script exists", exists("scripts/use-today-check.mjs"), "scripts/use-today-check.mjs should exist.");
@@ -73,6 +76,7 @@ check("Risk register includes use-today boundary", riskRegister.includes("check:
 check("Roadmap includes use-today command", roadmap.includes("npm run check:use-today"), "Roadmap should tell the user how to get the final use decision.");
 check("Release evidence includes use-today proof", releaseEvidence.includes("check:use-today"), "Release evidence should include the use-today proof.");
 check("Frontend exposes Startklar", mainSource.includes('activeView === "goLive"') && mainSource.includes("Startklar"), "The app should expose Startklar.");
+check("Frontend keeps Startklar near Overview", overviewNavIndex >= 0 && goLiveNavIndex > overviewNavIndex && goLiveNavIndex < todoNavIndex, "Startklar should be visible near Overview after login so the daily gate is easy to find.");
 check("Frontend exposes Driftcenter", mainSource.includes("operationsCenter") && mainSource.includes("Driftcenter"), "The app should expose Driftcenter.");
 check("Frontend exposes safety views", includesAll(mainSource, ["Sakerhet", "Regelkontroll", "Redovisningskontroll", "Momsrapport"]), "The app should expose the views named in the use-today routine.");
 check("Frontend exposes use-today gate", includesAll(mainSource, ["useTodayGateRows", "Kan jag jobba i AliBooks idag?", "use-today-panel", "use-today-card", "Dagens beslut"]), "Startklar should show the daily local MVP decision inside the app.");
