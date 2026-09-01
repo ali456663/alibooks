@@ -75,6 +75,7 @@ check("Release evidence includes use-today proof", releaseEvidence.includes("che
 check("Frontend exposes Startklar", mainSource.includes('activeView === "goLive"') && mainSource.includes("Startklar"), "The app should expose Startklar.");
 check("Frontend exposes Driftcenter", mainSource.includes("operationsCenter") && mainSource.includes("Driftcenter"), "The app should expose Driftcenter.");
 check("Frontend exposes safety views", includesAll(mainSource, ["Sakerhet", "Regelkontroll", "Redovisningskontroll", "Momsrapport"]), "The app should expose the views named in the use-today routine.");
+check("Frontend exposes use-today gate", includesAll(mainSource, ["useTodayGateRows", "Kan jag jobba i AliBooks idag?", "use-today-panel", "use-today-card", "Dagens beslut"]), "Startklar should show the daily local MVP decision inside the app.");
 check("Frontend exposes use-today script", frontendPackage.scripts?.["check:use-today"] === "node ../scripts/use-today-check.mjs", "frontend/package.json should expose npm run check:use-today.");
 check("Root exposes use-today script", rootPackage.scripts?.["check:use-today"] === "npm --prefix frontend run check:use-today --", "package.json should expose npm run check:use-today.");
 check("Release gate runs use-today check", releaseGate.includes('"check:use-today"'), "Release gate should fail if the use-today decision disappears.");

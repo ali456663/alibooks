@@ -72,6 +72,7 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:use-today`: passed 2026-09-01 19:10 +02:00 efter Startklar-panel for daglig lokal MVP-anvandning, 31/31 inklusive UI-grind for "Kan jag jobba i AliBooks idag?", vit sida/render recovery, backend/databas, berakningar, verifikat, backup, manuell MVP-kontroll, betalningsrutin, sakerhet och produktionsgrans.
 - `npm run check:release:full`: passed 2026-08-30 18:56 +02:00 efter MVP-slutspurt-steget, full release gate med frontend build, bundle 9/9, professionell loop 20/20, SpeedLedger-paritet 28/28, acceptans 18/18, readiness 158/158, evidence 94/94, finish-line 20/20, finance UI 100/100, vykontroll 49/49, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
 - `npm run check:release`: passed 2026-08-30 19:23 +02:00 efter Startklar-panel for forsta riktiga data, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, finish-line 21/21, first-real-data 34/34, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ar 72 commits fore `origin/main`.
 - `npm run check:finish-line`: passed 2026-08-30 19:13 +02:00 efter Startklar-panel for MVP-slutspurt, 21/21 inklusive UI-bevis for 20-stegslistan.
@@ -97,7 +98,7 @@ Detta bevisar lokalt att:
 - `npm run check:env-go-live`: 39/39, go-live-miljo for JWT, lokal JWT-generator, CORS, RDS, schemaflaggor, Stripe, SMTP, AI-nycklar och hemlighetshantering.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
-- `npm run check:use-today`: 30/30, slutligt lokalt anvandningsbeslut med stoppsignaler och produktionsblockerare.
+- `npm run check:use-today`: 31/31, slutligt lokalt anvandningsbeslut med stoppsignaler, vit-sida/render recovery, Startklar-UI och produktionsblockerare.
 - `npm run check:first-real-data`: 34/34, forsta riktiga data-grind for backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export.
 - `npm run check:pilot`: 25/25, begransad pilotdrift for forsta veckan med daglig rutin, backup, restore drill, manuell klickkontroll, export och stoppregler.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
@@ -140,7 +141,7 @@ Detta bevisar lokalt att:
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
-- `check:use-today`: 30/30
+- `check:use-today`: 31/31
 - `check:first-real-data`: 34/34
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46

@@ -11976,6 +11976,114 @@ button:focus-visible,
   font-weight: 900;
 }
 
+.use-today-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #cddcf0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: var(--shadow-small);
+}
+
+.use-today-decision {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #1e8f5a;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.use-today-decision.warning {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.use-today-decision.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.use-today-decision span,
+.use-today-card span,
+.use-today-card p,
+.use-today-card small {
+  margin: 0;
+  color: #51606d;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.use-today-decision strong {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.use-today-decision p {
+  margin: 0;
+}
+
+.use-today-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.use-today-card {
+  display: grid;
+  gap: 6px;
+  min-height: 176px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid #155ee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #191815;
+  text-align: left;
+  cursor: pointer;
+}
+
+.use-today-card.ok {
+  border-left-color: #1e8f5a;
+  background: #f6fff9;
+}
+
+.use-today-card.warning,
+.use-today-card.manual {
+  border-left-color: #f2a900;
+  background: #fffaf0;
+}
+
+.use-today-card.critical {
+  border-left-color: #d64045;
+  background: #fff6f3;
+}
+
+.use-today-card.external {
+  border-left-color: #155ee8;
+  background: #f8fbff;
+}
+
+.use-today-card:hover {
+  border-color: #155ee8;
+  box-shadow: 0 10px 24px rgba(21, 94, 232, 0.08);
+}
+
+.use-today-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.use-today-card em {
+  color: #191815;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
 .mvp-finish-line-panel {
   display: grid;
   gap: 14px;
@@ -15343,6 +15451,7 @@ button:focus-visible,
   .go-live-kpi-grid,
   .go-live-control-grid,
   .go-live-production-grid,
+  .use-today-grid,
   .mvp-finish-line-summary,
   .mvp-finish-line-list,
   .first-real-data-grid,
@@ -15568,6 +15677,7 @@ button:focus-visible,
   .go-live-kpi-grid,
   .go-live-control-grid,
   .go-live-production-grid,
+  .use-today-grid,
   .mvp-finish-line-summary,
   .mvp-finish-line-list,
   .first-real-data-grid,

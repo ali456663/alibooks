@@ -21473,6 +21473,138 @@ function App() {
     : firstRealDataManualCount > 0
       ? (language === "sv" ? "Nara, gor manuella bevis forst" : "Close, finish manual proof first")
       : (language === "sv" ? "Redo for forsta riktiga data" : "Ready for first real data");
+  const renderRecoveryWasTriggered = localStorage.getItem("alibooks-render-recovery-attempted") === "true";
+  const useTodayGateRows = [
+    {
+      key: "local-system",
+      status: goLiveSystemOk ? "ok" : goLiveSystemKnown ? "critical" : "warning",
+      statusLabel: goLiveSystemOk ? "OK" : goLiveSystemKnown ? (language === "sv" ? "Stoppar" : "Blocking") : (language === "sv" ? "Kontrollera" : "Check"),
+      title: language === "sv" ? "Backend och databas svarar" : "Backend and database respond",
+      detail: language === "sv"
+        ? "Docker/PostgreSQL och CloudShopApplication ska vara igang innan du jobbar med viktig data."
+        : "Docker/PostgreSQL and CloudShopApplication should be running before working with important data.",
+      score: goLiveSystemOk ? 100 : goLiveSystemKnown ? 20 : 65,
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "render",
+      status: renderRecoveryWasTriggered ? "critical" : "ok",
+      statusLabel: renderRecoveryWasTriggered ? (language === "sv" ? "Stoppar" : "Blocking") : "OK",
+      title: language === "sv" ? "Ingen vit sida eller render recovery" : "No blank page or render recovery",
+      detail: language === "sv"
+        ? "Om AliBooks visar fallback-sidan ska lokal UI-data rensas och smoke-test koras innan fortsatt arbete."
+        : "If AliBooks shows the fallback page, clear local UI data and run smoke test before continuing.",
+      score: renderRecoveryWasTriggered ? 25 : 100,
+      actionLabel: t.overview,
+      action: () => setActiveView("overview")
+    },
+    {
+      key: "calculations",
+      status: calculationCriticalCount === 0 ? "ok" : "critical",
+      statusLabel: calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      title: language === "sv" ? "Berakningar har inga kritiska fel" : "Calculations have no critical errors",
+      detail: language === "sv"
+        ? `${calculationCriticalCount} kritiska och ${calculationWarningCount} varningar i berakningskontrollen.`
+        : `${calculationCriticalCount} critical and ${calculationWarningCount} warnings in calculation control.`,
+      score: calculationCriticalCount === 0 ? 100 : 15,
+      actionLabel: t.financialDiagnostics,
+      action: () => setActiveView("financialDiagnostics")
+    },
+    {
+      key: "vouchers",
+      status: unbalancedJournalGroups.length === 0 ? "ok" : "critical",
+      statusLabel: unbalancedJournalGroups.length === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      title: language === "sv" ? "Verifikat balanserar" : "Vouchers balance",
+      detail: language === "sv"
+        ? `${unbalancedJournalGroups.length} obalanserade verifikat. Debet och kredit maste alltid vara lika.`
+        : `${unbalancedJournalGroups.length} unbalanced vouchers. Debit and credit must always match.`,
+      score: unbalancedJournalGroups.length === 0 ? 100 : 10,
+      actionLabel: t.bookkeeping,
+      action: () => setActiveView("bookkeeping")
+    },
+    {
+      key: "core-flow",
+      status: customers.length > 0 && invoices.length > 0 && services.length > 0 ? "ok" : "manual",
+      statusLabel: customers.length > 0 && invoices.length > 0 && services.length > 0 ? "OK" : (language === "sv" ? "Testa" : "Test"),
+      title: language === "sv" ? "Kund, tjanst och faktura finns" : "Customer, service and invoice exist",
+      detail: language === "sv"
+        ? `${customers.length} kunder, ${services.length} tjanster och ${invoices.length} fakturor. Testa hela flodet innan riktig kund.`
+        : `${customers.length} customers, ${services.length} services and ${invoices.length} invoices. Test the full flow before real customers.`,
+      score: customers.length > 0 && invoices.length > 0 && services.length > 0 ? 100 : 70,
+      actionLabel: t.invoices,
+      action: () => setActiveView("invoices")
+    },
+    {
+      key: "manual-proof",
+      status: mvpManualFailCount > 0 ? "critical" : mvpManualUntestedCount > 0 ? "manual" : "ok",
+      statusLabel: mvpManualFailCount > 0 ? (language === "sv" ? "Fel" : "Fail") : mvpManualUntestedCount > 0 ? (language === "sv" ? "Ej klart" : "Pending") : "OK",
+      title: language === "sv" ? "Manuellt MVP-test ar avbockat" : "Manual MVP test is checked",
+      detail: language === "sv"
+        ? `${mvpManualOkCount}/${mvpManualChecklistRows.length} manuella bevis ar OK.`
+        : `${mvpManualOkCount}/${mvpManualChecklistRows.length} manual proofs are OK.`,
+      score: mvpManualScore,
+      actionLabel: t.testFlow,
+      action: () => setActiveView("testFlow")
+    },
+    {
+      key: "backup",
+      status: backupValidation?.ok ? "ok" : "warning",
+      statusLabel: backupValidation?.ok ? "OK" : (language === "sv" ? "Verifiera" : "Verify"),
+      title: language === "sv" ? "Backup ar verifierad" : "Backup is verified",
+      detail: language === "sv"
+        ? "Ladda ned och kontrollera backup innan stor import, riktig kunddata eller periodlasning."
+        : "Download and verify backup before large import, real customer data or period locking.",
+      score: backupValidation?.ok ? 100 : 60,
+      actionLabel: t.settings,
+      action: () => setActiveView("settings")
+    },
+    {
+      key: "payment-routine",
+      status: systemStatus?.stripe?.configured || bankImportRows.length > 0 || bankImportRules.length > 0 || invoices.length > 0 ? "ok" : "manual",
+      statusLabel: systemStatus?.stripe?.configured ? "Stripe OK" : bankImportRows.length > 0 ? "CSV OK" : (language === "sv" ? "Manuell" : "Manual"),
+      title: language === "sv" ? "Betalningsrutinen ar tydlig" : "Payment routine is clear",
+      detail: language === "sv"
+        ? "Du kan borja manuellt, men bank-CSV eller Stripe ska testas innan mycket data eller riktiga pengar."
+        : "You can start manually, but bank CSV or Stripe should be tested before larger data or real money.",
+      score: systemStatus?.stripe?.configured || bankImportRows.length > 0 ? 100 : 75,
+      actionLabel: t.paymentReconciliation,
+      action: () => setActiveView("paymentReconciliation")
+    },
+    {
+      key: "security",
+      status: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "ok" : "warning",
+      statusLabel: systemStatus?.security?.jwtStrong && securityPrivacyScore >= 80 ? "OK" : (language === "sv" ? "Kontrollera" : "Check"),
+      title: language === "sv" ? "Sakerhet och AI-regler ar kontrollerade" : "Security and AI rules are checked",
+      detail: language === "sv"
+        ? "API-nycklar ska ligga i miljo, AI ska anvanda minimerad eller anonym data."
+        : "API keys belong in environment variables, AI should use minimized or anonymous data.",
+      score: Math.round((securityPrivacyScore + (systemStatus?.security?.jwtStrong ? 100 : 55)) / 2),
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
+    {
+      key: "production-boundary",
+      status: goLiveProductionBlockingRows.length === 0 ? "ok" : "external",
+      statusLabel: goLiveProductionBlockingRows.length === 0 ? "OK" : (language === "sv" ? "Skarpt vantar" : "Prod waits"),
+      title: language === "sv" ? "Produktion blandas inte med lokal MVP" : "Production is separate from local MVP",
+      detail: language === "sv"
+        ? `${goLiveProductionBlockingRows.length} produktionsbevis aterstar. Jobba lokalt men vanta med publik skarp drift.`
+        : `${goLiveProductionBlockingRows.length} production proofs remain. Work locally but wait with public production.`,
+      score: goLiveProductionBlockingRows.length === 0 ? 100 : 65,
+      actionLabel: t.operationsCenter,
+      action: () => setActiveView("operationsCenter")
+    }
+  ];
+  const useTodayBlockingCount = useTodayGateRows.filter((row) => row.status === "critical").length;
+  const useTodayManualCount = useTodayGateRows.filter((row) => row.status === "manual" || row.status === "warning" || row.status === "external").length;
+  const useTodayOkCount = useTodayGateRows.filter((row) => row.status === "ok").length;
+  const useTodayScore = Math.round(useTodayGateRows.reduce((sum, row) => sum + row.score, 0) / Math.max(useTodayGateRows.length, 1));
+  const useTodayDecisionText = useTodayBlockingCount > 0
+    ? (language === "sv" ? "Stoppa och fixa forst" : "Stop and fix first")
+    : useTodayManualCount > 0
+      ? (language === "sv" ? "Jobba lokalt med forsiktighet" : "Work locally with care")
+      : (language === "sv" ? "Gront for lokal MVP idag" : "Green for local MVP today");
   const testFlowRows = [
     {
       key: "system",
@@ -33207,6 +33339,42 @@ function App() {
                     <em>{row.score}%</em>
                     <p>{row.detail}</p>
                     <small>{row.recommendation}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="use-today-panel">
+              <div className="section-heading compact-section-heading">
+                <div>
+                  <h3>{language === "sv" ? "Kan jag jobba i AliBooks idag?" : "Can I work in AliBooks today?"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Kort beslut for daglig lokal MVP-anvandning: om nagot stoppar ska du fixa det innan du lagger in viktig data."
+                      : "Short decision for daily local MVP use: if anything blocks, fix it before entering important data."}
+                  </p>
+                </div>
+                <span className={useTodayBlockingCount > 0 ? "status warning-status" : useTodayManualCount > 0 ? "status neutral-status" : "status success-status"}>
+                  {useTodayDecisionText}
+                </span>
+              </div>
+              <article className={useTodayBlockingCount > 0 ? "use-today-decision critical" : useTodayManualCount > 0 ? "use-today-decision warning" : "use-today-decision good"}>
+                <span>{language === "sv" ? "Dagens beslut" : "Today's decision"}</span>
+                <strong>{useTodayScore}%</strong>
+                <p>
+                  {language === "sv"
+                    ? `${useTodayOkCount}/${useTodayGateRows.length} klara. ${useTodayBlockingCount} stoppar och ${useTodayManualCount} kontrollpunkter kvar.`
+                    : `${useTodayOkCount}/${useTodayGateRows.length} ready. ${useTodayBlockingCount} blocking and ${useTodayManualCount} control items remain.`}
+                </p>
+              </article>
+              <div className="use-today-grid">
+                {useTodayGateRows.map((row) => (
+                  <button type="button" className={`use-today-card ${row.status}`} key={`use-today-${row.key}`} onClick={row.action}>
+                    <span>{row.statusLabel}</span>
+                    <strong>{row.title}</strong>
+                    <em>{row.score}%</em>
+                    <p>{row.detail}</p>
+                    <small>{row.actionLabel}</small>
                   </button>
                 ))}
               </div>
