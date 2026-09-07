@@ -1,7 +1,7 @@
 # AliBooks release evidence
 
 Senast komplett lokalt releasebevis: 2026-08-30 18:56 +02:00.
-Senast standard-release och backendtest verifierat: 2026-08-30 18:56 +02:00.
+Senast standard-release och backendtest verifierat: 2026-09-07 21:44 +02:00.
 Senast standard-release efter CI-maintenance verifierat: 2026-08-29 22:07 +02:00.
 Senast standard-release efter MVP-slutspurt verifierat: 2026-08-30 18:49 +02:00.
 
@@ -72,6 +72,7 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
+- `npm run check:release` och `npm run test:backend`: passed 2026-09-07 21:44 +02:00 efter att viktigaste bokforingsmenyn och snabbstarten pa Oversikt verifierades. Standard release gate passerade med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, use-today 34/34, first-real-data 34/34, pilot 25/25, calculations 46/46, retention 23/23, audit-integrity 25/25, period-close 30/30, handoff 29/29, finance UI 100/100 och release traceability 14/14. Backendtester passerade separat via Docker Maven: 204 tests / 0 failures / 0 errors. Traceability varnar korrekt att branch ligger fore `origin/main` och maste pushas innan GitHub Actions kan bevisa senaste versionen.
 - `npm run build`, `npm run check:views`, `npm run check:use-today`, `npm run check:evidence`: passed 2026-09-07 21:32 +02:00 efter att viktigaste bokforingsmenyn flyttades hogst upp efter inloggning och Oversikt fick snabbstart till centrala arbetsytor. `check:views` visar 49/49 menyvyer, `check:use-today` visar 34/34 med ny kontroll for synliga professionella huvudval och snabbstart pa Oversikt, och `check:evidence` visar 94/94.
 - `npm run check:release`: passed 2026-09-01 19:14 +02:00 efter Startklar-panel for daglig lokal MVP-anvandning, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, use-today 32/32, first-real-data 34/34, finish-line 21/21, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ligger fore `origin/main` och maste pushas innan GitHub Actions kan bevisa senaste versionen.
 - `npm run check:use-today`: passed 2026-09-01 19:10 +02:00 efter Startklar-panel for daglig lokal MVP-anvandning, 32/32 inklusive synlig Startklar-knapp nara Oversikt, UI-grind for "Kan jag jobba i AliBooks idag?", vit sida/render recovery, backend/databas, berakningar, verifikat, backup, manuell MVP-kontroll, betalningsrutin, sakerhet och produktionsgrans.
