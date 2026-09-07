@@ -46,7 +46,7 @@
     <dependency>
       <groupId>com.stripe</groupId>
       <artifactId>stripe-java</artifactId>
-      <version>29.0.0</version>
+      <version>33.4.1</version>
     </dependency>
     <dependency>
       <groupId>com.github.librepdf</groupId>
