@@ -26403,6 +26403,57 @@ function App() {
     }
   ];
 
+  const coreWorkspaceShortcutRows = [
+    {
+      key: "startklar",
+      view: "goLive",
+      label: language === "sv" ? "Startklar" : "Go-live",
+      detail: language === "sv" ? "Se om AliBooks kan anvandas idag." : "See whether AliBooks can be used today."
+    },
+    {
+      key: "todo",
+      view: "todoList",
+      label: language === "sv" ? "Att gora" : "To do",
+      detail: language === "sv" ? "Betalningar, loner, kvitton och fragor." : "Payments, payroll, receipts and questions."
+    },
+    {
+      key: "bookkeeping",
+      view: "bookkeeping",
+      label: t.bookkeeping,
+      detail: language === "sv" ? "Verifikat, debet/kredit och huvudbok." : "Vouchers, debit/credit and general ledger."
+    },
+    {
+      key: "reports",
+      view: "reports",
+      label: t.reports,
+      detail: language === "sv" ? "Resultat, balans, skatt och export." : "Profit/loss, balance, tax and export."
+    },
+    {
+      key: "evidence",
+      view: "uploaded",
+      label: t.uploaded,
+      detail: language === "sv" ? "Kvitton, PDF och andra underlag." : "Receipts, PDFs and supporting evidence."
+    },
+    {
+      key: "vat",
+      view: "vat",
+      label: t.vatReport,
+      detail: language === "sv" ? "Momsrapport och avstamning." : "VAT report and reconciliation."
+    },
+    {
+      key: "security",
+      view: "security",
+      label: t.security,
+      detail: language === "sv" ? "Secrets, persondata, AI och backup." : "Secrets, personal data, AI and backup."
+    },
+    {
+      key: "handoff",
+      view: "accountantHandoff",
+      label: t.accountantHandoff,
+      detail: language === "sv" ? "Exportpaket till redovisningskonsult." : "Export package for accountant review."
+    }
+  ];
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -26639,6 +26690,33 @@ function App() {
             <strong>{revenueTotal - expenseTotal} SEK</strong>
           </article>
         </section>}
+
+        {token && activeView === "overview" && (
+          <section className="core-workspace-shortcuts">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{language === "sv" ? "Snabbstart" : "Quick start"}</p>
+                <h2>{language === "sv" ? "Viktigaste arbetsytorna" : "Core workspaces"}</h2>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setActiveView("accountingQuality")}>
+                {language === "sv" ? "Oppna redovisningskontroll" : "Open accounting quality"}
+              </button>
+            </div>
+            <div className="core-shortcut-grid">
+              {coreWorkspaceShortcutRows.map((item) => (
+                <button
+                  type="button"
+                  className="core-shortcut-card"
+                  key={item.key}
+                  onClick={() => setActiveView(item.view)}
+                >
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {token && activeView === "overview" && (
           <section className="orders-section business-insights-section">

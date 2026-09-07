@@ -72,7 +72,7 @@ Detta bevisar lokalt att:
 
 ## Senaste lokala bevis
 
-- `npm run build`, `npm run check:views`, `npm run check:use-today`, `npm run check:evidence`: passed 2026-09-07 21:32 +02:00 efter att viktigaste bokforingsmenyn flyttades hogst upp efter inloggning. `check:views` visar 49/49 menyvyer, `check:use-today` visar 33/33 med ny kontroll for synliga professionella huvudval, och `check:evidence` visar 94/94.
+- `npm run build`, `npm run check:views`, `npm run check:use-today`, `npm run check:evidence`: passed 2026-09-07 21:32 +02:00 efter att viktigaste bokforingsmenyn flyttades hogst upp efter inloggning och Oversikt fick snabbstart till centrala arbetsytor. `check:views` visar 49/49 menyvyer, `check:use-today` visar 34/34 med ny kontroll for synliga professionella huvudval och snabbstart pa Oversikt, och `check:evidence` visar 94/94.
 - `npm run check:release`: passed 2026-09-01 19:14 +02:00 efter Startklar-panel for daglig lokal MVP-anvandning, standard release gate med frontend build, runtime smoke, vykontroll 49/49, readiness 158/158, evidence 94/94, use-today 32/32, first-real-data 34/34, finish-line 21/21, finance UI 100/100 och release traceability 14/14. Traceability varnar korrekt att branch ligger fore `origin/main` och maste pushas innan GitHub Actions kan bevisa senaste versionen.
 - `npm run check:use-today`: passed 2026-09-01 19:10 +02:00 efter Startklar-panel for daglig lokal MVP-anvandning, 32/32 inklusive synlig Startklar-knapp nara Oversikt, UI-grind for "Kan jag jobba i AliBooks idag?", vit sida/render recovery, backend/databas, berakningar, verifikat, backup, manuell MVP-kontroll, betalningsrutin, sakerhet och produktionsgrans.
 - `npm run check:release:full`: passed 2026-08-30 18:56 +02:00 efter MVP-slutspurt-steget, full release gate med frontend build, bundle 9/9, professionell loop 20/20, SpeedLedger-paritet 28/28, acceptans 18/18, readiness 158/158, evidence 94/94, finish-line 20/20, finance UI 100/100, vykontroll 49/49, runtime smoke, backendtester 204 tests / 0 failures / 0 errors och Docker builds for `alibooks-backend:release-gate` och `alibooks-frontend:release-gate`.
@@ -100,7 +100,7 @@ Detta bevisar lokalt att:
 - `npm run check:env-go-live`: 39/39, go-live-miljo for JWT, lokal JWT-generator, CORS, RDS, schemaflaggor, Stripe, SMTP, AI-nycklar och hemlighetshantering.
 - `npm run check:mvp-use`: 20/20, 20-stegs kontroll for anvandningsklar lokal MVP.
 - `npm run check:operations`: 23/23, drift-runbook, incidentlogg, releasejournal och rollback-kontroll.
-- `npm run check:use-today`: 33/33, slutligt lokalt anvandningsbeslut med synlig Startklar-knapp, viktigaste bokforingsmenyn, stoppsignaler, vit-sida/render recovery, Startklar-UI och produktionsblockerare.
+- `npm run check:use-today`: 34/34, slutligt lokalt anvandningsbeslut med synlig Startklar-knapp, viktigaste bokforingsmenyn, snabbstart pa Oversikt, stoppsignaler, vit-sida/render recovery, Startklar-UI och produktionsblockerare.
 - `npm run check:first-real-data`: 34/34, forsta riktiga data-grind for backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export.
 - `npm run check:pilot`: 25/25, begransad pilotdrift for forsta veckan med daglig rutin, backup, restore drill, manuell klickkontroll, export och stoppregler.
 - `npm run check:calculations`: 46/46, berakningsintegritet for faktura, moms, delbetalning, Stripe, leverantorer, verifikat och lon-MVP.
@@ -143,7 +143,7 @@ Detta bevisar lokalt att:
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
-- `check:use-today`: 33/33
+- `check:use-today`: 34/34
 - `check:first-real-data`: 34/34
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46

@@ -93,6 +93,7 @@ check("Frontend keeps professional essentials visible", [
   accountingQualityNavIndex,
   accountantHandoffNavIndex
 ].every((index) => index > goLiveNavIndex && index < todoNavIndex), "Bookkeeping, reports, evidence, VAT, security and accountant handoff should be above the long menu after login.");
+check("Frontend exposes overview quick shortcuts", includesAll(mainSource, ["coreWorkspaceShortcutRows", "core-workspace-shortcuts", "Viktigaste arbetsytorna", "core-shortcut-card"]), "Overview should show direct shortcuts to the core professional workspaces after login.");
 check("Frontend exposes Driftcenter", mainSource.includes("operationsCenter") && mainSource.includes("Driftcenter"), "The app should expose Driftcenter.");
 check("Frontend exposes safety views", includesAll(mainSource, ["Sakerhet", "Regelkontroll", "Redovisningskontroll", "Momsrapport"]), "The app should expose the views named in the use-today routine.");
 check("Frontend exposes use-today gate", includesAll(mainSource, ["useTodayGateRows", "Kan jag jobba i AliBooks idag?", "use-today-panel", "use-today-card", "Dagens beslut"]), "Startklar should show the daily local MVP decision inside the app.");

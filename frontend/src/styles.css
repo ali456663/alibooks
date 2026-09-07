@@ -2633,6 +2633,48 @@ textarea {
   margin-top: 0;
 }
 
+.core-workspace-shortcuts {
+  margin: 18px 0 26px;
+}
+
+.core-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.core-shortcut-card {
+  display: grid;
+  min-height: 104px;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  box-shadow: var(--shadow-small);
+}
+
+.core-shortcut-card strong {
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.core-shortcut-card span {
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.core-shortcut-card:hover {
+  border-color: var(--color-primary);
+  background: #eef4ff;
+  transform: translateY(-1px);
+}
+
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -15400,6 +15442,7 @@ button:focus-visible,
   }
 
   .stats,
+  .core-shortcut-grid,
   .customer-stats,
   .invoice-summary-cards,
   .quote-summary-grid,
