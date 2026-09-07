@@ -52,6 +52,13 @@ const rootPackage = json("package.json");
 const status = gitStatus();
 const overviewNavIndex = mainSource.indexOf('{navButton("overview", t.overview)}');
 const goLiveNavIndex = mainSource.indexOf('{navButton("goLive", t.goLive)}');
+const bookkeepingNavIndex = mainSource.indexOf('{navButton("bookkeeping", t.bookkeeping)}');
+const reportsNavIndex = mainSource.indexOf('{navButton("reports", t.reports)}');
+const uploadedNavIndex = mainSource.indexOf('{navButton("uploaded", t.uploaded)}');
+const vatNavIndex = mainSource.indexOf('{navButton("vat", t.vatReport)}');
+const securityNavIndex = mainSource.indexOf('{navButton("security", t.security)}');
+const accountingQualityNavIndex = mainSource.indexOf('{navButton("accountingQuality", t.accountingQuality)}');
+const accountantHandoffNavIndex = mainSource.indexOf('{navButton("accountantHandoff", t.accountantHandoff)}');
 const todoNavIndex = mainSource.indexOf('{navButton("todoList", t.todoList)}');
 
 check("Use-today document exists", exists("docs/anvanda-idag-beslut.md"), "docs/anvanda-idag-beslut.md should exist.");
@@ -77,6 +84,15 @@ check("Roadmap includes use-today command", roadmap.includes("npm run check:use-
 check("Release evidence includes use-today proof", releaseEvidence.includes("check:use-today"), "Release evidence should include the use-today proof.");
 check("Frontend exposes Startklar", mainSource.includes('activeView === "goLive"') && mainSource.includes("Startklar"), "The app should expose Startklar.");
 check("Frontend keeps Startklar near Overview", overviewNavIndex >= 0 && goLiveNavIndex > overviewNavIndex && goLiveNavIndex < todoNavIndex, "Startklar should be visible near Overview after login so the daily gate is easy to find.");
+check("Frontend keeps professional essentials visible", [
+  bookkeepingNavIndex,
+  reportsNavIndex,
+  uploadedNavIndex,
+  vatNavIndex,
+  securityNavIndex,
+  accountingQualityNavIndex,
+  accountantHandoffNavIndex
+].every((index) => index > goLiveNavIndex && index < todoNavIndex), "Bookkeeping, reports, evidence, VAT, security and accountant handoff should be above the long menu after login.");
 check("Frontend exposes Driftcenter", mainSource.includes("operationsCenter") && mainSource.includes("Driftcenter"), "The app should expose Driftcenter.");
 check("Frontend exposes safety views", includesAll(mainSource, ["Sakerhet", "Regelkontroll", "Redovisningskontroll", "Momsrapport"]), "The app should expose the views named in the use-today routine.");
 check("Frontend exposes use-today gate", includesAll(mainSource, ["useTodayGateRows", "Kan jag jobba i AliBooks idag?", "use-today-panel", "use-today-card", "Dagens beslut"]), "Startklar should show the daily local MVP decision inside the app.");

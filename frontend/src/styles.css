@@ -2601,6 +2601,15 @@ textarea {
   gap: 4px;
 }
 
+.nav-section-label {
+  margin: 14px 12px 5px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .nav a,
 .nav-button {
   padding: 12px 14px;

@@ -26411,9 +26411,18 @@ function App() {
           <>
             <button className="create-button" type="button">{t.createNew}</button>
             <nav className="nav">
+              <div className="nav-section-label">{language === "sv" ? "Viktigast" : "Essentials"}</div>
               {navButton("overview", t.overview)}
               {navButton("goLive", t.goLive)}
+              {navButton("bookkeeping", t.bookkeeping)}
+              {navButton("reports", t.reports)}
+              {navButton("uploaded", t.uploaded)}
+              {navButton("vat", t.vatReport)}
+              {navButton("security", t.security)}
+              {navButton("accountingQuality", t.accountingQuality)}
+              {navButton("accountantHandoff", t.accountantHandoff)}
               {navButton("todoList", t.todoList)}
+              <div className="nav-section-label">{language === "sv" ? "Rutiner och kontroll" : "Routines and controls"}</div>
               {navButton("dailyRoutine", t.dailyRoutine)}
               {navButton("monthlyRoutine", t.monthlyRoutine)}
               {navButton("annualRoutine", t.annualRoutine)}
@@ -26431,6 +26440,11 @@ function App() {
               {navButton("closingCenter", t.closingCenter)}
               {navButton("internalControl", t.internalControl)}
               {navButton("taxCenter", t.taxCenter)}
+              {navButton("compliance", t.compliance)}
+              {navButton("financialDiagnostics", t.financialDiagnostics)}
+              {navButton("testFlow", t.testFlow)}
+              {navButton("operationsCenter", t.operationsCenter)}
+              <div className="nav-section-label">{language === "sv" ? "Affar" : "Business"}</div>
               {navButton("customers", t.customers)}
               {navButton("invoices", t.invoices)}
               {navButton("quotes", t.quotes)}
@@ -26442,23 +26456,13 @@ function App() {
               {navButton("services", t.services)}
               {navButton("activities", t.activities)}
               {navButton("analytics", t.analytics)}
-              {navButton("security", t.security)}
-              {navButton("compliance", t.compliance)}
-              {navButton("accountingQuality", t.accountingQuality)}
-              {navButton("financialDiagnostics", t.financialDiagnostics)}
-              {navButton("accountantHandoff", t.accountantHandoff)}
-              {navButton("testFlow", t.testFlow)}
-              {navButton("operationsCenter", t.operationsCenter)}
+              <div className="nav-section-label">{language === "sv" ? "Pengar" : "Money"}</div>
               {navButton("paymentReconciliation", t.paymentReconciliation)}
               {navButton("cashflow", t.cashflow)}
               {navButton("budget", t.budget)}
               {navButton("payroll", t.payroll)}
               {navButton("payments", t.payments)}
-              {navButton("uploaded", t.uploaded)}
-              {navButton("bookkeeping", t.bookkeeping)}
               {navButton("accounts", t.chartOfAccounts)}
-              {navButton("vat", t.vatReport)}
-              {navButton("reports", t.reports)}
               {navButton("settings", t.settings)}
             </nav>
           </>
