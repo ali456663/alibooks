@@ -57,6 +57,7 @@
     "check:audit": "npm --prefix frontend run check:audit --",
     "check:views": "npm --prefix frontend run check:views --",
     "smoke:runtime": "npm --prefix frontend run smoke:runtime --",
-    "test:backend": "npm --prefix frontend run test:backend --"
+    "test:backend": "npm --prefix frontend run test:backend --",
+    "test:integration": "node scripts/backend-integration-test.mjs"
   }
 }

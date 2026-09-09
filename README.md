@@ -66,6 +66,14 @@ npm run dev
 The frontend starts on `http://localhost:5157`.
 The root `package.json` delegates common commands to `frontend`, so `npm run dev`, `npm run doctor`, `npm run check:release` and `npm run test:backend` work from the main AliBooks folder.
 
+`npm run test:integration` runs the backend unit tests and real Spring Boot/PostgreSQL
+integration tests using Docker. It creates an isolated ephemeral database, tests
+transaction rollback and concurrent voucher numbering, and removes the test
+containers afterwards. It never uses the application's `.env` or local database.
+`npm run check:release:full` includes this suite. See
+[database integration tests](docs/database-integration-tests.md) for the 20 cases
+and the remaining limits of this verification.
+
 After larger changes, run the local release gate:
 
 ```bash

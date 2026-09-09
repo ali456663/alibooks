@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isAliBooksRemote } from "./lib/git-remote.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -24,7 +25,7 @@ function includesAll(source, values) {
 }
 
 function gitRemote() {
-  const result = spawnSync("git", ["remote", "-v"], {
+  const result = spawnSync("git", ["remote", "get-url", "origin"], {
     cwd: repoRoot,
     encoding: "utf8",
     shell: false
@@ -45,7 +46,7 @@ const frontendPackage = json("frontend/package.json");
 const remote = gitRemote();
 
 check("CI handoff doc names GitHub repo", includesAll(doc, ["https://github.com/ali456663/alibooks", "GitHub Actions"]), "The user should know exactly where to inspect CI.");
-check("Git remote points to AliBooks repo", remote.includes("https://github.com/ali456663/alibooks.git"), "Local push target should be visible and expected.");
+check("Git remote points to AliBooks repo", isAliBooksRemote(remote), "Origin must identify the AliBooks repository; HTTPS and SSH are supported.");
 check("Doc has exact push flow", includesAll(doc, ["npm run check:release", "npm run check:git -- --strict", "git push", "npm run check:sync"]), "CI handoff should start from a clean local release.");
 check("Doc lists CI jobs", includesAll(doc, ["Backend build and test", "Frontend release gate", "Docker build"]), "The user should know which GitHub jobs must be green.");
 check("Doc lists CI artifacts and summaries", includesAll(doc, ["backend-surefire-reports", "frontend-dist", "GITHUB_STEP_SUMMARY"]), "The user should know where to find downloadable CI evidence and job summaries.");

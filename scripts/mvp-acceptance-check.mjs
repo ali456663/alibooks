@@ -66,7 +66,7 @@ const requiredManualTerms = [
 ];
 
 const requiredBackendTests = [
-  "backend/src/test/java/se/cloudshop/CloudShopApplicationTests.java",
+  "backend/src/test/java/se/cloudshop/CloudShopApplicationIT.java",
   "backend/src/test/java/se/cloudshop/auth/UserServiceTest.java",
   "backend/src/test/java/se/cloudshop/auth/JwtServiceTest.java",
   "backend/src/test/java/se/cloudshop/order/OrderControllerTest.java",

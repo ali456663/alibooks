@@ -32,6 +32,7 @@ import se.cloudshop.supplier.PayablesReportService;
 import se.cloudshop.supplier.SupplierInvoice;
 
 @Service
+@Transactional
 public class AccountingService {
 
   private final AccountRepository accountRepository;

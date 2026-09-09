@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import se.cloudshop.audit.AuditService;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -77,6 +78,7 @@ public class OrderController {
   }
 
   @PostMapping("/orders")
+  @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Order createOrder(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -121,6 +123,7 @@ public class OrderController {
   }
 
   @PostMapping("/invoices")
+  @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Order createInvoice(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -130,6 +133,7 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/sent")
+  @Transactional
   public Order markInvoiceAsSent(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id
@@ -155,6 +159,7 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/paid")
+  @Transactional
   public Order markInvoiceAsPaid(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id,
@@ -202,6 +207,7 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/refund")
+  @Transactional
   public Order markInvoiceRefunded(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id,
@@ -311,6 +317,7 @@ public class OrderController {
   }
 
   @DeleteMapping("/invoices/{id}")
+  @Transactional
   public void deleteInvoice(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id
@@ -336,6 +343,7 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/credit")
+  @Transactional
   public Order createCreditInvoice(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id

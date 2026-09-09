@@ -60,12 +60,25 @@ jobs:
         working-directory: backend
         run: mvn -B test
 
+      - name: Test application startup and accounting transactions
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/alibooks_test
+          TEST_DATABASE_USERNAME: cloudshop
+          TEST_DATABASE_PASSWORD: cloudshop
+          PGPASSWORD: cloudshop
+        run: |
+          createdb -h localhost -U cloudshop alibooks_test
+          mvn -B -Pintegration verify
+
       - name: Upload backend test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-surefire-reports
-          path: backend/target/surefire-reports
+          path: |
+            backend/target/surefire-reports
+            backend/target/failsafe-reports
           if-no-files-found: warn
           retention-days: 14
 

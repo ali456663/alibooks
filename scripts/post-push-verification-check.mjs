@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isAliBooksRemote } from "./lib/git-remote.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -50,7 +51,7 @@ const releaseEvidence = read("docs/release-evidence.md");
 const roadmap = read("docs/roadmap-kvar.md");
 const rootPackage = json("package.json");
 const frontendPackage = json("frontend/package.json");
-const remote = git(["remote", "-v"]);
+const remote = git(["remote", "get-url", "origin"]);
 const status = git(["status", "-sb"]);
 const aheadMatch = status.output.match(/\[ahead\s+(\d+)/);
 const aheadCount = aheadMatch ? Number(aheadMatch[1]) : 0;
@@ -78,7 +79,7 @@ check("CI workflow uploads release evidence", includesAll(ciWorkflow, ["actions/
 check("Dockerhub workflow supports manual and tag release", includesAll(dockerhubWorkflow, ["workflow_dispatch", '"v*"']), "Dockerhub release should be manually runnable and taggable.");
 check("Dockerhub workflow uses secrets", includesAll(dockerhubWorkflow, ["secrets.DOCKERHUB_USERNAME", "secrets.DOCKERHUB_TOKEN"]), "Dockerhub credentials should stay in GitHub secrets.");
 check("Dockerhub workflow publishes traceable tags", includesAll(dockerhubWorkflow, ["type=sha,prefix=sha-", "type=ref,event=tag"]), "Docker images should be traceable to commit/tag.");
-check("Git remote points to AliBooks", remote.ok && remote.output.includes("https://github.com/ali456663/alibooks.git"), "Post-push verifier should check the expected remote.");
+check("Git remote points to AliBooks", remote.ok && isAliBooksRemote(remote.output), "Post-push verifier should check the expected remote.");
 check("Optional pushed-state enforcement is available", doc.includes("--require-pushed") && requirePushed !== undefined, "The verifier should support a strict after-push mode.");
 check("Branch is pushed when strict mode is used", !requirePushed || aheadCount === 0, requirePushed ? `Commits ahead of origin/main: ${aheadCount}.` : "Strict pushed-state check is only enforced with --require-pushed.");
 check("Frontend exposes post-push check", frontendPackage.scripts?.["check:post-push"] === "node ../scripts/post-push-verification-check.mjs", "frontend/package.json should expose npm run check:post-push.");

@@ -1,5 +1,24 @@
 # AliBooks release evidence
 
+## Databasverifiering 2026-09-09
+
+`npm run test:integration` passerade med 203 enhetstester och 20 integrationstester,
+utan fel eller hoppade tester. Det tidigare tomma `contextLoads`-testet har ersatts
+med riktig Spring Boot-start, PostgreSQL 16 och HTTP-kontroll. Testerna provar
+rollback vid databas- och revisionsloggsfel samt samtidiga verifikationsnummer.
+Testdatabasen och containrarna avvecklades efter korningen.
+
+`node --test scripts/git-remote.test.mjs` passerade 10/10 fall. Tva CI-kontroller
+kravde tidigare exakt HTTPS-adress med `.git`; nu accepteras samma repository
+aven utan suffix och via SSH. GitHub Actions for den nya versionen ska verifieras
+efter push. Se [databastesternas omfattning](database-integration-tests.md).
+
+`npm run check:release` passerade ocksa 2026-09-09, inklusive frontend-build,
+runtime-smoke och samtliga befintliga releasekontroller. Dockerbyggen och GitHub
+Actions for denna andring verifieras separat efter push.
+
+Datumen nedan avser tidigare fullstandiga releasekorningar:
+
 Senast komplett lokalt releasebevis: 2026-09-07 21:48 +02:00.
 Senast standard-release och backendtest verifierat: 2026-09-07 21:48 +02:00.
 Senast standard-release efter CI-maintenance verifierat: 2026-08-29 22:07 +02:00.

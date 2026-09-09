@@ -24,6 +24,7 @@ const frontendSteps = [
   ["check:ready", "Check AliBooks readiness"],
   ["check:backend-wiring", "Check backend constructor and record wiring"],
   ["check:git-parser", "Check git status parser regression"],
+  ["test:git-remote", "Test GitHub remote URL handling"],
   ["check:backup", "Check backup and restore readiness"],
   ["check:ci", "Check GitHub Actions pipeline"],
   ["check:ci-handoff", "Check CI handoff after push"],
@@ -104,7 +105,7 @@ for (const [script, label] of frontendSteps) {
 }
 
 if (withBackend) {
-  runNpmScript("test:backend", "Run backend tests");
+  runNpmScript("test:integration", "Run backend unit and PostgreSQL integration tests");
 } else {
   console.log("");
   console.log("Skipping backend tests. Add --with-backend before push or release if you want the full local gate.");
