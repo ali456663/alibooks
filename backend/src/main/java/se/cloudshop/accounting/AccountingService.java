@@ -126,6 +126,14 @@ public class AccountingService {
   }
 
   public void createPaymentEntries(Order invoice, LocalDate paymentDate, int paidAmount) {
+    createPaymentEntries(invoice, paymentDate, paidAmount, "1930");
+  }
+
+  public void createStripeInvoicePaymentEntries(Order invoice, LocalDate paymentDate, int paidAmount) {
+    createPaymentEntries(invoice, paymentDate, paidAmount, "1580");
+  }
+
+  private void createPaymentEntries(Order invoice, LocalDate paymentDate, int paidAmount, String receivedAccount) {
     if ("PAID".equals(invoice.getStatus())) {
       return;
     }
@@ -148,11 +156,11 @@ public class AccountingService {
     int amount = paidAmount;
 
     if (usesCashMethod()) {
-      createCashMethodPaymentEntries(invoice, voucherDate, amount);
+      createCashMethodPaymentEntries(invoice, voucherDate, amount, receivedAccount);
       return;
     }
 
-    Account bank = account("1930");
+    Account bank = account(receivedAccount);
     Account receivables = account("1510");
     String voucherNumber = voucherNumberService.nextVoucherNumber("B");
 
@@ -2886,7 +2894,7 @@ public class AccountingService {
     return "Annual result " + year;
   }
 
-  private void createCashMethodPaymentEntries(Order invoice, LocalDate voucherDate, int paidAmount) {
+  private void createCashMethodPaymentEntries(Order invoice, LocalDate voucherDate, int paidAmount, String receivedAccount) {
     int amount = Math.min(paidAmount, invoice.getRemainingAmount());
     if (amount <= 0) {
       return;
@@ -2896,7 +2904,7 @@ public class AccountingService {
     int netAmount = amount - vatAmount;
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("B");
-    Account bank = account("1930");
+    Account bank = account(receivedAccount);
     Account sales = account("3041");
     Account outputVat = account("2611");
 

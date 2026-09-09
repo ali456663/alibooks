@@ -1,6 +1,6 @@
 package se.cloudshop.payment;
 
-import com.stripe.Stripe;
+import com.stripe.StripeClient;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
@@ -9,6 +9,8 @@ import com.stripe.param.checkout.SessionCreateParams;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.time.Instant;
+import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -62,8 +64,6 @@ public class StripePaymentService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice has no remaining amount to pay.");
     }
 
-    Stripe.apiKey = stripeSecretKey;
-
     SessionCreateParams params = SessionCreateParams.builder()
         .setMode(SessionCreateParams.Mode.PAYMENT)
         .setSuccessUrl(frontendUrl + "?payment=success&invoiceId=" + invoice.getId())
@@ -89,9 +89,9 @@ public class StripePaymentService {
         .build();
 
     try {
-      Session session = Session.create(params);
-      invoice.setStripeCheckoutSessionId(session.getId());
-      orderRepository.save(invoice);
+      Session session = new StripeClient(stripeSecretKey).checkout().sessions().create(params);
+      // Do not merge a detached invoice here: a payment could have arrived during the API call.
+      orderRepository.updateStripeCheckoutSessionId(invoiceId, session.getId());
       return new CheckoutSessionResponse(session.getUrl());
     } catch (StripeException exception) {
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not create Stripe Checkout Session.");
@@ -104,60 +104,85 @@ public class StripePaymentService {
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Stripe webhook secret is not configured.");
     }
 
+    Event event;
+    JsonNode root;
     try {
-      Event event = Webhook.constructEvent(payload, signatureHeader, webhookSecret);
-
-      if (stripeWebhookEventRepository.existsById(event.getId())) {
-        return;
-      }
-
-      if (!"checkout.session.completed".equals(event.getType())) {
-        stripeWebhookEventRepository.save(new StripeWebhookEvent(event.getId(), event.getType()));
-        return;
-      }
-
-      JsonNode root = OBJECT_MAPPER.readTree(payload);
-      JsonNode session = root.path("data").path("object");
-      String invoiceId = session.path("metadata").path("invoiceId").asText();
-
-      if (invoiceId == null || invoiceId.isBlank()) {
-        String clientReferenceId = session.path("client_reference_id").asText();
-        if (isNumeric(clientReferenceId)) {
-          invoiceId = clientReferenceId;
-        }
-      }
-
-      if (invoiceId != null && !invoiceId.isBlank()) {
-        Order invoice = orderRepository.findById(Long.valueOf(invoiceId))
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
-
-        if (!invoice.isCreditInvoice() && !"CREDITED".equals(invoice.getStatus()) && invoice.hasRemainingAmount()) {
-          int paidAmount = invoice.getRemainingAmount();
-          accountingService.createPaymentEntries(invoice, LocalDate.now(), paidAmount);
-          invoice.registerPayment(LocalDate.now(), paidAmount, "Stripe " + event.getId());
-          orderRepository.save(invoice);
-        }
-      } else {
-        int totalAmount = Math.toIntExact(session.path("amount_total").asLong() / 100L);
-        String currency = session.path("currency").asText("sek");
-        if (!"sek".equalsIgnoreCase(currency)) {
-          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only SEK Stripe sales can be booked automatically.");
-        }
-
-        String stripeReference = session.path("payment_intent").asText();
-        if (stripeReference == null || stripeReference.isBlank()) {
-          stripeReference = session.path("id").asText();
-        }
-        accountingService.createStripeExternalSaleEntries(totalAmount, stripeReference, LocalDate.now());
-      }
-
-      stripeWebhookEventRepository.save(new StripeWebhookEvent(event.getId(), event.getType()));
+      event = Webhook.constructEvent(payload, signatureHeader, webhookSecret);
+      root = OBJECT_MAPPER.readTree(payload);
     } catch (Exception exception) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Stripe webhook.");
     }
+
+    if (event.getId() == null || event.getId().isBlank() || event.getType() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe event identity is missing.");
+    }
+    stripeWebhookEventRepository.lockProcessingKey(event.getId());
+    if (stripeWebhookEventRepository.existsById(event.getId())) return;
+
+    if (!"checkout.session.completed".equals(event.getType())
+        && !"checkout.session.async_payment_succeeded".equals(event.getType())) {
+      recordEvent(event);
+      return;
+    }
+    JsonNode session = root.path("data").path("object");
+    if ("unpaid".equals(session.path("payment_status").asText())
+        && "checkout.session.completed".equals(event.getType())) {
+      recordEvent(event); // Delayed payment: only the later paid event may book it.
+      return;
+    }
+    if (!"paid".equals(session.path("payment_status").asText())
+        || !"payment".equals(session.path("mode").asText())) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Stripe session is not a confirmed one-time payment.");
+    }
+    String sessionId = session.path("id").asText();
+    if (!sessionId.startsWith("cs_") || sessionId.length() > 240) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe checkout session identity is missing.");
+    }
+    String sessionKey = "checkout:" + sessionId;
+    stripeWebhookEventRepository.lockProcessingKey(sessionKey);
+    if (stripeWebhookEventRepository.existsById(sessionKey)) {
+      recordEvent(event);
+      return;
+    }
+    if (!"sek".equalsIgnoreCase(session.path("currency").asText())) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Only SEK Stripe sales can be booked automatically.");
+    }
+    JsonNode amount = session.path("amount_total");
+    if (!amount.isIntegralNumber() || !amount.canConvertToLong() || amount.longValue() <= 0
+        || amount.longValue() % 100 != 0 || amount.longValue() / 100 > Integer.MAX_VALUE) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Stripe amount must be positive whole SEK within the supported range. Reconcile minor units manually.");
+    }
+    int paidAmount = Math.toIntExact(amount.longValue() / 100);
+    String invoiceId = session.path("metadata").path("invoiceId").asText();
+    if (invoiceId.isBlank()) invoiceId = session.path("client_reference_id").asText();
+    long id;
+    try {
+      id = Long.parseLong(invoiceId);
+      if (id <= 0) throw new NumberFormatException();
+    } catch (NumberFormatException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Stripe payment requires an AliBooks invoice. External sales require reviewed tax and accounting data.");
+    }
+    orderRepository.lockById(id);
+    Order invoice = orderRepository.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
+    if (invoice.isCreditInvoice() || !("SENT".equals(invoice.getStatus()) || "PARTIALLY_PAID".equals(invoice.getStatus()))
+        || paidAmount > invoice.getRemainingAmount()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Stripe payment conflicts with invoice status or remaining amount. Reconcile manually.");
+    }
+    if (event.getCreated() == null || event.getCreated() <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe event date is missing.");
+    }
+    LocalDate paymentDate = Instant.ofEpochSecond(event.getCreated()).atZone(ZoneId.of("Europe/Stockholm")).toLocalDate();
+    accountingService.createStripeInvoicePaymentEntries(invoice, paymentDate, paidAmount);
+    invoice.registerPayment(paymentDate, paidAmount, "Stripe " + sessionId);
+    orderRepository.save(invoice);
+    stripeWebhookEventRepository.save(new StripeWebhookEvent(sessionKey, "checkout.session.booked"));
+    recordEvent(event);
   }
 
-  private boolean isNumeric(String value) {
-    return value != null && !value.isBlank() && value.chars().allMatch(Character::isDigit);
+  private void recordEvent(Event event) {
+    stripeWebhookEventRepository.save(new StripeWebhookEvent(event.getId(), event.getType()));
   }
 }

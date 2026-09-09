@@ -9,6 +9,13 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -48,6 +55,8 @@ import se.cloudshop.order.OrderRepository;
 import se.cloudshop.product.Product;
 import se.cloudshop.product.ProductRepository;
 import se.cloudshop.settings.SettingsService;
+import se.cloudshop.payment.StripePaymentService;
+import se.cloudshop.payment.StripeWebhookEventRepository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CloudShopApplicationIT {
@@ -60,6 +69,8 @@ class CloudShopApplicationIT {
   @Autowired JournalEntryRepository journal;
   @Autowired AccountingService accounting;
   @Autowired SettingsService settings;
+  @Autowired StripePaymentService stripe;
+  @Autowired StripeWebhookEventRepository stripeEvents;
   @Autowired JwtService jwt;
   @Autowired PlatformTransactionManager transactions;
   @SpyBean AuditService audit;
@@ -81,14 +92,14 @@ class CloudShopApplicationIT {
     registry.add("jwt.secret", () -> "integration-only-secret-with-no-production-access");
     registry.add("spring.mail.host", () -> "");
     registry.add("stripe.secret-key", () -> "");
-    registry.add("stripe.webhook-secret", () -> "");
+    registry.add("stripe.webhook-secret", () -> "integration-only-signing-secret");
   }
 
   @BeforeEach
   void prepare() {
     reset(audit);
     jdbc.execute("DROP TRIGGER IF EXISTS reject_test_credit ON journal_entries");
-    jdbc.execute("TRUNCATE journal_entries, customer_orders, expenses, audit_events RESTART IDENTITY CASCADE");
+    jdbc.execute("TRUNCATE journal_entries, customer_orders, expenses, audit_events, stripe_webhook_events RESTART IDENTITY CASCADE");
     jdbc.update("UPDATE app_settings SET accounting_locked_through_date = NULL, accounting_method = 'INVOICE_METHOD'");
     settings.getSettings();
     product = products.save(new Product("Integration test service", "Test only", 100));
@@ -535,6 +546,196 @@ class CloudShopApplicationIT {
       release.countDown();
       executor.shutdownNow();
       assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
+  @Test
+  void stripeBooksActualPartialAmountToClearingAccount() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    sendStripe(stripeEvent(id, "evt_partial", "cs_partial", 5000));
+    Order saved = orders.findById(id).orElseThrow();
+    assertThat(saved.getPaidAmount()).isEqualTo(50);
+    assertThat(saved.getRemainingAmount()).isEqualTo(75);
+    assertThat(jdbc.queryForObject("SELECT sum(debit) FROM journal_entries WHERE account_number = '1580'", Long.class)).isEqualTo(50);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE account_number = '1930'", Long.class)).isZero();
+    assertThat(stripeEvents.existsById("checkout:cs_partial")).isTrue();
+    assertBalanced();
+  }
+
+  @Test
+  void stripeCashMethodUsesClearingAccountAndInvoiceTax() {
+    jdbc.update("UPDATE app_settings SET accounting_method = 'CASH_METHOD'");
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    sendStripe(stripeEvent(id, "evt_cash", "cs_cash", 12500));
+    assertThat(journal.count()).isEqualTo(3);
+    assertThat(jdbc.queryForObject("SELECT sum(debit) FROM journal_entries WHERE account_number = '1580'", Long.class)).isEqualTo(125);
+    assertThat(jdbc.queryForObject("SELECT sum(credit) FROM journal_entries WHERE account_number = '2611'", Long.class)).isEqualTo(25);
+    assertBalanced();
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {0, -100, 5001, 214748364800L, Long.MAX_VALUE})
+  void stripeRejectsUnsupportedAmountsWithoutWrites(long amount) {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    assertThatThrownBy(() -> sendStripe(stripeEvent(id, "evt_bad_amount", "cs_bad_amount", amount)))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+    assertUnpaidStripeInvoice(id);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"eur", "usd", ""})
+  void stripeRejectsWrongOrMissingCurrency(String currency) {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    ObjectNode event = stripeEvent(id, "evt_currency", "cs_currency", 5000);
+    stripeSession(event).put("currency", currency);
+    assertThatThrownBy(() -> sendStripe(event)).hasMessageContaining("Only SEK");
+    assertUnpaidStripeInvoice(id);
+  }
+
+  @Test
+  void unpaidCheckoutWaitsForAsynchronousSuccess() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    ObjectNode event = stripeEvent(id, "evt_pending", "cs_delayed", 12500);
+    stripeSession(event).put("payment_status", "unpaid");
+    sendStripe(event);
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isZero();
+    assertThat(stripeEvents.existsById("checkout:cs_delayed")).isFalse();
+    ObjectNode success = stripeEvent(id, "evt_success", "cs_delayed", 12500);
+    success.put("type", "checkout.session.async_payment_succeeded");
+    sendStripe(success);
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(125);
+    assertThat(journal.count()).isEqualTo(5);
+  }
+
+  @Test
+  void repeatedEventsAndDifferentEventsForSameSessionDoNotDoubleBook() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    ObjectNode event = stripeEvent(id, "evt_first", "cs_once", 5000);
+    sendStripe(event);
+    sendStripe(event);
+    event.put("id", "evt_second");
+    event.put("type", "checkout.session.async_payment_succeeded");
+    sendStripe(event);
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(50);
+    assertThat(orders.findById(id).orElseThrow().getPayments()).hasSize(1);
+    assertThat(journal.count()).isEqualTo(5);
+  }
+
+  @Test
+  void stripeAndManualPaymentSerializeAgainstSameInvoice() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "bank")),
+        () -> sendStripe(stripeEvent(id, "evt_concurrent", "cs_concurrent", 7500)));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(125);
+    assertThat(orders.findById(id).orElseThrow().getPayments()).hasSize(2);
+    assertThat(journal.count()).isEqualTo(7);
+    assertBalanced();
+  }
+
+  @Test
+  void concurrentStripeEventsForSameSessionOnlyBookOnce() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> sendStripe(stripeEvent(id, "evt_concurrent_first", "cs_same", 5000)),
+        () -> sendStripe(stripeEvent(id, "evt_concurrent_second", "cs_same", 5000)));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(50);
+    assertThat(journal.count()).isEqualTo(5);
+  }
+
+  @Test
+  void staleStripeAmountIsNotClampedToRemainingBalance() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "bank")),
+        () -> assertThatThrownBy(() -> sendStripe(stripeEvent(id, "evt_stale", "cs_stale", 12500)))
+            .hasMessageContaining("Reconcile manually"));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(50);
+    assertThat(stripeEvents.count()).isZero();
+    assertThat(journal.count()).isEqualTo(5);
+  }
+
+  @Test
+  void stripeDatabaseFailureRollsBackAndCanBeRetried() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    ObjectNode event = stripeEvent(id, "evt_retry", "cs_retry", 5000);
+    rejectCreditRows();
+    assertThatThrownBy(() -> sendStripe(event)).isInstanceOf(RuntimeException.class)
+        .isNotInstanceOf(ResponseStatusException.class);
+    assertUnpaidStripeInvoice(id);
+    jdbc.execute("DROP TRIGGER reject_test_credit ON journal_entries");
+    sendStripe(event);
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(50);
+    assertThat(journal.count()).isEqualTo(5);
+  }
+
+  @Test
+  void externalStripeSaleRequiresReviewedInvoiceInsteadOfAssumingVat() {
+    ObjectNode event = stripeEvent(1L, "evt_external", "cs_external", 12500);
+    stripeSession(event).remove("metadata");
+    assertThatThrownBy(() -> sendStripe(event)).hasMessageContaining("External sales require reviewed tax");
+    assertThat(journal.count()).isZero();
+    assertThat(stripeEvents.count()).isZero();
+  }
+
+  @Test
+  void invalidStripeSignatureCannotWriteAnything() {
+    ObjectNode event = stripeEvent(1L, "evt_forged", "cs_forged", 12500);
+    assertThatThrownBy(() -> stripe.handleWebhook(event.toString(), "t=1,v1=invalid"))
+        .hasMessageContaining("Invalid Stripe webhook");
+    assertThat(journal.count()).isZero();
+    assertThat(stripeEvents.count()).isZero();
+  }
+
+  @Test
+  void checkoutSessionUpdateDoesNotOverwriteRecordedPayment() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "bank"));
+    orders.updateStripeCheckoutSessionId(id, "cs_new");
+    Order saved = orders.findById(id).orElseThrow();
+    assertThat(saved.getPaidAmount()).isEqualTo(50);
+    assertThat(saved.getStatus()).isEqualTo("PARTIALLY_PAID");
+    assertThat(saved.getPayments()).hasSize(1);
+  }
+
+  private void assertUnpaidStripeInvoice(Long id) {
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(3);
+    assertThat(stripeEvents.count()).isZero();
+  }
+
+  private ObjectNode stripeEvent(Long invoiceId, String eventId, String sessionId, long amount) {
+    ObjectNode event = new ObjectMapper().createObjectNode();
+    event.put("id", eventId);
+    event.put("object", "event");
+    event.put("type", "checkout.session.completed");
+    event.put("created", Instant.now().getEpochSecond());
+    ObjectNode session = event.putObject("data").putObject("object");
+    session.put("id", sessionId);
+    session.put("object", "checkout.session");
+    session.put("mode", "payment");
+    session.put("payment_status", "paid");
+    session.put("currency", "sek");
+    session.put("amount_total", amount);
+    session.putObject("metadata").put("invoiceId", invoiceId.toString());
+    return event;
+  }
+
+  private ObjectNode stripeSession(ObjectNode event) {
+    return (ObjectNode) event.path("data").path("object");
+  }
+
+  private void sendStripe(ObjectNode event) {
+    String payload = event.toString();
+    long timestamp = Instant.now().getEpochSecond();
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec("integration-only-signing-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+      String signature = HexFormat.of().formatHex(mac.doFinal((timestamp + "." + payload).getBytes(StandardCharsets.UTF_8)));
+      stripe.handleWebhook(payload, "t=" + timestamp + ",v1=" + signature);
+    } catch (java.security.GeneralSecurityException exception) {
+      throw new IllegalStateException(exception);
     }
   }
 

@@ -80,7 +80,7 @@ databas, API, berakningar, bankimport och Stripe innan decimalbelopp kan anvanda
 
 Detta ar tekniska regressionstester, inte ett intyg om att hela systemet ar klart.
 Granska fortfarande samtidiga betalningar mot samma faktura fran olika kanaler
-(Stripe, e-postfloden och andra skrivare anvander inte det nya manuella radlaset),
+(e-postfloden och andra skrivare anvander inte fakturaradlaset),
 Stripe-belopp och avrundning, e-postleverans tillsammans med databasfel samt
 aterlasning av bade databas och uppladdade underlag. Dessa floden bevisas inte av
 testet for samtidiga verifikationsnummer. Kontroller som bara letar efter text i
@@ -89,9 +89,10 @@ koden bevisar inte att berakningar eller affarsfloden fungerar vid korning.
 Molndrift, backup/restore och externa betalnings- och e-postintegrationer behover
 separata testbevis enligt befintligt go-live-riskregister.
 
-Prioriterad kodrisk: `StripePaymentService.handleWebhook` anvander fortfarande
-fakturans restbelopp som betalning i stallet for att stamma av sessionens
-`amount_total` och `payment_status`. For extern forsaljning divideras minor units
-med 100. Aktivera inte skarp automatisk Stripe-bokforing utifran enbart de manuella
-betalningstesternas resultat. Webhook-validering, oren och samtidiga kanaler
-behover egna beteendetester och korrigeringar.
+Stripe-hardningen kontrollerar nu `amount_total`, `payment_status`, valuta och
+fakturastatus. Belopp med oren avvisas i stallet for att trunkeras. Syntetiskt
+signerade webhook-tester provar verklig databas, dubbletter, fordrojda betalningar,
+konflikt med manuell betalning och rollback/retry. Detta ersatter inte ett riktigt
+Stripe-testmode-prov fran hemsidan genom webhook till avstamning av utbetalning.
+
+Se [Stripe-kontrakt och kvarvarande blockerare](stripe-booking-safety.md).

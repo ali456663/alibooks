@@ -1,5 +1,18 @@
 # AliBooks release evidence
 
+## Stripe-hardning 2026-09-09
+
+`npm run test:integration` passerade med 203 enhetstester och 73 integrationstestfall,
+utan fel eller hoppade tester. De 19 nya fallen anvander syntetiskt signerade
+Stripe-handelser och riktig isolerad PostgreSQL. De provar faktiskt delbetalt
+belopp, avrakningskonto 1580, kontantmetoden, ogiltiga belopp/valutor, fordrojd
+betalning, event- och sessionsdubbletter, samtidighet med manuella betalningar,
+rollback/retry och avvisning av externa kop utan granskat fakturaunderlag.
+
+`npm run check:release` passerade inklusive build och browser-smoke. Inga riktiga
+betalningar, Stripe API-anrop eller kundmejl anvandes i dessa tester.
+GitHub Actions verifieras efter push. [Kontrakt och skarpa blockerare](stripe-booking-safety.md).
+
 ## Betalningskontroller 2026-09-09
 
 `npm run test:integration` passerade med 203 enhetstester och 54
