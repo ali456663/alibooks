@@ -1,5 +1,20 @@
 # AliBooks release evidence
 
+## Betalningskontroller 2026-09-09
+
+`npm run test:integration` passerade med 203 enhetstester och 54
+integrationstestfall: inga fel och inga hoppade tester. De 34 nya fallen provar
+ogiltiga belopp, standardbelopp, datum, saknad faktura, samtidiga manuella
+betalningar/aterbetalningar/krediteringar och strikt JSON-inlasning via HTTP.
+Testdatabas och containrar avvecklades efter korningen.
+
+`npm run check:release` passerade for frontendandringen, inklusive build och
+webblasarsmoke. De nya integrationstesterna kors av befintlig CI-profil.
+GitHub Actions for denna andring ska kontrolleras efter push.
+
+Detta ar inte ett godkannande for skarp automatisk Stripe-bokforing eller belopp
+med oren. Se kvarvarande risker i [databastesternas omfattning](database-integration-tests.md).
+
 ## Databasverifiering 2026-09-09
 
 `npm run test:integration` passerade med 203 enhetstester och 20 integrationstester,

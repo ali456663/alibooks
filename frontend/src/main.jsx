@@ -6290,7 +6290,7 @@ function App() {
     const paymentDate = paymentOverride.paymentDate || paymentDates[id] || new Date().toISOString().slice(0, 10);
     const invoiceToPay = invoices.find((item) => item.id === id);
     const remainingAmount = invoiceRemainingAmount(invoiceToPay || {});
-    const paidAmount = Number(paymentOverride.paidAmount || paymentAmounts[id] || remainingAmount);
+    const paidAmount = Number(paymentOverride.paidAmount ?? paymentAmounts[id] ?? remainingAmount);
     const paymentReference = paymentOverride.paymentReference || paymentReferences[id] || "";
 
     if (status.toLowerCase() === "sent" && invoiceToPay && !invoiceCanBeMarkedSent(invoiceToPay)) {
@@ -6318,8 +6318,8 @@ function App() {
       return;
     }
 
-    if (isPaid && paidAmount <= 0) {
-      setError(language === "sv" ? "Betalt belopp maste vara storre an 0." : "Paid amount must be greater than 0.");
+    if (isPaid && (!Number.isSafeInteger(paidAmount) || paidAmount <= 0)) {
+      setError(language === "sv" ? "Ange ett positivt betalningsbelopp i hela kronor." : "Enter a positive payment amount in whole SEK.");
       return;
     }
 
@@ -6358,7 +6358,7 @@ function App() {
     const id = item?.id;
     const refundableAmount = invoiceRefundableAmount(item || {});
     const refundDate = refundDates[id] || new Date().toISOString().slice(0, 10);
-    const refundAmount = Number(refundAmounts[id] || refundableAmount);
+    const refundAmount = Number(refundAmounts[id] ?? refundableAmount);
     const refundReference = refundReferences[id] || "";
 
     if (!id) {
@@ -6380,8 +6380,8 @@ function App() {
       return;
     }
 
-    if (refundAmount <= 0) {
-      setError(language === "sv" ? "Aterbetalningsbelopp maste vara storre an 0." : "Refund amount must be greater than 0.");
+    if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0) {
+      setError(language === "sv" ? "Ange ett positivt aterbetalningsbelopp i hela kronor." : "Enter a positive refund amount in whole SEK.");
       return;
     }
 
@@ -35779,7 +35779,7 @@ function App() {
                                   min="1"
                                   max={invoiceRefundableAmount(item)}
                                   step="1"
-                                  value={refundAmounts[item.id] || invoiceRefundableAmount(item)}
+                                  value={refundAmounts[item.id] ?? invoiceRefundableAmount(item)}
                                   onChange={(event) => setRefundAmounts({ ...refundAmounts, [item.id]: event.target.value })}
                                   disabled={!token}
                                 />
@@ -35844,7 +35844,7 @@ function App() {
                         {language === "sv" ? "Belopp" : "Amount"}
                         <input
                           type="number"
-                          value={paymentAmounts[item.id] || invoiceRemainingAmount(item)}
+                          value={paymentAmounts[item.id] ?? invoiceRemainingAmount(item)}
                           onChange={(event) => setPaymentAmounts({ ...paymentAmounts, [item.id]: event.target.value })}
                           disabled={!token || !invoiceCanReceivePayment(item)}
                         />

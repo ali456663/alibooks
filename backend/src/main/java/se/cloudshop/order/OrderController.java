@@ -139,6 +139,7 @@ public class OrderController {
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
@@ -166,6 +167,7 @@ public class OrderController {
       @RequestBody(required = false) MarkInvoicePaidRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
@@ -186,10 +188,14 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be before invoice date.");
     }
 
-    int paidAmount = request == null || request.paidAmount() == null || request.paidAmount() <= 0
+    int paidAmount = request == null || request.paidAmount() == null
         ? order.getRemainingAmount()
         : request.paidAmount();
     String paymentReference = request == null ? null : request.paymentReference();
+
+    if (paidAmount <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount must be greater than zero.");
+    }
 
     if (paidAmount > order.getRemainingAmount()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount cannot be greater than remaining amount.");
@@ -214,6 +220,7 @@ public class OrderController {
       @RequestBody(required = false) MarkInvoiceRefundRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
@@ -230,10 +237,14 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund date cannot be before invoice date.");
     }
 
-    int refundAmount = request == null || request.refundAmount() == null || request.refundAmount() <= 0
+    int refundAmount = request == null || request.refundAmount() == null
         ? order.getRefundableAmount()
         : request.refundAmount();
     String refundReference = request == null ? null : request.refundReference();
+
+    if (refundAmount <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund amount must be greater than zero.");
+    }
 
     if (refundAmount > order.getRefundableAmount()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund amount cannot be greater than refundable amount.");
@@ -323,6 +334,7 @@ public class OrderController {
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
@@ -349,6 +361,7 @@ public class OrderController {
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order original = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 

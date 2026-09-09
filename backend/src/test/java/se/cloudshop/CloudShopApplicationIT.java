@@ -15,11 +15,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -294,6 +300,237 @@ class CloudShopApplicationIT {
       assertThat(first.get(15, TimeUnit.SECONDS)).isNotEqualTo(second.get(15, TimeUnit.SECONDS));
       assertThat(journal.count()).isEqualTo(4);
       assertBalanced();
+    } finally {
+      release.countDown();
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, -1, Integer.MIN_VALUE, Integer.MAX_VALUE})
+  void invalidPaymentAmountLeavesInvoiceAndJournalUnchanged(int amount) {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    long auditCount = auditCount();
+    assertThatThrownBy(() -> invoices.markInvoiceAsPaid(authorization, id,
+        new MarkInvoicePaidRequest(LocalDate.now(), amount, "invalid")))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(3);
+    assertThat(auditCount()).isEqualTo(auditCount);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM invoice_payments", Long.class)).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, -1, Integer.MIN_VALUE, Integer.MAX_VALUE})
+  void invalidRefundAmountLeavesInvoiceAndJournalUnchanged(int amount) {
+    Long id = refundableInvoice();
+    long entries = journal.count();
+    long auditCount = auditCount();
+    assertThatThrownBy(() -> invoices.markInvoiceRefunded(authorization, id,
+        new MarkInvoiceRefundRequest(LocalDate.now(), amount, "invalid")))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(orders.findById(id).orElseThrow().getRefundedAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(entries);
+    assertThat(auditCount()).isEqualTo(auditCount);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void omittedPaymentAmountUsesOnlyRemainingBalance(boolean omitBody) {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "first"));
+    invoices.markInvoiceAsPaid(authorization, id,
+        omitBody ? null : new MarkInvoicePaidRequest(null, null, "remaining"));
+    Order saved = orders.findById(id).orElseThrow();
+    assertThat(saved.getPaidAmount()).isEqualTo(125);
+    assertThat(saved.getStatus()).isEqualTo("PAID");
+    assertThat(saved.getPayments()).extracting(payment -> payment.getAmount()).containsExactlyInAnyOrder(50, 75);
+    assertThat(journal.count()).isEqualTo(7);
+    assertBalanced();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void omittedRefundAmountUsesOnlyRefundableBalance(boolean omitBody) {
+    Long id = refundableInvoice();
+    invoices.markInvoiceRefunded(authorization, id, new MarkInvoiceRefundRequest(LocalDate.now(), 50, "first"));
+    invoices.markInvoiceRefunded(authorization, id,
+        omitBody ? null : new MarkInvoiceRefundRequest(null, null, "remaining"));
+    Order saved = orders.findById(id).orElseThrow();
+    assertThat(saved.getRefundedAmount()).isEqualTo(125);
+    assertThat(saved.getRefundableAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(12);
+    assertBalanced();
+  }
+
+  @Test
+  void paymentBeforeInvoiceDateLeavesNoWrites() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    assertThatThrownBy(() -> invoices.markInvoiceAsPaid(authorization, id,
+        new MarkInvoicePaidRequest(LocalDate.now().minusDays(1), 50, "early")))
+        .hasMessageContaining("before invoice date");
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(3);
+  }
+
+  @Test
+  void refundBeforeInvoiceDateLeavesNoWrites() {
+    Long id = refundableInvoice();
+    long entries = journal.count();
+    assertThatThrownBy(() -> invoices.markInvoiceRefunded(authorization, id,
+        new MarkInvoiceRefundRequest(LocalDate.now().minusDays(1), 50, "early")))
+        .hasMessageContaining("before invoice date");
+    assertThat(orders.findById(id).orElseThrow().getRefundedAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(entries);
+  }
+
+  @Test
+  void concurrentPartialPaymentsKeepBothAmounts() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "first")),
+        () -> invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 75, "second")));
+    Order saved = orders.findById(id).orElseThrow();
+    assertThat(saved.getPaidAmount()).isEqualTo(125);
+    assertThat(saved.getPayments()).hasSize(2);
+    assertThat(saved.getStatus()).isEqualTo("PAID");
+    assertThat(journal.count()).isEqualTo(7);
+    assertBalanced();
+  }
+
+  @Test
+  void concurrentDuplicatePaymentIsRejectedAfterFirstCommit() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    var payment = new MarkInvoicePaidRequest(LocalDate.now(), 50, "same");
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceAsPaid(authorization, id, payment),
+        () -> assertThatThrownBy(() -> invoices.markInvoiceAsPaid(authorization, id, payment))
+            .isInstanceOfSatisfying(ResponseStatusException.class,
+                error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(50);
+    assertThat(orders.findById(id).orElseThrow().getPayments()).hasSize(1);
+    assertThat(journal.count()).isEqualTo(5);
+    assertBalanced();
+  }
+
+  @Test
+  void concurrentPaymentsCannotExceedInvoiceBalance() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 75, "first")),
+        () -> assertThatThrownBy(() -> invoices.markInvoiceAsPaid(authorization, id,
+            new MarkInvoicePaidRequest(LocalDate.now(), 75, "second")))
+            .hasMessageContaining("greater than remaining amount"));
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isEqualTo(75);
+    assertThat(journal.count()).isEqualTo(5);
+    assertBalanced();
+  }
+
+  @Test
+  void concurrentRefundsCannotExceedPaidAmount() throws Exception {
+    Long id = refundableInvoice();
+    long entries = journal.count();
+    afterUncommittedWrite(
+        () -> invoices.markInvoiceRefunded(authorization, id, new MarkInvoiceRefundRequest(LocalDate.now(), 75, "first")),
+        () -> assertThatThrownBy(() -> invoices.markInvoiceRefunded(authorization, id,
+            new MarkInvoiceRefundRequest(LocalDate.now(), 75, "second")))
+            .hasMessageContaining("greater than refundable amount"));
+    assertThat(orders.findById(id).orElseThrow().getRefundedAmount()).isEqualTo(75);
+    assertThat(journal.count()).isEqualTo(entries + 2);
+    assertBalanced();
+  }
+
+  @Test
+  void concurrentCreditRequestsCreateOnlyOneCreditInvoice() throws Exception {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    afterUncommittedWrite(
+        () -> invoices.createCreditInvoice(authorization, id),
+        () -> assertThatThrownBy(() -> invoices.createCreditInvoice(authorization, id))
+            .hasMessageContaining("already credited"));
+    assertThat(orders.count()).isEqualTo(2);
+    assertThat(journal.count()).isEqualTo(6);
+    assertBalanced();
+  }
+
+  @Test
+  void paymentForMissingInvoiceReturnsNotFoundWithoutWrites() {
+    assertThatThrownBy(() -> invoices.markInvoiceAsPaid(authorization, Long.MAX_VALUE, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    assertThat(journal.count()).isZero();
+    assertThat(auditCount()).isZero();
+  }
+
+  private long auditCount() {
+    return jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0.5", "50.9", "\"50\"", "true", "{}", "[]", "2147483648"})
+  void httpPaymentRejectsCoercionWithoutBooking(String amountJson) {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    assertThat(http.postForEntity("/invoices/" + id + "/paid",
+        jsonRequest("{\"paidAmount\":" + amountJson + "}"), String.class).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(orders.findById(id).orElseThrow().getPaidAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(3);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0.5", "50.9", "\"50\"", "true", "{}", "[]", "2147483648"})
+  void httpRefundRejectsCoercionWithoutBooking(String amountJson) {
+    Long id = refundableInvoice();
+    long entries = journal.count();
+    assertThat(http.postForEntity("/invoices/" + id + "/refund",
+        jsonRequest("{\"refundAmount\":" + amountJson + "}"), String.class).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(orders.findById(id).orElseThrow().getRefundedAmount()).isZero();
+    assertThat(journal.count()).isEqualTo(entries);
+  }
+
+  private HttpEntity<String> jsonRequest(String body) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    return new HttpEntity<>(body, headers);
+  }
+
+  private Long refundableInvoice() {
+    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 125, "paid"));
+    invoices.createCreditInvoice(authorization, id);
+    return id;
+  }
+
+  private void afterUncommittedWrite(Runnable firstWrite, Runnable secondWrite) throws Exception {
+    var executor = Executors.newFixedThreadPool(2);
+    var written = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var started = new CountDownLatch(1);
+    try {
+      var first = executor.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+        firstWrite.run();
+        written.countDown();
+        try {
+          if (!release.await(15, TimeUnit.SECONDS)) throw new IllegalStateException("Test release timed out");
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException(exception);
+        }
+      }));
+      assertThat(written.await(15, TimeUnit.SECONDS)).isTrue();
+      var second = executor.submit(() -> {
+        started.countDown();
+        secondWrite.run();
+      });
+      assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+      release.countDown();
+      first.get(15, TimeUnit.SECONDS);
+      second.get(15, TimeUnit.SECONDS);
     } finally {
       release.countDown();
       executor.shutdownNow();

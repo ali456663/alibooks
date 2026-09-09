@@ -41,6 +41,24 @@ Kontrollerna laser databasen efter att produktionskodens transaktion avslutats.
 Skrivfel framkallas med en PostgreSQL-trigger efter forsta debetraden. Fel i
 revisionsloggen framkallas separat for att testa hela affarsoperationens rollback.
 
+## Betalningsskydd: ytterligare 34 testfall
+
+- Fyra ogiltiga betalningsbelopp: noll, negativt, minsta och storsta Java-heltal.
+- Samma fyra ogiltiga belopp for aterbetalningar.
+- Utelamnat belopp respektive utelamnad body anvander endast kvarvarande saldo,
+  bade for betalning och aterbetalning (fyra fall).
+- Betalningsdatum och aterbetalningsdatum fore fakturadatum nekas (tva fall).
+- Fem samtidighetstest: tva delbetalningar, identisk betalning, overbetalning,
+  for stor sammanlagd aterbetalning och dubbel kreditering.
+- Betalning mot saknad faktura ger 404 utan bokforingsrader.
+- Sju JSON-varden som inte far omvandlas till betalningsbelopp provas via HTTP:
+  0.5, 50.9, text, booleskt varde, objekt, lista och heltal utanfor Integer.
+  Samma sju fall provas for aterbetalningar.
+
+Samtidighetstesterna haller den forsta transaktionen oppen tills det andra
+anropet vantar. Darefter kontrolleras sparat saldo, historik och verifikat.
+De provar manuella API-operationer, inte bankens faktiska overforing av pengar.
+
 ## Andringarna
 
 Bokforingstjansten och fakturornas lokala skrivoperationer har gemensamma
@@ -48,10 +66,21 @@ transaktioner. Kostnadsskapande inkluderar bade kostnad, verifikat och revisions
 Verifikationsnummer reserveras med ett PostgreSQL advisory transaction lock per
 serie, som slapps vid commit eller rollback. Ingen ny produktionstabell behovs.
 
+Manuell betalning, aterbetalning, kreditering, skickad-markering och radering
+laser fakturaraden med PostgreSQL FOR UPDATE innan saldo och status lases.
+Laset kraver en aktiv transaktion och slapps vid commit eller rollback.
+Noll och negativa belopp nekas i stallet for att tolkas som full betalning.
+Betalnings- och aterbetalnings-API:erna avvisar decimaler och JSON-typkonvertering.
+Frontend behaller uttryckliga noll/tomma varden och stoppar ogiltiga belopp.
+
+Nuvarande beloppsmodell ar hela SEK. Stod for oren maste byggas konsekvent i
+databas, API, berakningar, bankimport och Stripe innan decimalbelopp kan anvandas.
+
 ## Kvar fore skarp anvandning
 
 Detta ar tekniska regressionstester, inte ett intyg om att hela systemet ar klart.
-Granska fortfarande samtidiga betalningar mot samma faktura fran olika kanaler,
+Granska fortfarande samtidiga betalningar mot samma faktura fran olika kanaler
+(Stripe, e-postfloden och andra skrivare anvander inte det nya manuella radlaset),
 Stripe-belopp och avrundning, e-postleverans tillsammans med databasfel samt
 aterlasning av bade databas och uppladdade underlag. Dessa floden bevisas inte av
 testet for samtidiga verifikationsnummer. Kontroller som bara letar efter text i
@@ -59,3 +88,10 @@ koden bevisar inte att berakningar eller affarsfloden fungerar vid korning.
 
 Molndrift, backup/restore och externa betalnings- och e-postintegrationer behover
 separata testbevis enligt befintligt go-live-riskregister.
+
+Prioriterad kodrisk: `StripePaymentService.handleWebhook` anvander fortfarande
+fakturans restbelopp som betalning i stallet for att stamma av sessionens
+`amount_total` och `payment_status`. For extern forsaljning divideras minor units
+med 100. Aktivera inte skarp automatisk Stripe-bokforing utifran enbart de manuella
+betalningstesternas resultat. Webhook-validering, oren och samtidiga kanaler
+behover egna beteendetester och korrigeringar.

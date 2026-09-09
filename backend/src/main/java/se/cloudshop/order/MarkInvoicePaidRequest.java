@@ -1,10 +1,11 @@
 package se.cloudshop.order;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.LocalDate;
 
 public record MarkInvoicePaidRequest(
     LocalDate paymentDate,
-    Integer paidAmount,
+    @JsonDeserialize(using = WholeKronaAmountDeserializer.class) Integer paidAmount,
     String paymentReference
 ) {
 }
