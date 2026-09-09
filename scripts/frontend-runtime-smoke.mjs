@@ -100,6 +100,23 @@ async function evaluateJson(send, expression) {
   return JSON.parse(result.result?.result?.value || "{}");
 }
 
+async function waitForRenderedShell(send) {
+  const deadline = Date.now() + 25000;
+  let state = {};
+  while (Date.now() < deadline) {
+    state = await evaluateJson(send, `JSON.stringify({
+      reloading: Boolean(window.__alibooksSmokeReloadPending),
+      mounted: Boolean(document.querySelector('.app-shell .auth-entry')),
+      crashed: Boolean(document.querySelector('.app-crash-fallback')),
+      readyState: document.readyState,
+      text: document.body?.innerText.slice(0, 1200) || ''
+    })`);
+    if (!state.reloading && (state.mounted || state.crashed)) return;
+    await sleep(200);
+  }
+  throw new Error(`AliBooks did not finish rendering within 25 seconds: ${JSON.stringify(state)}`);
+}
+
 async function main() {
   let devServer = null;
   let chrome = null;
@@ -169,7 +186,7 @@ async function main() {
     }
     const { ws, send } = await connectToAliBooksPage();
     await send("Runtime.enable");
-    await sleep(1500);
+    await waitForRenderedShell(send);
 
     const expression = `JSON.stringify({
       title: document.title,
@@ -216,10 +233,11 @@ async function main() {
       localStorage.removeItem('alibooks-token');
       localStorage.removeItem('alibooks-email');
       localStorage.setItem('alibooks-active-view', 'customers');
+      window.__alibooksSmokeReloadPending = true;
       location.reload();
       return { seededSavedView: 'customers' };
     })())`);
-    await sleep(2000);
+    await waitForRenderedShell(send);
 
     const loggedOutSavedViewRecovery = await evaluateJson(send, `JSON.stringify({
       activeView: localStorage.getItem('alibooks-active-view'),

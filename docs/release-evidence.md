@@ -13,6 +13,11 @@ rollback/retry och avvisning av externa kop utan granskat fakturaunderlag.
 betalningar, Stripe API-anrop eller kundmejl anvandes i dessa tester.
 GitHub Actions verifieras efter push. [Kontrakt och skarpa blockerare](stripe-booking-safety.md).
 
+CI-uppfoljning: frontend-smoke laste en annu tom sida efter en fast vantetid.
+Smoke vantar nu upp till 25 sekunder pa monterad auth-vy eller crash-fallback,
+aven efter reload. De befintliga kontrollerna for blank sida, inloggningsskydd
+och aterstallning behalls. Lokal `npm run smoke:runtime` passerade efter fixen.
+
 ## Betalningskontroller 2026-09-09
 
 `npm run test:integration` passerade med 203 enhetstester och 54
