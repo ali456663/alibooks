@@ -112,6 +112,19 @@ jobs:
         working-directory: frontend
         run: npm run check:audit
 
+      - name: Install pinned headless test browser
+        env:
+          CHROME_TEST_VERSION: "153.0.8010.36"
+        run: |
+          curl --fail --location --retry 3 \
+            "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_TEST_VERSION}/linux64/chrome-headless-shell-linux64.zip" \
+            --output "$RUNNER_TEMP/alibooks-headless.zip"
+          unzip -q "$RUNNER_TEMP/alibooks-headless.zip" -d "$RUNNER_TEMP/alibooks-browser"
+          browser="$RUNNER_TEMP/alibooks-browser/chrome-headless-shell-linux64/chrome-headless-shell"
+          test -x "$browser"
+          "$browser" --version
+          echo "CHROME_PATH=$browser" >> "$GITHUB_ENV"
+
       - name: Run frontend release gate
         working-directory: frontend
         run: npm run check:release

@@ -17,6 +17,9 @@ CI-uppfoljning: frontend-smoke laste en annu tom sida efter en fast vantetid.
 Smoke vantar nu upp till 25 sekunder pa monterad auth-vy eller crash-fallback,
 aven efter reload. De befintliga kontrollerna for blank sida, inloggningsskydd
 och aterstallning behalls. Lokal `npm run smoke:runtime` passerade efter fixen.
+En separat CI-starttimeout i system-Chrome ledde till att CI nu installerar
+versionslast Chrome Headless Shell 153.0.8010.36 fran Googles Chrome for Testing.
+Detta paverkar inte anvandarens lokala Chrome-installation.
 
 ## Betalningskontroller 2026-09-09
 

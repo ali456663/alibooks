@@ -11,8 +11,9 @@ inte avstamning av verkliga underlag, belopp, moms och backup/aterlasning.
   `checkout.session.async_payment_succeeded`-handelsen.
 - `amount_total` maste vara positivt, inom heltalsgransen och i SEK. Belopp med
   oren nekas; de avrundas aldrig tyst.
-- Fakturan identifieras med metadata `invoiceId` eller den tidigare kompatibla
-  numeriska `client_reference_id`. Anvand inte kundnummer i detta falt.
+- Fakturan identifieras endast med metadata `invoiceId`, som AliBooks satter vid
+  Checkout-skapandet. `client_reference_id` far inte ensam koppla ett webbkop till
+  en faktura: faltet kan innehalla ett kundnummer eller annan extern referens.
 - Fakturan maste vara skickad eller delbetald. Belopp storre an restsaldot nekas
   for manuell avstamning; de krymps inte till restsaldot.
 - Betalningen bokfors mot 1580 enligt befintligt Stripe-avrakningsflode.

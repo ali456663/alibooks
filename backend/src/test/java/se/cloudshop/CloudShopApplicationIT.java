@@ -674,6 +674,7 @@ class CloudShopApplicationIT {
   void externalStripeSaleRequiresReviewedInvoiceInsteadOfAssumingVat() {
     ObjectNode event = stripeEvent(1L, "evt_external", "cs_external", 12500);
     stripeSession(event).remove("metadata");
+    stripeSession(event).put("client_reference_id", "1");
     assertThatThrownBy(() -> sendStripe(event)).hasMessageContaining("External sales require reviewed tax");
     assertThat(journal.count()).isZero();
     assertThat(stripeEvents.count()).isZero();

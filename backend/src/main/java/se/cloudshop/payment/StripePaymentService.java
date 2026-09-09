@@ -155,7 +155,6 @@ public class StripePaymentService {
     }
     int paidAmount = Math.toIntExact(amount.longValue() / 100);
     String invoiceId = session.path("metadata").path("invoiceId").asText();
-    if (invoiceId.isBlank()) invoiceId = session.path("client_reference_id").asText();
     long id;
     try {
       id = Long.parseLong(invoiceId);
