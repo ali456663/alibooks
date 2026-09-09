@@ -11,10 +11,6 @@ const smokeUrl = process.env.ALIBOOKS_SMOKE_URL || "http://127.0.0.1:5157/?reset
 const debugPort = Number(process.env.ALIBOOKS_SMOKE_DEBUG_PORT || 9333);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function npmCommand() {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
-}
-
 function chromeCandidates() {
   return [
     process.env.CHROME_PATH,
@@ -62,7 +58,7 @@ async function connectToAliBooksPage() {
 
   const target = targets.find((item) => (
     item.type === "page"
-    && (item.url.startsWith("http://127.0.0.1:5157") || item.url.startsWith("http://localhost:5157"))
+    && item.url.startsWith(new URL(smokeUrl).origin)
   ));
 
   if (!target?.webSocketDebuggerUrl) {
@@ -107,10 +103,15 @@ async function evaluateJson(send, expression) {
 async function main() {
   let devServer = null;
   let chrome = null;
+  let chromeDiagnostics = "";
 
   try {
     if (!(await urlResponds(smokeUrl))) {
-      devServer = spawn(npmCommand(), ["run", "dev"], {
+      // Start Vite directly so cleanup owns the server process on Windows and Linux.
+      devServer = spawn(process.execPath, [
+        path.join(frontendDir, "node_modules", "vite", "bin", "vite.js"),
+        "--host", "::", "--port", new URL(smokeUrl).port || "5157", "--strictPort"
+      ], {
         cwd: frontendDir,
         env: { ...process.env, BROWSER: "none" },
         stdio: ["ignore", "pipe", "pipe"]
@@ -118,6 +119,7 @@ async function main() {
 
       devServer.stdout.on("data", (chunk) => process.stdout.write(chunk));
       devServer.stderr.on("data", (chunk) => process.stderr.write(chunk));
+      devServer.on("error", (error) => process.stderr.write(`Vite startup failed: ${error.message}\n`));
 
       if (!(await waitForUrl(smokeUrl))) {
         throw new Error(`Vite did not respond at ${smokeUrl}`);
@@ -144,9 +146,27 @@ async function main() {
       `--remote-debugging-port=${debugPort}`,
       `--user-data-dir=${profile}`,
       smokeUrl
-    ], { stdio: "ignore" });
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    chrome.stderr.on("data", (chunk) => {
+      chromeDiagnostics = (chromeDiagnostics + String(chunk)).slice(-4000);
+    });
+    chrome.on("error", (error) => {
+      chromeDiagnostics = error.message;
+    });
 
-    await sleep(5000);
+    const browserDeadline = Date.now() + 30000;
+    let browserReady = false;
+    while (Date.now() < browserDeadline) {
+      if (await urlResponds(`http://127.0.0.1:${debugPort}/json/version`)) {
+        browserReady = true;
+        break;
+      }
+      if (chrome.exitCode !== null || chrome.signalCode !== null) break;
+      await sleep(250);
+    }
+    if (!browserReady) {
+      throw new Error(`Chrome did not start its debugging endpoint. Executable: ${chromePath}. Exit: ${chrome.exitCode}. ${chromeDiagnostics}`);
+    }
     const { ws, send } = await connectToAliBooksPage();
     await send("Runtime.enable");
     await sleep(1500);

@@ -17,6 +17,14 @@ efter push. Se [databastesternas omfattning](database-integration-tests.md).
 runtime-smoke och samtliga befintliga releasekontroller. Dockerbyggen och GitHub
 Actions for denna andring verifieras separat efter push.
 
+Uppfoljning 2026-09-09: GitHub-backendjobbet for `c5142e4` passerade inklusive
+integrationstester. Frontendjobbet naddes fram till browser-smoke men kunde inte
+ansluta till Chromes debugport. Smoke-testet vantar nu pa browserns beredskap och
+visar startdiagnostik. Vite startas direkt som en agd process, sa att testet kan
+avslutas utan kvarvarande npm/Vite-processer. Hela frontend-releasekontrollen
+passerade darefter i en ren Linux-klon med Chromium. Windows-smoke verifierades
+ocksa fran en tom port med automatisk start och avstangning av Vite.
+
 Datumen nedan avser tidigare fullstandiga releasekorningar:
 
 Senast komplett lokalt releasebevis: 2026-09-07 21:48 +02:00.
