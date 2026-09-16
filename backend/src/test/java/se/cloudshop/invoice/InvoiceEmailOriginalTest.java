@@ -9,10 +9,12 @@ import jakarta.mail.internet.MimeMessage;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.customer.Customer;
 import se.cloudshop.email.InvoiceEmailService;
 import se.cloudshop.order.Order;
@@ -21,6 +23,25 @@ import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
 
 class InvoiceEmailOriginalTest {
+  @Test
+  void refusesToSendWhenPaymentDetailsAreMissing() {
+    var mail = mock(JavaMailSender.class);
+    var settings = mock(SettingsService.class);
+    var originals = mock(InvoiceOriginalService.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    invoice.setInvoiceNumber("F-TEST-MISSING-PAYMENT");
+    invoice.setStatus("SENT");
+    when(settings.getSettings()).thenReturn(AppSettings.defaults());
+
+    var sender = new InvoiceEmailService(mail, settings, originals, "test.invalid", "sender@example.invalid");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendInvoice(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Payment details are missing");
+    verify(mail, never()).send(any(MimeMessage.class));
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"SENT", "PARTIALLY_PAID", "PAID"})
   void emailAttachmentIsExactlyTheArchivedPdf(String status) throws Exception {
@@ -31,8 +52,16 @@ class InvoiceEmailOriginalTest {
         new Product("Test", "", 100), Instant.now());
     invoice.setInvoiceNumber("F-TEST-1");
     invoice.setStatus(status);
+    invoice.setPlusGiro("123 45 67-8");
+    invoice.setOcrNumber("OCR-TEST-1");
+    invoice.setPaymentRecipient("Test company");
     byte[] bytes = "%PDF-1.4 original archive test".getBytes(StandardCharsets.US_ASCII);
-    when(settings.getSettings()).thenReturn(AppSettings.defaults());
+    var configuredSettings = AppSettings.defaults();
+    configuredSettings.setContactEmail("issuer@example.invalid");
+    configuredSettings.setPlusGiro("123 45 67-8");
+    configuredSettings.setDefaultOcr("OCR-TEST-1");
+    configuredSettings.setPaymentRecipient("Test company");
+    when(settings.getSettings()).thenReturn(configuredSettings);
     when(originals.read(invoice)).thenReturn(new InvoiceOriginalService.InvoicePdfDocument(bytes, "original", InvoiceOriginal.digest(bytes)));
     when(mail.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
     var sender = new InvoiceEmailService(mail, settings, originals, "test.invalid", "sender@example.invalid");

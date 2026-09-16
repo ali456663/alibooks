@@ -38,10 +38,13 @@ public class InvoiceReminderEmailService {
     }
 
     AppSettings settings = settingsService.getSettings();
+    requireInvoicePaymentDetails(invoice);
     SimpleMailMessage message = new SimpleMailMessage();
     message.setFrom(mailUsername);
     message.setTo(invoice.getCustomer().getEmail());
-    message.setReplyTo(settings.getContactEmail());
+    if (hasText(settings.getContactEmail())) {
+      message.setReplyTo(settings.getContactEmail());
+    }
     message.setSubject("Paminnelse faktura " + invoice.getInvoiceNumber());
     message.setText(createReminderText(invoice, settings, false));
     mailSender.send(message);
@@ -55,10 +58,13 @@ public class InvoiceReminderEmailService {
     }
 
     AppSettings settings = settingsService.getSettings();
+    requireInvoicePaymentDetails(invoice);
     SimpleMailMessage message = new SimpleMailMessage();
     message.setFrom(mailUsername);
     message.setTo(invoice.getCustomer().getEmail());
-    message.setReplyTo(settings.getContactEmail());
+    if (hasText(settings.getContactEmail())) {
+      message.setReplyTo(settings.getContactEmail());
+    }
     message.setSubject("Forfallen faktura " + invoice.getInvoiceNumber());
     message.setText(createReminderText(invoice, settings, true));
     mailSender.send(message);
@@ -92,6 +98,19 @@ public class InvoiceReminderEmailService {
     if (mailHost == null || mailHost.isBlank() || mailUsername == null || mailUsername.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not configured. Add SMTP settings first.");
     }
+  }
+
+  private void requireInvoicePaymentDetails(Order invoice) {
+    if (!hasText(invoice.getPlusGiro())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Payment details are missing. Add the company's PlusGiro or bank payment details before sending the reminder."
+      );
+    }
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   private String createReminderText(Order invoice, AppSettings settings, boolean overdue) {

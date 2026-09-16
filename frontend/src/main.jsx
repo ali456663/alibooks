@@ -832,9 +832,9 @@ function renderInvoiceEmailText(item, settings, templateOverride = null) {
     .replaceAll("{fakturanummer}", invoiceNumber(item))
     .replaceAll("{forfallodatum}", item.dueDate || "")
     .replaceAll("{belopp}", String(invoiceRemainingAmount(item)))
-    .replaceAll("{plusgiro}", item.plusGiro || "418 76 01-2")
-    .replaceAll("{ocr}", item.ocrNumber || "1055065900139")
-    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "Bank Norwegian")
+    .replaceAll("{plusgiro}", item.plusGiro || "-")
+    .replaceAll("{ocr}", item.ocrNumber || "-")
+    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "-")
     .replaceAll("{foretag}", settings?.companyName || "AliBooks")
     .replaceAll("{kontaktEpost}", settings?.contactEmail || "");
 }
@@ -847,9 +847,9 @@ function renderInvoiceReminderText(item, settings, templateOverride = null) {
     .replaceAll("{fakturanummer}", invoiceNumber(item))
     .replaceAll("{forfallodatum}", item.dueDate || "")
     .replaceAll("{belopp}", String(invoiceRemainingAmount(item)))
-    .replaceAll("{plusgiro}", item.plusGiro || "418 76 01-2")
-    .replaceAll("{ocr}", item.ocrNumber || "1055065900139")
-    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "Bank Norwegian")
+    .replaceAll("{plusgiro}", item.plusGiro || "-")
+    .replaceAll("{ocr}", item.ocrNumber || "-")
+    .replaceAll("{betalningsmottagare}", item.paymentRecipient || "-")
     .replaceAll("{foretag}", settings?.companyName || "AliBooks")
     .replaceAll("{kontaktEpost}", settings?.contactEmail || "");
 }
@@ -862,9 +862,9 @@ function demoInvoiceForReminderPreview(settings) {
     dueDate: "2026-07-17",
     totalAmount: 1188,
     paidAmount: 104,
-    plusGiro: settings?.plusGiro || "418 76 01-2",
-    ocrNumber: settings?.defaultOcr || "1055065900139",
-    paymentRecipient: settings?.paymentRecipient || "Bank Norwegian"
+    plusGiro: settings?.plusGiro || "",
+    ocrNumber: settings?.defaultOcr || "",
+    paymentRecipient: settings?.paymentRecipient || ""
   };
 }
 
@@ -3467,7 +3467,7 @@ function App() {
 
     const companyName = settings?.companyName || "AliBooks";
     const companySubtitle = settings?.companySubtitle || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const html = `<!doctype html>
 <html>
 <head>
@@ -6980,8 +6980,8 @@ function App() {
       `${language === "sv" ? "Kvar att betala" : "Remaining"}: ${invoiceRemainingAmount(item)} SEK`,
       `OCR: ${item.ocrNumber || "-"}`,
       `${language === "sv" ? "Referens" : "Reference"}: ${item.paymentReference || "-"}`,
-      `PlusGiro: ${item.plusGiro || "418 76 01-2"}`,
-      `${language === "sv" ? "Betalningsmottagare" : "Payment recipient"}: ${item.paymentRecipient || "Bank Norwegian"}`
+      `PlusGiro: ${item.plusGiro || "-"}`,
+      `${language === "sv" ? "Betalningsmottagare" : "Payment recipient"}: ${item.paymentRecipient || "-"}`
     ].join("\n");
 
     try {
@@ -7918,7 +7918,7 @@ function App() {
   function downloadBankImportExampleCsv() {
     const exampleInvoice = invoices.find((item) => invoiceRemainingAmount(item) > 0);
     const exampleAmount = exampleInvoice ? invoiceRemainingAmount(exampleInvoice) : 999;
-    const exampleReference = exampleInvoice?.ocrNumber || exampleInvoice?.invoiceNumber || "1055065900139";
+    const exampleReference = exampleInvoice?.ocrNumber || exampleInvoice?.invoiceNumber || "-";
     const exampleCustomer = exampleInvoice?.customerName || "Exempel Kund";
 
     downloadLocalCsv("bankimport-exempel.csv", [
@@ -8494,7 +8494,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Arsbokslut kontrollrapport" : "Annual closing control report";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const checklistRows = annualCloseChecklist.map((item) => `<tr>
       <td>${escapeHtml(item.title)}</td>
       <td>${escapeHtml(item.statusLabel)}</td>
@@ -8642,7 +8642,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Deklarationsunderlag" : "Tax declaration basis";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const declarationRowsHtml = annualDeclarationRows.map((row) => `<tr>
       <td>${escapeHtml(row.label)}</td>
       <td>${row.amount} SEK</td>
@@ -8806,7 +8806,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Arkivforteckning" : "Archive index";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const itemRows = legalArchiveItems.map((item) => `<tr>
       <td>${escapeHtml(item.title)}</td>
       <td>${escapeHtml(item.statusLabel)}</td>
@@ -8998,7 +8998,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Redovisningskonsult-paket" : "Accountant handoff package";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const handoffRows = accountantHandoffItems.map((item) => `<tr>
       <td>${escapeHtml(item.title)}</td>
       <td>${escapeHtml(item.statusLabel)}</td>
@@ -11798,7 +11798,7 @@ function App() {
   function openPayrollStatement(draft) {
     const calculation = payrollDraftCalculation(draft);
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const employee = payrollEmployees.find((item) => String(item.id) === String(draft.employeeId));
     const employeeEmail = draft.email || employee?.email || "";
     const employeeAddress = draft.address || employee?.address || "";
@@ -11909,7 +11909,7 @@ function App() {
   function payrollPayslipEmailText(draft, options = {}) {
     const calculation = payrollDraftCalculation(draft);
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const pdfLine = options.attachedPdf
       ? (language === "sv" ? "Ditt lonebesked bifogas som PDF." : "Your payslip is attached as a PDF.")
       : (language === "sv" ? "Lonebeskedet finns som PDF/utskrift i AliBooks." : "The payslip is available as PDF/printout in AliBooks.");
@@ -12244,7 +12244,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Arsrapport lon" : "Payroll yearly report";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const rowsHtml = payrollYearRows.length > 0
       ? payrollYearRows.map((row) => `<tr>
           <td>${escapeHtml(row.employeeName)}</td>
@@ -12761,7 +12761,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Loneunderlag" : "Payroll report";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const rowsHtml = payrollReportRows.length > 0
       ? payrollReportRows.map((row) => `<tr>
           <td>${escapeHtml(row.employeeName)}</td>
@@ -12895,7 +12895,7 @@ function App() {
 
     const reportTitle = language === "sv" ? "Arbetsgivardeklaration underlag" : "Employer declaration basis";
     const companyName = settings?.companyName || "Muscle&Focus";
-    const companyEmail = settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com";
+    const companyEmail = settings?.contactEmail || currentEmail || "";
     const rowsHtml = payrollReportRows.length > 0
       ? payrollReportRows.map((row) => `<tr>
           <td>${escapeHtml(row.employeeName)}</td>
@@ -35460,9 +35460,9 @@ function App() {
                     <span>{t.total}: {invoiceTotalAmount(item)} SEK</span>
                     <div className="payment-info">
                       <strong>{t.payment}</strong>
-                      <span>PlusGiro: {item.plusGiro || "418 76 01-2"}</span>
-                      <span>OCR: {item.ocrNumber || "1055065900139"}</span>
-                      <span>{t.paymentRecipient}: {item.paymentRecipient || "Bank Norwegian"}</span>
+                      <span>PlusGiro: {item.plusGiro || "-"}</span>
+                      <span>OCR: {item.ocrNumber || "-"}</span>
+                      <span>{t.paymentRecipient}: {item.paymentRecipient || "-"}</span>
                       {(item.status === "PAID" || item.status === "PARTIALLY_PAID") && (
                         <>
                           <span>{language === "sv" ? "Betaldatum" : "Payment date"}: {item.paidDate || "-"}</span>
@@ -40299,7 +40299,7 @@ function App() {
               <div>
                 <span>{language === "sv" ? "Kontakt" : "Contact"}</span>
                 <strong>{settings?.companyName || "Muscle&Focus"}</strong>
-                <p>{settings?.contactEmail || currentEmail || "ali.wafa17943@gmail.com"}</p>
+                <p>{settings?.contactEmail || currentEmail || ""}</p>
               </div>
             </div>
 

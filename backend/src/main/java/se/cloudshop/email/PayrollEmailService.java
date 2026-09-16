@@ -273,7 +273,7 @@ public class PayrollEmailService {
 
       document.add(new Paragraph(" "));
       document.add(new Paragraph("Kontrollera alltid aktuell skattetabell, avtal och Skatteverkets uppgifter innan riktig lon betalas ut.", mutedFont));
-      document.add(new Paragraph("Kontakt / Contact: " + value(settings.getContactEmail(), "ali.wafa17943@gmail.com"), mutedFont));
+      document.add(new Paragraph("Kontakt / Contact: " + value(settings.getContactEmail(), "-"), mutedFont));
 
       document.close();
       return outputStream.toByteArray();

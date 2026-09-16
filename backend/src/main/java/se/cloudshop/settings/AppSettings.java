@@ -47,10 +47,12 @@ public class AppSettings {
   public static AppSettings defaults() {
     AppSettings settings = new AppSettings();
     settings.companyName = "Muscle&Focus";
-    settings.contactEmail = "ali.wafa17943@gmail.com";
-    settings.plusGiro = "418 76 01-2";
-    settings.defaultOcr = "1055065900139";
-    settings.paymentRecipient = "Bank Norwegian";
+    // Company-specific contact and payment details must be entered by the owner.
+    // Never ship personal or potentially stale payment data as defaults.
+    settings.contactEmail = "";
+    settings.plusGiro = "";
+    settings.defaultOcr = "";
+    settings.paymentRecipient = "";
     settings.companyType = "SOLE_TRADER";
     settings.accountingMethod = "INVOICE_METHOD";
     settings.vatReportingPeriod = "QUARTERLY";

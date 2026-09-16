@@ -45,6 +45,7 @@ public class InvoiceEmailService {
     }
 
     AppSettings settings = settingsService.getSettings();
+    requireInvoicePaymentDetails(invoice);
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
     byte[] pdf = invoiceOriginalService.read(invoice).pdf();
 
@@ -53,7 +54,9 @@ public class InvoiceEmailService {
       MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
       helper.setFrom(mailUsername);
       helper.setTo(invoice.getCustomer().getEmail());
-      helper.setReplyTo(settings.getContactEmail());
+      if (hasText(settings.getContactEmail())) {
+        helper.setReplyTo(settings.getContactEmail());
+      }
       helper.setSubject("Faktura " + invoice.getInvoiceNumber());
       helper.setText(createInvoiceText(invoice, settings));
       helper.addAttachment(filename, new ByteArrayResource(pdf), "application/pdf");
@@ -67,6 +70,19 @@ public class InvoiceEmailService {
     if (mailHost == null || mailHost.isBlank() || mailUsername == null || mailUsername.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not configured. Add SMTP settings first.");
     }
+  }
+
+  private void requireInvoicePaymentDetails(Order invoice) {
+    if (!hasText(invoice.getPlusGiro())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Payment details are missing. Add the company's PlusGiro or bank payment details before sending the invoice."
+      );
+    }
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   private String createInvoiceText(Order invoice, AppSettings settings) {
