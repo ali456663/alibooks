@@ -30,7 +30,7 @@ check("CI has read-only contents permission", ci.includes("contents: read"), "CI
 check("CI jobs have timeouts", includesAll(ci, ["timeout-minutes: 20", "timeout-minutes: 30"]), "Backend, frontend and Docker jobs should not hang indefinitely.");
 
 check("Backend CI uses PostgreSQL 16 service", includesAll(ci, ["postgres:16", "POSTGRES_DB: cloudshop", "pg_isready"]), "Backend tests should run against PostgreSQL 16 like local/prod direction.");
-check("Backend CI uses Java 21", includesAll(ci, ["actions/setup-java@v4", 'java-version: "21"']), "Backend CI should match the Spring Boot Java 21 build.");
+check("Backend CI uses Java 21", includesAll(ci, ["actions/setup-java@v5", 'java-version: "21"']), "Backend CI should match the Spring Boot Java 21 build with the supported setup-java action.");
 check("Backend CI runs Maven tests in batch mode", ci.includes("run: mvn -B test"), "Backend job must run Maven tests without interactive Maven output.");
 check("Backend CI has JWT secret", ci.includes("JWT_SECRET: ci_test_secret_must_be_long_enough_for_demo"), "Backend tests should use a non-empty CI JWT secret.");
 check("Backend CI has explicit schema mode", ci.includes("SPRING_JPA_HIBERNATE_DDL_AUTO: update"), "Backend CI should run with an explicit Hibernate ddl-auto mode.");
