@@ -38,7 +38,7 @@ public class Expense {
     this.description = description;
     this.netAmount = netAmount;
     this.vatAmount = vatAmount;
-    this.totalAmount = netAmount + vatAmount;
+    this.totalAmount = Math.addExact(netAmount, vatAmount);
     this.category = category;
     this.paidFrom = paidFrom;
     this.createdAt = Instant.now();

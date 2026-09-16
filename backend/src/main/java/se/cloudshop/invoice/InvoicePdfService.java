@@ -14,9 +14,7 @@ import com.lowagie.text.pdf.PdfWriter;
 import java.io.ByteArrayOutputStream;
 import java.awt.Color;
 import org.springframework.stereotype.Service;
-import se.cloudshop.customer.Customer;
 import se.cloudshop.order.Order;
-import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
 
 @Service
@@ -29,7 +27,13 @@ public class InvoicePdfService {
   }
 
   public byte[] createInvoicePdf(Order invoice) {
-    AppSettings settings = settingsService.getSettings();
+    return createInvoicePdf(invoice, false);
+  }
+
+  byte[] createInvoicePdf(Order invoice, boolean missingOriginal) {
+    boolean reconstructed = missingOriginal || invoice.getDocumentSnapshot() == null;
+    InvoiceDocumentSnapshot snapshot = invoice.getDocumentSnapshot() == null
+        ? InvoiceDocumentSnapshot.capture(invoice, settingsService.getSettings()) : invoice.getDocumentSnapshot();
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     Document document = new Document();
 
@@ -50,34 +54,44 @@ public class InvoicePdfService {
 
     Paragraph brand = new Paragraph("AliBooks", brandFont);
     document.add(brand);
-    Paragraph company = new Paragraph(value(settings.getCompanyName(), "Muscle&Focus"), companyFont);
+    Paragraph company = new Paragraph(value(snapshot.issuerName(), "-"), companyFont);
     document.add(company);
     document.add(new Paragraph(" "));
     document.add(new Paragraph(" "));
 
-    Paragraph title = new Paragraph("Faktura / Invoice", titleFont);
+    String documentTitle = invoice.isCreditInvoice() ? "Kreditfaktura / Credit note"
+        : "DRAFT".equals(invoice.getStatus()) ? "Fakturautkast / Draft invoice" : "Faktura / Invoice";
+    Paragraph title = new Paragraph(documentTitle, titleFont);
     title.setAlignment(Element.ALIGN_RIGHT);
     document.add(title);
+    if (reconstructed) {
+      document.add(new Paragraph("Rekonstruerad kopia / Reconstructed copy: originaldokument eller historiska registeruppgifter saknas. Kontrollera mot originalfakturan.", normalFont));
+    }
+    if (invoice.isCreditInvoice()) {
+      document.add(new Paragraph("Krediterar faktura-ID / Credits invoice ID: " + (invoice.getCreditedInvoiceId() == null ? "-" : invoice.getCreditedInvoiceId()), normalFont));
+    }
     document.add(new Paragraph(" "));
 
     PdfPTable meta = new PdfPTable(2);
     meta.setWidthPercentage(100);
     meta.getDefaultCell().setBorder(Rectangle.NO_BORDER);
     addCell(meta, "Fakturanummer / Invoice number", headingFont);
-    addCell(meta, value(invoice.getInvoiceNumber(), "F-" + invoice.getId()), normalFont);
+    addCell(meta, value(invoice.getInvoiceNumber(), invoice.getId() == null ? "Ej tilldelat / Not assigned" : "F-" + invoice.getId()), normalFont);
     addCell(meta, "Datum / Date", headingFont);
-    addCell(meta, String.valueOf(invoice.getInvoiceDate()), normalFont);
-    addCell(meta, "Forfallodatum / Due date", headingFont);
-    addCell(meta, String.valueOf(invoice.getDueDate()), normalFont);
-    addCell(meta, "Betalningsvillkor / Payment terms", headingFont);
-    addCell(meta, invoice.getPaymentTermsDays() + " dagar / days", normalFont);
+    addCell(meta, invoice.getInvoiceDate() == null ? "-" : invoice.getInvoiceDate().toString(), normalFont);
+    if (!invoice.isCreditInvoice()) {
+      addCell(meta, "Forfallodatum / Due date", headingFont);
+      addCell(meta, invoice.getDueDate() == null ? "-" : invoice.getDueDate().toString(), normalFont);
+      addCell(meta, "Betalningsvillkor / Payment terms", headingFont);
+      addCell(meta, invoice.getPaymentTermsDays() + " dagar / days", normalFont);
+    }
     addCell(meta, "Status", headingFont);
     addCell(meta, value(invoice.getStatus(), "DRAFT"), normalFont);
     document.add(meta);
 
     document.add(new Paragraph(" "));
     document.add(sectionTitle("Kund / Customer", headingFont));
-    addCustomer(document, invoice.getCustomer(), normalFont);
+    addCustomer(document, snapshot, normalFont);
 
     document.add(new Paragraph(" "));
     PdfPTable rows = new PdfPTable(5);
@@ -87,7 +101,7 @@ public class InvoicePdfService {
     addCell(rows, "Netto / Net", headingFont);
     addCell(rows, "Moms / VAT", headingFont);
     addCell(rows, "Totalt / Total", headingFont);
-    addCell(rows, invoice.getProduct().getName(), normalFont);
+    addCell(rows, value(snapshot.productName(), "Tjanst / Service"), normalFont);
     addCell(rows, String.valueOf(invoice.getQuantity()), normalFont);
     addCell(rows, invoice.getNetAmount() + " SEK", normalFont);
     addCell(rows, invoice.getVatAmount() + " SEK", normalFont);
@@ -106,15 +120,23 @@ public class InvoicePdfService {
     }
 
     document.add(new Paragraph(" "));
-    document.add(sectionTitle("Betalning / Payment", headingFont));
-    document.add(new Paragraph("PlusGiro: " + value(invoice.getPlusGiro(), settings.getPlusGiro()), normalFont));
-    document.add(new Paragraph("OCR: " + value(invoice.getOcrNumber(), settings.getDefaultOcr()), normalFont));
-    document.add(new Paragraph("Mottagare / Recipient: " + value(invoice.getPaymentRecipient(), settings.getPaymentRecipient()), normalFont));
-    if (settings.isFTaxApproved()) {
+    if (!invoice.isCreditInvoice()) {
+      document.add(sectionTitle("Betalning / Payment", headingFont));
+      document.add(new Paragraph("Betalt / Paid: " + invoice.getPaidAmount() + " SEK", normalFont));
+      document.add(new Paragraph("DRAFT".equals(invoice.getStatus())
+          ? "Utkast - inte betalningsunderlag / Draft - not a payment request"
+          : "Att betala / Remaining: " + invoice.getRemainingAmount() + " SEK", headingFont));
+      document.add(new Paragraph("PlusGiro: " + value(snapshot.plusGiro(), "-"), normalFont));
+      document.add(new Paragraph("OCR: " + value(snapshot.ocr(), "-"), normalFont));
+      document.add(new Paragraph("Mottagare / Recipient: " + value(snapshot.paymentRecipient(), "-"), normalFont));
+    } else {
+      document.add(new Paragraph("Kreditbelopp / Credit amount: " + invoice.getTotalAmount() + " SEK. Ingen betalningsbegaran / Not a payment request.", normalFont));
+    }
+    if (snapshot.fTaxApproved()) {
       document.add(new Paragraph("Godkand for F-skatt / Approved for F-tax", normalFont));
     }
 
-    Paragraph footer = new Paragraph("Kontakt / Contact: " + value(settings.getContactEmail(), "ali.wafa17943@gmail.com"), footerFont);
+    Paragraph footer = new Paragraph("Kontakt / Contact: " + value(snapshot.contactEmail(), "-"), footerFont);
     footer.setAlignment(Element.ALIGN_CENTER);
     footer.setSpacingBefore(36);
     document.add(footer);
@@ -142,18 +164,13 @@ public class InvoicePdfService {
     return paragraph;
   }
 
-  private void addCustomer(Document document, Customer customer, Font normalFont) {
-    if (customer == null) {
-      document.add(new Paragraph("Customer information missing", normalFont));
-      return;
-    }
-
-    document.add(new Paragraph(value(customer.getName(), "-"), normalFont));
-    document.add(new Paragraph("Personnummer / Personal number: " + value(customer.getPersonalNumber(), "-"), normalFont));
-    document.add(new Paragraph("E-post / Email: " + value(customer.getEmail(), "-"), normalFont));
-    document.add(new Paragraph("Tel: " + value(customer.getPhone(), "-"), normalFont));
-    document.add(new Paragraph(value(customer.getAddress(), "-"), normalFont));
-    document.add(new Paragraph(value(customer.getPostalCode(), "") + " " + value(customer.getCity(), ""), normalFont));
+  private void addCustomer(Document document, InvoiceDocumentSnapshot customer, Font normalFont) {
+    document.add(new Paragraph(value(customer.customerName(), "-"), normalFont));
+    document.add(new Paragraph("Personnummer / Personal number: " + value(customer.personalNumber(), "-"), normalFont));
+    document.add(new Paragraph("E-post / Email: " + value(customer.email(), "-"), normalFont));
+    document.add(new Paragraph("Tel: " + value(customer.phone(), "-"), normalFont));
+    document.add(new Paragraph(value(customer.address(), "-"), normalFont));
+    document.add(new Paragraph(value(customer.postalCode(), "") + " " + value(customer.city(), ""), normalFont));
   }
 
   private void addCell(PdfPTable table, String text, Font font) {

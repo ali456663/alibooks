@@ -1,5 +1,7 @@
 package se.cloudshop.supplier;
 
+import static se.cloudshop.accounting.ReportAmounts.reportAmount;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -7,22 +9,33 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import se.cloudshop.accounting.SettlementSnapshot;
+import se.cloudshop.audit.AuditEventRepository;
 
 @Service
 public class PayablesReportService {
 
   private final SupplierInvoiceRepository supplierInvoiceRepository;
+  private final AuditEventRepository auditEventRepository;
 
-  public PayablesReportService(SupplierInvoiceRepository supplierInvoiceRepository) {
+  public PayablesReportService(SupplierInvoiceRepository supplierInvoiceRepository, AuditEventRepository auditEventRepository) {
     this.supplierInvoiceRepository = supplierInvoiceRepository;
+    this.auditEventRepository = auditEventRepository;
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PayablesAgingReport createAgingReport(LocalDate asOfDate) {
     LocalDate asOf = asOfDate == null ? LocalDate.now() : asOfDate;
+    // Older versions allowed deleting cash-method invoices; their balances cannot be reconstructed.
+    if (asOf.isBefore(LocalDate.now()) && auditEventRepository.existsByEntityTypeAndAction("supplier_invoice", "deleted")) {
+      throw SettlementSnapshot.incomplete();
+    }
     List<PayablesAgingInvoice> invoices = supplierInvoiceRepository.findAll()
         .stream()
-        .filter(this::isOpenPayable)
         .map(invoice -> toAgingInvoice(invoice, asOf))
+        .filter(invoice -> invoice.remainingAmount() > 0)
         .sorted(Comparator
             .comparing((PayablesAgingInvoice invoice) -> invoice.dueDate() == null)
             .thenComparing(invoice -> invoice.dueDate() == null ? LocalDate.MAX : invoice.dueDate())
@@ -44,28 +57,28 @@ public class PayablesReportService {
         .map(entry -> entry.getValue().toBucket(entry.getKey()))
         .toList();
 
-    int totalOutstanding = invoices.stream().mapToInt(PayablesAgingInvoice::remainingAmount).sum();
-    int overdueOutstanding = invoices.stream()
+    int totalOutstanding = reportAmount(invoices.stream().mapToLong(PayablesAgingInvoice::remainingAmount).sum());
+    int overdueOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.daysOverdue() > 0)
-        .mapToInt(PayablesAgingInvoice::remainingAmount)
-        .sum();
-    int notDueOutstanding = invoices.stream()
+        .mapToLong(PayablesAgingInvoice::remainingAmount)
+        .sum());
+    int notDueOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.daysOverdue() <= 0 && invoice.dueDate() != null)
-        .mapToInt(PayablesAgingInvoice::remainingAmount)
-        .sum();
-    int noDueDateOutstanding = invoices.stream()
+        .mapToLong(PayablesAgingInvoice::remainingAmount)
+        .sum());
+    int noDueDateOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.dueDate() == null)
-        .mapToInt(PayablesAgingInvoice::remainingAmount)
-        .sum();
-    int dueSoonOutstanding = invoices.stream()
+        .mapToLong(PayablesAgingInvoice::remainingAmount)
+        .sum());
+    int dueSoonOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.dueDate() != null)
         .filter(invoice -> {
           long daysUntilDue = ChronoUnit.DAYS.between(asOf, invoice.dueDate());
           return daysUntilDue >= 0 && daysUntilDue <= 5;
         })
-        .mapToInt(PayablesAgingInvoice::remainingAmount)
-        .sum();
-    int inputVatOutstanding = invoices.stream().mapToInt(PayablesAgingInvoice::vatAmount).sum();
+        .mapToLong(PayablesAgingInvoice::remainingAmount)
+        .sum());
+    int inputVatOutstanding = reportAmount(invoices.stream().mapToLong(PayablesAgingInvoice::vatAmount).sum());
 
     return new PayablesAgingReport(
         asOf,
@@ -81,20 +94,23 @@ public class PayablesReportService {
     );
   }
 
-  private boolean isOpenPayable(SupplierInvoice invoice) {
-    if (invoice.getRemainingAmount() <= 0) {
-      return false;
-    }
-
-    String status = invoice.getStatus() == null ? "unpaid" : invoice.getStatus();
-    return !"cancelled".equals(status) && !"paid".equals(status);
-  }
-
   private PayablesAgingInvoice toAgingInvoice(SupplierInvoice invoice, LocalDate asOf) {
+    String status = String.valueOf(invoice.getStatus());
+    if (!List.of("unpaid", "prepared", "booked", "partial", "paid", "cancelled").contains(status)
+        || ("paid".equals(status) && invoice.getPaidAmount() != invoice.getTotalAmount())
+        || ("partial".equals(status) && (invoice.getPaidAmount() <= 0 || invoice.getPaidAmount() >= invoice.getTotalAmount()))
+        || (!List.of("paid", "partial").contains(status) && invoice.getPaidAmount() != 0)
+        || ("cancelled".equals(status) != (invoice.getCancelledAt() != null))) {
+      throw SettlementSnapshot.incomplete();
+    }
+    SettlementSnapshot balance = SettlementSnapshot.at(invoice.getTotalAmount(), invoice.getPaidAmount(),
+        invoice.getInvoiceDate(), invoice.getCancelledAt(), SupplierPaymentHistory.read(invoice.getPaymentHistory()), asOf);
     long daysOverdue = invoice.getDueDate() == null ? 0 : ChronoUnit.DAYS.between(invoice.getDueDate(), asOf);
     String bucketKey = bucketKey(invoice.getDueDate(), daysOverdue);
     String bucketTitle = bucketTitle(bucketKey);
-    boolean paymentRecommended = invoice.getDueDate() != null && ChronoUnit.DAYS.between(asOf, invoice.getDueDate()) <= 5;
+    boolean paymentRecommended = asOf.equals(LocalDate.now()) && !"cancelled".equals(status)
+        && invoice.getRemainingAmount() > 0 && invoice.getDueDate() != null
+        && ChronoUnit.DAYS.between(asOf, invoice.getDueDate()) <= 5;
 
     return new PayablesAgingInvoice(
         invoice.getId(),
@@ -103,14 +119,14 @@ public class PayablesReportService {
         invoice.getSupplierOrgNumber(),
         invoice.getInvoiceDate(),
         invoice.getDueDate(),
-        invoice.getStatus(),
+        balance.paidAmount() > 0 ? "partial" : "unpaid",
         invoice.getReference(),
         invoice.getDescription(),
         invoice.getCategory(),
         invoice.getNetAmount(),
         invoice.getVatAmount(),
         invoice.getTotalAmount(),
-        invoice.getRemainingAmount(),
+        balance.remainingAmount(),
         Math.max(Math.toIntExact(daysOverdue), 0),
         bucketKey,
         bucketTitle,
@@ -155,7 +171,7 @@ public class PayablesReportService {
   private static class BucketSummary {
     private final String title;
     private int invoiceCount;
-    private int totalRemaining;
+    private long totalRemaining;
     private LocalDate oldestDueDate;
 
     BucketSummary(String title) {
@@ -171,7 +187,7 @@ public class PayablesReportService {
     }
 
     PayablesAgingBucket toBucket(String key) {
-      return new PayablesAgingBucket(key, title, invoiceCount, totalRemaining, oldestDueDate);
+      return new PayablesAgingBucket(key, title, invoiceCount, reportAmount(totalRemaining), oldestDueDate);
     }
   }
 }

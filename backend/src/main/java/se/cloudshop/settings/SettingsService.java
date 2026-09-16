@@ -1,9 +1,12 @@
 package se.cloudshop.settings;
 
 import java.time.LocalDate;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.JournalEntryRepository;
 
@@ -12,10 +15,21 @@ public class SettingsService {
 
   private final AppSettingsRepository appSettingsRepository;
   private final JournalEntryRepository journalEntryRepository;
+  private final EntityManager entityManager;
 
-  public SettingsService(AppSettingsRepository appSettingsRepository, JournalEntryRepository journalEntryRepository) {
+  public SettingsService(AppSettingsRepository appSettingsRepository, JournalEntryRepository journalEntryRepository, EntityManager entityManager) {
     this.appSettingsRepository = appSettingsRepository;
     this.journalEntryRepository = journalEntryRepository;
+    this.entityManager = entityManager;
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public AppSettings lockSettingsForAccounting() {
+    AppSettings settings = appSettingsRepository.findById(1L).orElseThrow(() ->
+        new ResponseStatusException(HttpStatus.CONFLICT, "Accounting settings must be initialized before writing."));
+    // The shared row lock lasts through commit; refresh also discards stale JPA reads.
+    entityManager.refresh(settings, LockModeType.PESSIMISTIC_WRITE);
+    return settings;
   }
 
   public AppSettings getSettings() {
@@ -29,7 +43,7 @@ public class SettingsService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Settings payload is required.");
     }
 
-    AppSettings settings = getSettings();
+    AppSettings settings = lockSettingsForAccounting();
     LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
     validateAccountingLockChange(currentLockedThroughDate, updatedSettings.getAccountingLockedThroughDate());
     validateAccountingPolicyChange(settings, updatedSettings);
@@ -63,7 +77,7 @@ public class SettingsService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Accounting lock date is required.");
     }
 
-    AppSettings settings = getSettings();
+    AppSettings settings = lockSettingsForAccounting();
     LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
     if (currentLockedThroughDate != null && lockedThroughDate.isBefore(currentLockedThroughDate)) {
       throw new ResponseStatusException(

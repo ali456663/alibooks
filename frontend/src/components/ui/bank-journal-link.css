@@ -1,0 +1,10 @@
+.bank-journal-link { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 100%; width: 320px; }
+.bank-journal-link select { width: 100%; min-width: 0; }
+.bank-journal-link button, .bank-journal-link span { white-space: normal; overflow-wrap: anywhere; }
+.bank-journal-link [role="alert"] { color: #b42318; }
+.bank-reconciliation-list .bank-reconciliation-row > div { min-width: 0; width: 100%; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; }
+.bank-reconciliation-row .bank-journal-link { display: flex; width: 100%; max-width: 320px; text-align: start; }
+@media (max-width: 760px) {
+  .bank-reconciliation-row { flex-direction: column; min-width: 0; }
+  .bank-reconciliation-list .bank-reconciliation-row > div:last-child { justify-items: start; text-align: start; }
+}

@@ -25,6 +25,7 @@ docker run --rm `
   -v "${backupDirAbs}:/backups" `
   postgres:16 `
   pg_dump -h $PgHost -p $PgPort -U $PgUser -d $PgDatabase -Fc -f "/backups/$filename"
+if ($LASTEXITCODE -ne 0) { throw "pg_dump failed. Backup is NOT verified." }
 
 Write-Host "Verifying backup catalog with pg_restore -l"
 docker run --rm `
@@ -32,6 +33,8 @@ docker run --rm `
   -v "${backupDirAbs}:/backups" `
   postgres:16 `
   pg_restore -l "/backups/$filename" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Backup catalog verification failed." }
 
-Write-Host "Backup verified: $backupDirAbs\$filename"
+Write-Host "Backup verified (catalog only, not a restore test): $backupDirAbs\$filename"
+Write-Host "Also copy uploads/receipts while all writers are stopped. A database dump does not contain receipt files."
 Write-Host "Store this file securely and never commit it to Git."

@@ -32,19 +32,22 @@ public class BankReconciliationController {
   private final BankReconciliationService bankReconciliationService;
   private final AuditService auditService;
   private final boolean bankReconciliationResetEnabled;
+  private final BankImportBookingService bankImport;
 
   public BankReconciliationController(
       AuthHeader authHeader,
       BankReconciliationEntryRepository bankReconciliationEntryRepository,
       BankReconciliationService bankReconciliationService,
       AuditService auditService,
-      @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled
+      @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled,
+      BankImportBookingService bankImport
   ) {
     this.authHeader = authHeader;
     this.bankReconciliationEntryRepository = bankReconciliationEntryRepository;
     this.bankReconciliationService = bankReconciliationService;
     this.auditService = auditService;
     this.bankReconciliationResetEnabled = bankReconciliationResetEnabled;
+    this.bankImport = bankImport;
   }
 
   @GetMapping("/bank-reconciliations")
@@ -117,6 +120,7 @@ public class BankReconciliationController {
   }
 
   @PostMapping("/bank-reconciliations")
+  @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public BankReconciliationEntry createBankReconciliation(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -128,25 +132,14 @@ public class BankReconciliationController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank reconciliation entry is required.");
     }
 
-    if (request.amount() == 0) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is required.");
+    if (!"skipped".equals(request.status())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booked history must be created atomically with a bank payment or expense.");
     }
-
-    BankReconciliationEntry entry = bankReconciliationEntryRepository.save(new BankReconciliationEntry(request));
-    auditService.record(
-        "bank",
-        "bank_reconciliation_entry",
-        entry.getId(),
-        "bank_reconciliation_entry_created",
-        entry.getBankRowId().isBlank() ? entry.getReference() : entry.getBankRowId(),
-        "Bank reconciliation entry created.",
-        entry.getAmount(),
-        authorizationHeader
-    );
-    return entry;
+    return bankImport.skip(new BankImportRow(request.bankRowId(), request.date(), request.description(), request.reference(), request.amount()), authorizationHeader);
   }
 
   @DeleteMapping("/bank-reconciliations")
+  @Transactional
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void clearBankReconciliations(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -187,7 +180,7 @@ public class BankReconciliationController {
       @PathVariable String bankRowId
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    long deletedRows = bankReconciliationEntryRepository.deleteByBankRowIdAndStatus(bankRowId, "skipped");
+    long deletedRows = bankImport.removeSkipped(bankRowId);
     auditService.record(
         "bank",
         "bank_reconciliation_entry",

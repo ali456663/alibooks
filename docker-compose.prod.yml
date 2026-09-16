@@ -12,6 +12,8 @@ services:
   backend:
     image: ${DOCKERHUB_USERNAME}/cloudshop-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    volumes:
+      - receipt_uploads:/app/uploads
     expose:
       - "3000"
     environment:
@@ -50,3 +52,6 @@ services:
       - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD:-}
       - SPRING_MAIL_SMTP_AUTH=${SPRING_MAIL_SMTP_AUTH:-true}
       - SPRING_MAIL_SMTP_STARTTLS_ENABLE=${SPRING_MAIL_SMTP_STARTTLS_ENABLE:-true}
+
+volumes:
+  receipt_uploads:

@@ -123,7 +123,7 @@ const expectations = [
   {
     route: "/bank-reconciliations/skipped/{bankRowId}",
     details: [
-      ["only skipped rows are removable", "deleteByBankRowIdAndStatus(bankRowId, \"skipped\")"],
+      ["skipped row removal uses guarded service", "bankImport.removeSkipped(bankRowId)"],
       ["skipped row removal audit", "skipped_bank_reconciliation_removed"]
     ]
   },
@@ -141,8 +141,8 @@ const expectations = [
     details: [
       ["booked supplier invoices cannot be deleted", "hasSupplierInvoiceEntries(invoice)"],
       ["paid supplier invoices cannot be deleted", "invoice.getPaidAmount() > 0"],
-      ["locked supplier periods protected", "requireUnlockedAccountingDate(invoice.getInvoiceDate())"],
-      ["supplier invoice deletion audit", "Supplier invoice deleted"]
+      ["supplier deletion rejected regardless of period", "Registered supplier invoices must be retained for dated balances"],
+      ["supplier deletion responds with conflict", "HttpStatus.CONFLICT"]
     ]
   },
   {
@@ -196,7 +196,25 @@ for (const expectation of expectations) {
   }
 }
 
+check(
+  "Supplier deletion has no destructive call and has database coverage",
+  Boolean(byRoute.get("/supplier-invoices/{id}"))
+    && !/\.delete\w*\s*\(/.test(byRoute.get("/supplier-invoices/{id}").body)
+    && read("backend/src/test/java/se/cloudshop/CloudShopApplicationIT.java").includes("cashSupplierInvoiceCannotBeDeletedOrCancelledWithoutADate"),
+  "Registered cash-method invoices must also be retained; the integration test verifies the row remains."
+);
+
 const voucherApprovalService = read("backend/src/main/java/se/cloudshop/accounting/VoucherApprovalService.java");
+const bankImportService = read("backend/src/main/java/se/cloudshop/bank/BankImportBookingService.java");
+check(
+  "Skipped bank removal serializes and respects closed periods",
+  bankImportService.includes('deleteByBankRowIdAndStatus(bankRowId, "skipped")')
+    && bankImportService.includes("rows.lockBankRow(bankRowId)")
+    && bankImportService.includes("accounting.requireUnlockedAccountingDate(row.getBankDate())")
+    && bankImportService.includes("Propagation.MANDATORY")
+    && read("backend/src/test/java/se/cloudshop/CloudShopApplicationIT.java").includes("skippedBankRowMustBeRestoredBeforeBookingAndCannotBeRemovedInClosedPeriod"),
+  "Only skipped rows may be removed, inside a transaction with row serialization, period guard and integration coverage."
+);
 check(
   "Voucher approval reset respects locked periods",
   voucherApprovalService.includes("requireVoucherApprovalEditable(cleanVoucherNumber)")

@@ -33,6 +33,7 @@ Officiella utgangspunkter:
    Kontrollera manuella betalningar, delbetalningar, overbetalningar, Stripe-fordran och bank-CSV.
    AliBooks-vy: `Betalningsavstamning`
    Om kunder betalar med kort, Apple Pay, Swish eller liknande elektronisk betalning ska du kontrollera kassaregisterregler eller kontantfaktura-rutin innan skarp drift.
+   Automatiska betalningspaminnelser lases per faktura, sparar misslyckade forsok och kan aterforsoka en missad korning utan att skicka samma paminnelsetyp dubbelt.
 
 5. **Stam av konton mot verkligheten**
    Jamfor 1930, 1510, 2440, 1580, moms och skattekonto mot externa underlag.

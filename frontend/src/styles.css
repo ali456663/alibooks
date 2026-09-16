@@ -15574,10 +15574,11 @@ button:focus-visible,
   }
 
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
+    min-width: 0;
     position: static;
     height: auto;
     max-height: none;
@@ -15617,6 +15618,38 @@ button:focus-visible,
 
   .workspace {
     padding: 22px 16px;
+  }
+
+  .account-box {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .signed-in {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .bank-import-row {
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .bank-import-row > div:last-child {
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .bank-import-category-select,
+  .bank-import-description-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .bank-import-row span,
+  .bank-import-row button {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .topbar,
@@ -16948,5 +16981,13 @@ li,
   .app-shell::after,
   .brand::after {
     animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    position: static;
+    margin-inline: -16px;
+    padding-inline: 16px;
   }
 }

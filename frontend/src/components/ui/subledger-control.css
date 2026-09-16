@@ -1,0 +1,10 @@
+.subledger-control { padding: 20px 0; border-block: 1px solid var(--border, #d9dfe5); margin: 20px 0; letter-spacing: 0; }
+.subledger-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.subledger-toolbar h3 { margin: 0 auto 8px 0; font-size: 18px; }
+.subledger-toolbar label { display: grid; gap: 4px; font-size: 14px; }
+.subledger-toolbar input { width: 160px; max-width: 100%; }
+.subledger-table-scroll { overflow-x: auto; max-width: 100%; }
+.subledger-control table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 14px; }
+.subledger-control th, .subledger-control td { border-bottom: 1px solid var(--border, #d9dfe5); padding: 10px 12px; text-align: left; }
+.subledger-control td:nth-child(2), .subledger-control td:nth-child(3), .subledger-control td:nth-child(4) { text-align: right; font-variant-numeric: tabular-nums; }
+.subledger-control li, .subledger-control p { overflow-wrap: anywhere; }

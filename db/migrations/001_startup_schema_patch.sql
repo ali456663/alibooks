@@ -288,289 +288,289 @@ ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS updated_at timestamp;
 CREATE INDEX IF NOT EXISTS card_purchases_purchase_date_idx ON card_purchases(purchase_date);
 -- 137
 CREATE TABLE IF NOT EXISTS suppliers (id bigserial PRIMARY KEY);
--- 122
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS name varchar(255);
--- 123
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS email varchar(255);
--- 124
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS org_number varchar(255);
--- 125
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS phone varchar(255);
--- 126
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS payment_info varchar(512);
--- 127
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false;
--- 128
-CREATE INDEX IF NOT EXISTS suppliers_name_idx ON suppliers(name);
--- 129
-CREATE TABLE IF NOT EXISTS supplier_invoices (id bigserial PRIMARY KEY);
--- 130
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_id bigint;
--- 131
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_name varchar(255);
--- 132
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_email varchar(255);
--- 133
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_org_number varchar(255);
--- 134
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS invoice_date date;
--- 135
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS due_date date;
--- 136
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS description varchar(512);
--- 137
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS reference varchar(255);
 -- 138
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS name varchar(255);
 -- 139
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS email varchar(255);
 -- 140
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS org_number varchar(255);
 -- 141
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS category varchar(64);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS phone varchar(255);
 -- 142
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'unpaid';
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS payment_info varchar(512);
 -- 143
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_at date;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false;
 -- 144
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_amount integer DEFAULT 0;
+CREATE INDEX IF NOT EXISTS suppliers_name_idx ON suppliers(name);
 -- 145
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_reference varchar(255);
+CREATE TABLE IF NOT EXISTS supplier_invoices (id bigserial PRIMARY KEY);
 -- 146
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_history text;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_id bigint;
 -- 147
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancelled_at date;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_name varchar(255);
 -- 148
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancellation_voucher_number varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_email varchar(255);
 -- 149
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS self_billing boolean DEFAULT false;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS supplier_org_number varchar(255);
 -- 150
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_name varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS invoice_date date;
 -- 151
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_reference varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS due_date date;
 -- 152
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS approval_reference varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS description varchar(512);
 -- 153
-ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS created_at timestamp;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS reference varchar(255);
 -- 154
-CREATE INDEX IF NOT EXISTS supplier_invoices_supplier_id_idx ON supplier_invoices(supplier_id);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0;
 -- 155
-CREATE INDEX IF NOT EXISTS supplier_invoices_due_date_idx ON supplier_invoices(due_date);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0;
 -- 156
-CREATE TABLE IF NOT EXISTS recurring_contracts (id bigserial PRIMARY KEY);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0;
 -- 157
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_id bigint;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS category varchar(64);
 -- 158
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_name varchar(255);
--- 155
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_id bigint;
--- 156
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_name varchar(255);
--- 157
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1;
--- 158
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS contract_interval varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'unpaid';
 -- 159
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS next_invoice_date date;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_at date;
 -- 160
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_amount integer DEFAULT 0;
 -- 161
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_reference varchar(255);
 -- 162
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS last_invoice_number varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_history text;
 -- 163
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS created_at timestamp;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancelled_at date;
 -- 164
-ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS archived_at timestamp;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancellation_voucher_number varchar(255);
 -- 165
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS self_billing boolean DEFAULT false;
 -- 166
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_date date DEFAULT CURRENT_DATE;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_name varchar(255);
 -- 167
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS correction_of_voucher_number varchar(255);
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS buyer_reference varchar(255);
 -- 168
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS expense_id bigint;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS approval_reference varchar(255);
 -- 169
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS supplier_invoice_id bigint;
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS created_at timestamp;
 -- 170
-CREATE INDEX IF NOT EXISTS journal_entries_voucher_number_idx ON journal_entries(voucher_number) WHERE voucher_number IS NOT NULL AND voucher_number <> '';
+CREATE INDEX IF NOT EXISTS supplier_invoices_supplier_id_idx ON supplier_invoices(supplier_id);
 -- 171
-CREATE INDEX IF NOT EXISTS journal_entries_expense_id_idx ON journal_entries(expense_id) WHERE expense_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS supplier_invoices_due_date_idx ON supplier_invoices(due_date);
 -- 172
-CREATE INDEX IF NOT EXISTS journal_entries_supplier_invoice_id_idx ON journal_entries(supplier_invoice_id) WHERE supplier_invoice_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS recurring_contracts (id bigserial PRIMARY KEY);
 -- 173
-CREATE TABLE IF NOT EXISTS voucher_approvals (id bigserial PRIMARY KEY);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_id bigint;
 -- 174
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS customer_name varchar(255);
 -- 175
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS status varchar(255);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_id bigint;
 -- 176
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS note text;
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS service_name varchar(255);
 -- 177
-ALTER TABLE voucher_approvals ALTER COLUMN note TYPE text;
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1;
 -- 178
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS reviewer varchar(255);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS contract_interval varchar(255);
 -- 179
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS reviewed_at timestamp;
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS next_invoice_date date;
 -- 180
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS created_at timestamp;
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
 -- 181
-ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS updated_at timestamp;
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false;
 -- 182
-CREATE UNIQUE INDEX IF NOT EXISTS voucher_approvals_voucher_number_unique ON voucher_approvals(voucher_number) WHERE voucher_number IS NOT NULL AND voucher_number <> '';
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS last_invoice_number varchar(255);
 -- 183
-CREATE INDEX IF NOT EXISTS voucher_approvals_reviewed_at_idx ON voucher_approvals(reviewed_at);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS created_at timestamp;
 -- 184
-CREATE TABLE IF NOT EXISTS owner_transactions (id bigserial PRIMARY KEY);
+ALTER TABLE recurring_contracts ADD COLUMN IF NOT EXISTS archived_at timestamp;
 -- 185
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS transaction_type varchar(64);
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
 -- 186
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS transaction_date date;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voucher_date date DEFAULT CURRENT_DATE;
 -- 187
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS correction_of_voucher_number varchar(255);
 -- 188
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS description varchar(512);
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS expense_id bigint;
 -- 189
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS reference varchar(255);
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS supplier_invoice_id bigint;
 -- 190
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS debit_account varchar(64);
+CREATE INDEX IF NOT EXISTS journal_entries_voucher_number_idx ON journal_entries(voucher_number) WHERE voucher_number IS NOT NULL AND voucher_number <> '';
 -- 191
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS credit_account varchar(64);
+CREATE INDEX IF NOT EXISTS journal_entries_expense_id_idx ON journal_entries(expense_id) WHERE expense_id IS NOT NULL;
 -- 192
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'draft';
+CREATE INDEX IF NOT EXISTS journal_entries_supplier_invoice_id_idx ON journal_entries(supplier_invoice_id) WHERE supplier_invoice_id IS NOT NULL;
 -- 193
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
+CREATE TABLE IF NOT EXISTS voucher_approvals (id bigserial PRIMARY KEY);
 -- 194
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS created_at timestamp;
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
 -- 195
-ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS updated_at timestamp;
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS status varchar(255);
 -- 196
-CREATE INDEX IF NOT EXISTS owner_transactions_date_idx ON owner_transactions(transaction_date);
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS note text;
 -- 197
-CREATE TABLE IF NOT EXISTS app_settings (id bigint PRIMARY KEY);
+ALTER TABLE voucher_approvals ALTER COLUMN note TYPE text;
 -- 198
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_name varchar(255);
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS reviewer varchar(255);
 -- 199
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS contact_email varchar(255);
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS reviewed_at timestamp;
 -- 200
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS plus_giro varchar(255);
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS created_at timestamp;
 -- 201
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_ocr varchar(255);
+ALTER TABLE voucher_approvals ADD COLUMN IF NOT EXISTS updated_at timestamp;
 -- 202
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_recipient varchar(255);
+CREATE UNIQUE INDEX IF NOT EXISTS voucher_approvals_voucher_number_unique ON voucher_approvals(voucher_number) WHERE voucher_number IS NOT NULL AND voucher_number <> '';
 -- 203
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'SOLE_TRADER';
+CREATE INDEX IF NOT EXISTS voucher_approvals_reviewed_at_idx ON voucher_approvals(reviewed_at);
 -- 204
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS accounting_method varchar(255) DEFAULT 'INVOICE_METHOD';
+CREATE TABLE IF NOT EXISTS owner_transactions (id bigserial PRIMARY KEY);
 -- 205
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_reporting_period varchar(255) DEFAULT 'QUARTERLY';
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS transaction_type varchar(64);
 -- 206
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS fiscal_year_start_month integer DEFAULT 1;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS transaction_date date;
 -- 207
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS fiscal_year_end_month integer DEFAULT 12;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0;
 -- 208
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_percent integer DEFAULT 25;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS description varchar(512);
 -- 209
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_terms_days integer DEFAULT 30;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS reference varchar(255);
 -- 210
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS f_tax_approved boolean DEFAULT true;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS debit_account varchar(64);
 -- 211
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_email_template text;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS credit_account varchar(64);
 -- 212
-ALTER TABLE app_settings ALTER COLUMN invoice_email_template TYPE text;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'draft';
 -- 213
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS automatic_invoice_reminders_enabled boolean DEFAULT true;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS voucher_number varchar(255);
 -- 214
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_days_before_due integer DEFAULT 5;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS created_at timestamp;
 -- 215
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_template text;
+ALTER TABLE owner_transactions ADD COLUMN IF NOT EXISTS updated_at timestamp;
 -- 216
-ALTER TABLE app_settings ALTER COLUMN invoice_reminder_template TYPE text;
+CREATE INDEX IF NOT EXISTS owner_transactions_date_idx ON owner_transactions(transaction_date);
 -- 217
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminders_enabled boolean DEFAULT true;
+CREATE TABLE IF NOT EXISTS app_settings (id bigint PRIMARY KEY);
 -- 218
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_days_after_due integer DEFAULT 3;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_name varchar(255);
 -- 219
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_template text;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS contact_email varchar(255);
 -- 220
-ALTER TABLE app_settings ALTER COLUMN overdue_invoice_reminder_template TYPE text;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS plus_giro varchar(255);
 -- 221
-ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS accounting_locked_through_date date;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_ocr varchar(255);
 -- 222
-UPDATE customer_orders SET status = 'DRAFT' WHERE status IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_recipient varchar(255);
 -- 223
-UPDATE customer_orders SET quantity = 1 WHERE quantity IS NULL OR quantity = 0;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'SOLE_TRADER';
 -- 224
-UPDATE customer_orders SET ordinary_price = net_amount WHERE ordinary_price IS NULL OR ordinary_price = 0;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS accounting_method varchar(255) DEFAULT 'INVOICE_METHOD';
 -- 225
-UPDATE customer_orders SET discount_amount = 0 WHERE discount_amount IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_reporting_period varchar(255) DEFAULT 'QUARTERLY';
 -- 226
-UPDATE customer_orders SET invoice_date = CURRENT_DATE WHERE invoice_date IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS fiscal_year_start_month integer DEFAULT 1;
 -- 227
-UPDATE customer_orders SET payment_terms_days = 30 WHERE payment_terms_days IS NULL OR payment_terms_days = 0;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS fiscal_year_end_month integer DEFAULT 12;
 -- 228
-UPDATE customer_orders SET due_date = invoice_date + payment_terms_days WHERE due_date IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_percent integer DEFAULT 25;
 -- 229
-UPDATE customer_orders SET f_tax_approved = true WHERE f_tax_approved IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS payment_terms_days integer DEFAULT 30;
 -- 230
-UPDATE customer_orders SET refunded_amount = 0 WHERE refunded_amount IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS f_tax_approved boolean DEFAULT true;
 -- 231
-UPDATE customers SET archived = false WHERE archived IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_email_template text;
 -- 232
-UPDATE suppliers SET archived = false WHERE archived IS NULL;
+ALTER TABLE app_settings ALTER COLUMN invoice_email_template TYPE text;
 -- 233
-UPDATE supplier_invoices SET status = 'unpaid' WHERE status IS NULL OR status = '';
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS automatic_invoice_reminders_enabled boolean DEFAULT true;
 -- 234
-UPDATE supplier_invoices SET net_amount = GREATEST(total_amount - vat_amount, 0) WHERE net_amount IS NULL OR net_amount = 0;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_days_before_due integer DEFAULT 5;
 -- 235
-UPDATE supplier_invoices SET paid_amount = 0 WHERE paid_amount IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS invoice_reminder_template text;
 -- 236
-UPDATE supplier_invoices SET paid_amount = total_amount WHERE (status = 'paid' OR paid_at IS NOT NULL) AND paid_amount = 0;
+ALTER TABLE app_settings ALTER COLUMN invoice_reminder_template TYPE text;
 -- 237
-UPDATE supplier_invoices SET payment_reference = '' WHERE payment_reference IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminders_enabled boolean DEFAULT true;
 -- 238
-UPDATE supplier_invoices SET payment_history = '' WHERE payment_history IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_days_after_due integer DEFAULT 3;
 -- 239
-UPDATE supplier_invoices SET self_billing = false WHERE self_billing IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS overdue_invoice_reminder_template text;
 -- 240
-UPDATE supplier_invoices SET buyer_name = '' WHERE buyer_name IS NULL;
+ALTER TABLE app_settings ALTER COLUMN overdue_invoice_reminder_template TYPE text;
 -- 241
-UPDATE supplier_invoices SET buyer_reference = '' WHERE buyer_reference IS NULL;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS accounting_locked_through_date date;
 -- 242
-UPDATE supplier_invoices SET approval_reference = '' WHERE approval_reference IS NULL;
+UPDATE customer_orders SET status = 'DRAFT' WHERE status IS NULL;
 -- 243
-UPDATE supplier_invoices SET status = 'cancelled' WHERE cancellation_voucher_number IS NOT NULL AND cancellation_voucher_number <> '';
+UPDATE customer_orders SET quantity = 1 WHERE quantity IS NULL OR quantity = 0;
 -- 244
-UPDATE recurring_contracts SET quantity = 1 WHERE quantity IS NULL OR quantity = 0;
+UPDATE customer_orders SET ordinary_price = net_amount WHERE ordinary_price IS NULL OR ordinary_price = 0;
 -- 245
-UPDATE recurring_contracts SET contract_interval = 'monthly' WHERE contract_interval IS NULL OR contract_interval = '';
+UPDATE customer_orders SET discount_amount = 0 WHERE discount_amount IS NULL;
 -- 246
-UPDATE recurring_contracts SET next_invoice_date = CURRENT_DATE WHERE next_invoice_date IS NULL;
+UPDATE customer_orders SET invoice_date = CURRENT_DATE WHERE invoice_date IS NULL;
 -- 247
-UPDATE recurring_contracts SET active = true WHERE active IS NULL;
+UPDATE customer_orders SET payment_terms_days = 30 WHERE payment_terms_days IS NULL OR payment_terms_days = 0;
 -- 248
-UPDATE recurring_contracts SET archived = false WHERE archived IS NULL;
+UPDATE customer_orders SET due_date = invoice_date + payment_terms_days WHERE due_date IS NULL;
 -- 249
-UPDATE owner_transactions SET status = 'draft' WHERE status IS NULL OR status = '';
--- 246
-UPDATE owner_transactions SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
--- 247
-UPDATE owner_transactions SET updated_at = created_at WHERE updated_at IS NULL;
--- 248
-UPDATE owner_transactions SET status = 'booked' WHERE voucher_number IS NOT NULL AND voucher_number <> '';
--- 249
-UPDATE app_settings SET company_type = 'SOLE_TRADER' WHERE company_type IS NULL;
+UPDATE customer_orders SET f_tax_approved = true WHERE f_tax_approved IS NULL;
 -- 250
-UPDATE app_settings SET accounting_method = 'INVOICE_METHOD' WHERE accounting_method IS NULL OR accounting_method = '';
+UPDATE customer_orders SET refunded_amount = 0 WHERE refunded_amount IS NULL;
 -- 251
-UPDATE app_settings SET vat_reporting_period = 'QUARTERLY' WHERE vat_reporting_period IS NULL OR vat_reporting_period = '';
+UPDATE customers SET archived = false WHERE archived IS NULL;
 -- 252
-UPDATE app_settings SET fiscal_year_start_month = 1 WHERE fiscal_year_start_month IS NULL OR fiscal_year_start_month < 1 OR fiscal_year_start_month > 12;
+UPDATE suppliers SET archived = false WHERE archived IS NULL;
 -- 253
-UPDATE app_settings SET fiscal_year_end_month = 12 WHERE fiscal_year_end_month IS NULL OR fiscal_year_end_month < 1 OR fiscal_year_end_month > 12;
+UPDATE supplier_invoices SET status = 'unpaid' WHERE status IS NULL OR status = '';
 -- 254
-UPDATE app_settings SET automatic_invoice_reminders_enabled = true WHERE automatic_invoice_reminders_enabled IS NULL;
+UPDATE supplier_invoices SET net_amount = GREATEST(total_amount - vat_amount, 0) WHERE net_amount IS NULL OR net_amount = 0;
 -- 255
+UPDATE supplier_invoices SET paid_amount = 0 WHERE paid_amount IS NULL;
+-- 256
+UPDATE supplier_invoices SET paid_amount = total_amount WHERE (status = 'paid' OR paid_at IS NOT NULL) AND paid_amount = 0;
+-- 257
+UPDATE supplier_invoices SET payment_reference = '' WHERE payment_reference IS NULL;
+-- 258
+UPDATE supplier_invoices SET payment_history = '' WHERE payment_history IS NULL;
+-- 259
+UPDATE supplier_invoices SET self_billing = false WHERE self_billing IS NULL;
+-- 260
+UPDATE supplier_invoices SET buyer_name = '' WHERE buyer_name IS NULL;
+-- 261
+UPDATE supplier_invoices SET buyer_reference = '' WHERE buyer_reference IS NULL;
+-- 262
+UPDATE supplier_invoices SET approval_reference = '' WHERE approval_reference IS NULL;
+-- 263
+UPDATE supplier_invoices SET status = 'cancelled' WHERE cancellation_voucher_number IS NOT NULL AND cancellation_voucher_number <> '';
+-- 264
+UPDATE recurring_contracts SET quantity = 1 WHERE quantity IS NULL OR quantity = 0;
+-- 265
+UPDATE recurring_contracts SET contract_interval = 'monthly' WHERE contract_interval IS NULL OR contract_interval = '';
+-- 266
+UPDATE recurring_contracts SET next_invoice_date = CURRENT_DATE WHERE next_invoice_date IS NULL;
+-- 267
+UPDATE recurring_contracts SET active = true WHERE active IS NULL;
+-- 268
+UPDATE recurring_contracts SET archived = false WHERE archived IS NULL;
+-- 269
+UPDATE owner_transactions SET status = 'draft' WHERE status IS NULL OR status = '';
+-- 270
+UPDATE owner_transactions SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
+-- 271
+UPDATE owner_transactions SET updated_at = created_at WHERE updated_at IS NULL;
+-- 272
+UPDATE owner_transactions SET status = 'booked' WHERE voucher_number IS NOT NULL AND voucher_number <> '';
+-- 273
+UPDATE app_settings SET company_type = 'SOLE_TRADER' WHERE company_type IS NULL;
+-- 274
+UPDATE app_settings SET accounting_method = 'INVOICE_METHOD' WHERE accounting_method IS NULL OR accounting_method = '';
+-- 275
+UPDATE app_settings SET vat_reporting_period = 'QUARTERLY' WHERE vat_reporting_period IS NULL OR vat_reporting_period = '';
+-- 276
+UPDATE app_settings SET fiscal_year_start_month = 1 WHERE fiscal_year_start_month IS NULL OR fiscal_year_start_month < 1 OR fiscal_year_start_month > 12;
+-- 277
+UPDATE app_settings SET fiscal_year_end_month = 12 WHERE fiscal_year_end_month IS NULL OR fiscal_year_end_month < 1 OR fiscal_year_end_month > 12;
+-- 278
+UPDATE app_settings SET automatic_invoice_reminders_enabled = true WHERE automatic_invoice_reminders_enabled IS NULL;
+-- 279
 UPDATE app_settings SET invoice_email_template = 'Hej {kundnamn},
 
 Bifogat finns faktura {fakturanummer}.
@@ -583,9 +583,9 @@ Betalningsmottagare: {betalningsmottagare}.
 Vanliga halsningar,
 {foretag}
 {kontaktEpost}' WHERE invoice_email_template IS NULL OR invoice_email_template = '';
--- 256
+-- 280
 UPDATE app_settings SET invoice_reminder_days_before_due = 5 WHERE invoice_reminder_days_before_due IS NULL OR invoice_reminder_days_before_due = 0;
--- 257
+-- 281
 UPDATE app_settings SET invoice_reminder_template = 'Hej {kundnamn},
 
 Vi vill paminna om faktura {fakturanummer}.
@@ -598,13 +598,25 @@ Betalningsmottagare: {betalningsmottagare}.
 Vanliga halsningar,
 {foretag}
 {kontaktEpost}' WHERE invoice_reminder_template IS NULL OR invoice_reminder_template = '';
--- 258
+-- 282
 UPDATE app_settings SET overdue_invoice_reminders_enabled = true WHERE overdue_invoice_reminders_enabled IS NULL;
--- 259
+-- 283
 UPDATE app_settings SET overdue_invoice_reminder_days_after_due = 3 WHERE overdue_invoice_reminder_days_after_due IS NULL OR overdue_invoice_reminder_days_after_due = 0;
--- 260
+-- 284
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'BOTH';
--- 261
+-- 285
 UPDATE accounts SET company_type = 'BOTH' WHERE company_type IS NULL;
--- 262
+-- 286
 UPDATE journal_entries SET voucher_date = CURRENT_DATE WHERE voucher_date IS NULL;
+-- 287
+ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS journal_entry_id bigint;
+-- 288
+ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS document_snapshot text;
+-- 289
+CREATE TABLE IF NOT EXISTS invoice_originals (invoice_id bigint PRIMARY KEY REFERENCES customer_orders(id), pdf bytea NOT NULL, sha256 varchar(64) NOT NULL, archived_at timestamp with time zone NOT NULL);
+-- 290
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_invoice_originals_invoice') THEN ALTER TABLE invoice_originals ADD CONSTRAINT fk_invoice_originals_invoice FOREIGN KEY (invoice_id) REFERENCES customer_orders(id); END IF; END $$;
+-- 291
+CREATE UNIQUE INDEX IF NOT EXISTS uk_bank_reconciliation_journal ON bank_reconciliation_entries (journal_entry_id);
+-- 292
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_bank_reconciliation_journal' AND conrelid = 'bank_reconciliation_entries'::regclass) THEN ALTER TABLE bank_reconciliation_entries ADD CONSTRAINT fk_bank_reconciliation_journal FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id); END IF; END $$;

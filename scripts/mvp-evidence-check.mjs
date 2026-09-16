@@ -311,7 +311,7 @@ check(
 
 check(
   "Risk register separates local MVP from production",
-  includesAll(riskRegister, ["nara MVP-klar lokalt", "inte skarp produktionsklar", "externt bevis"]),
+  includesAll(riskRegister, ["interna blockerare", "ore-stod", "inte skarp produktionsklar", "externt bevis"]),
   "The risk register should make the local-vs-production boundary explicit."
 );
 

@@ -44,7 +44,9 @@ class OrderControllerTest {
       settingsService,
       invoiceReminderEmailService,
       invoiceEmailService,
-      auditService
+      auditService,
+      mock(se.cloudshop.bank.BankImportBookingService.class),
+      mock(se.cloudshop.invoice.InvoiceOriginalService.class)
   );
 
   @Test
@@ -116,6 +118,7 @@ class OrderControllerTest {
 
   @Test
   void markInvoiceSentBooksDraftInvoice() {
+    when(settingsService.getSettings()).thenReturn(AppSettings.defaults());
     Order draftInvoice = new Order("Ali", new Product("PT", "Training", 1000), java.time.Instant.now());
     when(orderRepository.findById(1L)).thenReturn(Optional.of(draftInvoice));
     when(orderRepository.save(draftInvoice)).thenReturn(draftInvoice);
@@ -176,7 +179,7 @@ class OrderControllerTest {
     Order paidInvoice = new Order("Ali", new Product("PT", "Training", 1000), java.time.Instant.now());
     paidInvoice.registerPayment(paidInvoice.getInvoiceDate(), paidInvoice.getTotalAmount(), "Bank");
     when(orderRepository.findById(1L)).thenReturn(Optional.of(paidInvoice));
-    when(orderRepository.save(paidInvoice)).thenReturn(paidInvoice);
+    when(orderRepository.saveAndFlush(paidInvoice)).thenReturn(paidInvoice);
 
     orderController.sendInvoiceEmail("Bearer " + authHeaderToken(), 1L);
 

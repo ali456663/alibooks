@@ -23,6 +23,18 @@ fi
 echo "Using compose file: $COMPOSE_FILE"
 echo "Using env file: $ENV_FILE"
 
+# A new volume hides uploads stored in an old container's writable layer.
+# Never recreate that container before its files have been migrated.
+backend_id="$(docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" ps -a -q backend)"
+if [ -n "$backend_id" ]; then
+  upload_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/uploads"}}{{.Destination}}{{end}}{{end}}' "$backend_id")"
+  if [ "$upload_mount" != "/app/uploads" ]; then
+    echo "Refusing deploy: existing backend has no persistent /app/uploads volume."
+    echo "Preserve and migrate receipt files first. See docs/backup-restore-runbook.md."
+    exit 1
+  fi
+fi
+
 echo "Pulling latest Docker images..."
 docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" pull
 

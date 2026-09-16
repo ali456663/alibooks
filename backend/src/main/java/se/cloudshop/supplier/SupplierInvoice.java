@@ -233,8 +233,11 @@ public class SupplierInvoice {
 
   public void registerPayment(LocalDate paidAt, int amount, String reference) {
     LocalDate paymentDate = paidAt == null ? LocalDate.now() : paidAt;
-    int newPaidAmount = Math.min(totalAmount, Math.max(0, this.paidAmount) + amount);
-    this.paidAmount = newPaidAmount;
+    if ("cancelled".equals(status) || amount <= 0 || paidAmount < 0
+        || (long) paidAmount + amount > totalAmount) {
+      throw new IllegalArgumentException("Supplier payment conflicts with invoice status or remaining amount.");
+    }
+    this.paidAmount = Math.addExact(this.paidAmount, amount);
     this.paymentReference = reference == null ? "" : reference.trim();
     this.paidAt = paymentDate;
     this.status = getRemainingAmount() == 0 ? "paid" : "partial";

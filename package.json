@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:reports": "node --test scripts/report-response.test.mjs scripts/import-money.test.mjs scripts/bank-booking.test.mjs",
     "dev": "npm --prefix frontend run dev --",
     "doctor": "npm --prefix frontend run doctor --",
     "generate:jwt-secret": "npm --prefix frontend run generate:jwt-secret --",
@@ -58,6 +59,9 @@
     "check:views": "npm --prefix frontend run check:views --",
     "smoke:runtime": "npm --prefix frontend run smoke:runtime --",
     "test:backend": "npm --prefix frontend run test:backend --",
-    "test:integration": "node scripts/backend-integration-test.mjs"
+    "test:integration": "node scripts/backend-integration-test.mjs",
+    "test:backup": "node scripts/backup-restore-test.mjs",
+    "verify:backup": "node scripts/backup-restore-verify.mjs",
+    "backup:local": "node scripts/backup-local-bundle.mjs"
   }
 }

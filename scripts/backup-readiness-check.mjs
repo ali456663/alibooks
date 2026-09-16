@@ -59,22 +59,22 @@ check(
 );
 check(
   "Shell restore verifies catalog before restore",
-  includesAll(shellRestore, ["RESTORE_FILE", "RESTORE_CONFIRM", "pg_restore", "-l", "--clean", "--if-exists"]),
+  includesAll(shellRestore, ["RESTORE_FILE", "RESTORE_CONFIRM", "pg_restore", "-l", "--single-transaction", "--exit-on-error"]),
   "Shell restore should require a dump file, explicit confirmation and catalog verification."
 );
 check(
   "Shell restore blocks production-looking targets",
-  includesAll(shellRestore, ["Do not restore into production first", "*test*|*restore*|*drill*", "Refusing restore"]),
+  includesAll(shellRestore, ["Do not restore into production first", "alibooks_restore_*|alibooks_drill_*", "Refusing restore"]),
   "Shell restore should default to separate test/restore/drill databases."
 );
 check(
   "PowerShell restore verifies catalog before restore",
-  includesAll(psRestore, ["RestoreFile", "RestoreConfirm", "pg_restore", "-l", "--clean", "--if-exists"]),
+  includesAll(psRestore, ["RestoreFile", "RestoreConfirm", "pg_restore", "-l", "--single-transaction", "--exit-on-error"]),
   "PowerShell restore should require a dump file, explicit confirmation and catalog verification."
 );
 check(
   "PowerShell restore blocks production-looking targets",
-  includesAll(psRestore, ["test|restore|drill", "Refusing restore", "separate database"]),
+  includesAll(psRestore, ["^alibooks_(restore|drill)_", "Refusing restore", "separate database"]),
   "PowerShell restore should default to separate test/restore/drill databases."
 );
 check(

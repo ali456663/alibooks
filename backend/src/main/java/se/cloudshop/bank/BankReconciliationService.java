@@ -1,9 +1,18 @@
 package se.cloudshop.bank;
 
+import static se.cloudshop.accounting.ReportAmounts.reportAmount;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,10 +35,12 @@ public class BankReconciliationService {
     this.journalEntryRepository = journalEntryRepository;
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public BankReconciliationReport createReport(LocalDate periodFrom, LocalDate periodTo) {
     validatePeriod(periodFrom, periodTo);
 
-    List<JournalEntry> bankJournalEntries = journalEntryRepository.findAll()
+    List<JournalEntry> allJournalEntries = journalEntryRepository.findAll();
+    List<JournalEntry> bankJournalEntries = allJournalEntries
         .stream()
         .filter(entry -> BANK_ACCOUNT_NUMBER.equals(entry.getAccountNumber()))
         .filter(entry -> isWithinPeriod(entry.getVoucherDate(), periodFrom, periodTo))
@@ -38,7 +49,8 @@ public class BankReconciliationService {
             .thenComparing(entry -> entry.getVoucherNumber() == null ? "" : entry.getVoucherNumber()))
         .toList();
 
-    List<BankReconciliationEntry> bankRows = bankReconciliationEntryRepository.findAll()
+    List<BankReconciliationEntry> allBankRows = bankReconciliationEntryRepository.findAll();
+    List<BankReconciliationEntry> bankRows = allBankRows
         .stream()
         .filter(entry -> isWithinPeriod(entry.getBankDate(), periodFrom, periodTo))
         .toList();
@@ -49,15 +61,16 @@ public class BankReconciliationService {
         .filter(entry -> "skipped".equalsIgnoreCase(entry.getStatus()))
         .toList();
 
-    int ledgerMovement = bankJournalEntries.stream()
-        .mapToInt(entry -> entry.getDebit() - entry.getCredit())
-        .sum();
-    int reconciledMovement = bookedRows.stream()
-        .mapToInt(BankReconciliationEntry::getAmount)
-        .sum();
-    int difference = ledgerMovement - reconciledMovement;
+    int ledgerMovement = reportAmount(bankJournalEntries.stream()
+        .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
+        .sum());
+    int reconciledMovement = reportAmount(bookedRows.stream()
+        .mapToLong(BankReconciliationEntry::getAmount)
+        .sum());
+    int difference = reportAmount((long) ledgerMovement - reconciledMovement);
 
     List<BankReconciliationIssue> issues = new ArrayList<>();
+    checkJournalLinks(allJournalEntries, allBankRows, bankJournalEntries, bankRows, issues);
     if (bankJournalEntries.isEmpty() && !bookedRows.isEmpty()) {
       issues.add(new BankReconciliationIssue(
           "critical",
@@ -140,9 +153,50 @@ public class BankReconciliationService {
     }
   }
 
+  private void checkJournalLinks(List<JournalEntry> allJournal, List<BankReconciliationEntry> allRows,
+      List<JournalEntry> periodJournal, List<BankReconciliationEntry> periodRows,
+      List<BankReconciliationIssue> issues) {
+    Map<Long, JournalEntry> journalById = allJournal.stream().filter(entry -> entry.getId() != null)
+        .collect(Collectors.toMap(JournalEntry::getId, Function.identity()));
+    Map<Long, Long> linkCounts = allRows.stream().filter(row -> row.getJournalEntryId() != null)
+        .collect(Collectors.groupingBy(BankReconciliationEntry::getJournalEntryId, Collectors.counting()));
+    Map<String, Long> bankIdCounts = allRows.stream().filter(row -> row.getBankRowId() != null)
+        .collect(Collectors.groupingBy(BankReconciliationEntry::getBankRowId, Collectors.counting()));
+    Set<Long> matched = new HashSet<>();
+    for (BankReconciliationEntry row : periodRows) {
+      if (row.getBankDate() == null || row.getBankRowId() == null || row.getBankRowId().isBlank()
+          || bankIdCounts.getOrDefault(row.getBankRowId(), 0L) > 1) {
+        issues.add(new BankReconciliationIssue("critical", "invalid_bank_identity_or_date", row.getBankDate(), row.getBankRowId(),
+            row.getAmount(), "Bank row has an absent date or missing/duplicated identity."));
+        continue;
+      }
+      if ("skipped".equalsIgnoreCase(row.getStatus()) && row.getJournalEntryId() == null) continue;
+      JournalEntry journal = journalById.get(row.getJournalEntryId());
+      String problem = null;
+      if (!"booked".equalsIgnoreCase(row.getStatus())) problem = "invalid_bank_row_status";
+      else if (row.getJournalEntryId() == null) problem = "unlinked_bank_row";
+      else if (journal == null) problem = "missing_linked_journal_entry";
+      else if (linkCounts.get(row.getJournalEntryId()) > 1) problem = "duplicate_journal_link";
+      else if (!BANK_ACCOUNT_NUMBER.equals(journal.getAccountNumber()) || row.getBankDate() == null
+          || !row.getBankDate().equals(journal.getVoucherDate()) || row.getAmount() == 0
+          || (long) journal.getDebit() - journal.getCredit() != row.getAmount()) problem = "bank_journal_link_mismatch";
+      if (problem == null) matched.add(journal.getId());
+      else issues.add(new BankReconciliationIssue("critical", problem, row.getBankDate(), row.getBankRowId(),
+          row.getAmount(), "Bank row " + row.getBankRowId() + " requires review: " + problem + "."));
+    }
+    for (JournalEntry journal : periodJournal) {
+      if (journal.getId() == null || !matched.contains(journal.getId())) {
+        issues.add(new BankReconciliationIssue("critical", "unmatched_journal_entry", journal.getVoucherDate(),
+            journal.getVoucherNumber(), reportAmount((long) journal.getDebit() - journal.getCredit()),
+            "Journal row " + journal.getId() + " on account 1930 has no verified bank row link."));
+      }
+    }
+  }
+
   private boolean isWithinPeriod(LocalDate date, LocalDate periodFrom, LocalDate periodTo) {
     if (date == null) {
-      return periodFrom == null && periodTo == null;
+      // Undated records cannot safely be assigned to, or excluded from, a closing period.
+      return true;
     }
 
     if (periodFrom != null && date.isBefore(periodFrom)) {

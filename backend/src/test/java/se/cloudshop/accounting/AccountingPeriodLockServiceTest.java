@@ -1,9 +1,12 @@
 package se.cloudshop.accounting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -26,6 +29,50 @@ import se.cloudshop.supplier.PayablesReportService;
 
 class AccountingPeriodLockServiceTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"REVIEW_REQUIRED", "UNSUPPORTED_METHOD"})
+  void unresolvedSubledgerControlPreventsLocking(String status) {
+    LocalDate date = LocalDate.now();
+    mockCleanProfessionalControls(date);
+    when(subledgerControlService.createReport(date)).thenReturn(new SubledgerControlReport(date, "INVOICE_METHOD", status, List.of()));
+    assertThat(periodLockService.checkPeriod(date).blockers()).anyMatch(message -> message.contains("reskontra") || message.contains("Reskontra"));
+    assertThatThrownBy(() -> periodLockService.closePeriod(date, "test")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    verify(settingsService, never()).lockAccountingThroughDate(any());
+  }
+
+  @Test
+  void wrappedVoucherTotalsCannotPassPeriodClose() {
+    LocalDate date = LocalDate.now();
+    mockCleanProfessionalControls(date);
+    Account bank = new Account("1930", "Bank");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "M-1", Integer.MAX_VALUE, 0, "Test", date),
+        new JournalEntry(null, bank, "M-1", Integer.MAX_VALUE, 0, "Test", date),
+        new JournalEntry(null, bank, "M-1", 102, 0, "Test", date),
+        new JournalEntry(null, bank, "M-1", 0, 100, "Test", date)
+    ));
+    PeriodCloseCheckResult result = periodLockService.checkPeriod(date);
+    assertThat(result.unbalancedVoucherCount()).isEqualTo(1);
+    assertThat(result.readyToLock()).isFalse();
+    assertThat(result.blockers()).anyMatch(message -> message.contains("obalanserade"));
+    assertThatThrownBy(() -> periodLockService.closePeriod(date, "test"))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    verify(settingsService, never()).lockAccountingThroughDate(any());
+  }
+
+  @Test
+  void lateVoucherAmountsCannotWrapDuringPeriodClose() {
+    LocalDate date = LocalDate.now().minusDays(50);
+    Account bank = new Account("1930", "Bank");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "M-1", Integer.MAX_VALUE, 0, "Test", date),
+        new JournalEntry(null, bank, "M-1", 1, 0, "Test", date)
+    ));
+    assertThatThrownBy(() -> periodLockService.closePeriod(LocalDate.now(), "test"))
+        .isInstanceOf(ReportAmounts.LimitExceeded.class);
+    verify(settingsService, never()).lockAccountingThroughDate(any());
+  }
+
   private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
   private final OrderRepository orderRepository = mock(OrderRepository.class);
   private final ExpenseRepository expenseRepository = mock(ExpenseRepository.class);
@@ -36,6 +83,7 @@ class AccountingPeriodLockServiceTest {
   private final ReceivablesReportService receivablesReportService = mock(ReceivablesReportService.class);
   private final PayablesReportService payablesReportService = mock(PayablesReportService.class);
   private final VoucherApprovalRepository voucherApprovalRepository = mock(VoucherApprovalRepository.class);
+  private final SubledgerControlService subledgerControlService = mock(SubledgerControlService.class);
   private final AccountingPeriodLockService periodLockService = new AccountingPeriodLockService(
       journalEntryRepository,
       orderRepository,
@@ -46,11 +94,13 @@ class AccountingPeriodLockServiceTest {
       bankReconciliationService,
       receivablesReportService,
       payablesReportService,
-      voucherApprovalRepository
+      voucherApprovalRepository,
+      subledgerControlService
   );
 
   @BeforeEach
   void setUp() {
+    when(subledgerControlService.createReport(any())).thenReturn(new SubledgerControlReport(LocalDate.now(), "INVOICE_METHOD", "MATCHED", List.of()));
     when(settingsService.getSettings()).thenReturn(AppSettings.defaults());
     when(journalEntryRepository.findAll()).thenReturn(List.of());
     when(voucherApprovalRepository.findAll()).thenReturn(List.of());

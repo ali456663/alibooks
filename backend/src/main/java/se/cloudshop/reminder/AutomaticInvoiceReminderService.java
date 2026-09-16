@@ -2,10 +2,8 @@ package se.cloudshop.reminder;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import se.cloudshop.email.InvoiceReminderEmailService;
 import se.cloudshop.order.Order;
 import se.cloudshop.order.OrderRepository;
 import se.cloudshop.settings.AppSettings;
@@ -15,20 +13,18 @@ import se.cloudshop.settings.SettingsService;
 public class AutomaticInvoiceReminderService {
 
   private static final String AUTO_METHOD_PREFIX = "AUTO_EMAIL_";
-  private static final String SENT_STATUS = "SENT";
-  private static final String SKIPPED_STATUS = "SKIPPED";
 
   private final OrderRepository orderRepository;
-  private final InvoiceReminderEmailService invoiceReminderEmailService;
+  private final AutomaticReminderDeliveryService deliveryService;
   private final SettingsService settingsService;
 
   public AutomaticInvoiceReminderService(
       OrderRepository orderRepository,
-      InvoiceReminderEmailService invoiceReminderEmailService,
+      AutomaticReminderDeliveryService deliveryService,
       SettingsService settingsService
   ) {
     this.orderRepository = orderRepository;
-    this.invoiceReminderEmailService = invoiceReminderEmailService;
+    this.deliveryService = deliveryService;
     this.settingsService = settingsService;
   }
 
@@ -56,71 +52,31 @@ public class AutomaticInvoiceReminderService {
     int sent = 0;
     int skipped = 0;
 
-    for (Order invoice : orderRepository.findAll()) {
-      if (shouldSendAutomaticReminder(invoice, today, reminderDaysBeforeDue, autoMethod)) {
-        checked++;
-        try {
-          invoiceReminderEmailService.sendReminder(invoice);
-          invoice.addReminder(autoMethod, SENT_STATUS, invoice.getCustomer().getEmail());
-          sent++;
-        } catch (RuntimeException exception) {
-          invoice.addReminderHistory(autoMethod, SKIPPED_STATUS, reminderEmail(invoice));
-          skipped++;
-        }
-
-        orderRepository.save(invoice);
+    for (Order candidate : orderRepository.findAll()) {
+      if (candidate.getId() == null) {
+        continue;
       }
 
-      if (settings.isOverdueInvoiceRemindersEnabled()
-          && shouldSendOverdueReminder(invoice, today, overdueDaysAfterDue, overdueAutoMethod)) {
+      AutomaticReminderDeliveryService.DeliveryResult dueResult = deliveryService.deliver(
+          candidate.getId(), today, reminderDaysBeforeDue, autoMethod, false, overdueDaysAfterDue, overdueAutoMethod);
+      if (dueResult != AutomaticReminderDeliveryService.DeliveryResult.NOT_ELIGIBLE) {
         checked++;
-        try {
-          invoiceReminderEmailService.sendOverdueReminder(invoice);
-          invoice.addReminder(overdueAutoMethod, SENT_STATUS, invoice.getCustomer().getEmail());
-          sent++;
-        } catch (RuntimeException exception) {
-          invoice.addReminderHistory(overdueAutoMethod, SKIPPED_STATUS, reminderEmail(invoice));
-          skipped++;
-        }
+        if (dueResult == AutomaticReminderDeliveryService.DeliveryResult.SENT) sent++;
+        if (dueResult == AutomaticReminderDeliveryService.DeliveryResult.SKIPPED) skipped++;
+      }
 
-        orderRepository.save(invoice);
+      if (settings.isOverdueInvoiceRemindersEnabled()) {
+        AutomaticReminderDeliveryService.DeliveryResult overdueResult = deliveryService.deliver(
+            candidate.getId(), today, reminderDaysBeforeDue, autoMethod, true, overdueDaysAfterDue, overdueAutoMethod);
+        if (overdueResult != AutomaticReminderDeliveryService.DeliveryResult.NOT_ELIGIBLE) {
+          checked++;
+          if (overdueResult == AutomaticReminderDeliveryService.DeliveryResult.SENT) sent++;
+          if (overdueResult == AutomaticReminderDeliveryService.DeliveryResult.SKIPPED) skipped++;
+        }
       }
     }
 
     return new AutomaticReminderResult(Instant.now(), true, reminderDaysBeforeDue, checked, sent, skipped);
   }
 
-  private boolean shouldSendAutomaticReminder(Order invoice, LocalDate today, int reminderDaysBeforeDue, String autoMethod) {
-    if (!invoice.hasRemainingAmount() || invoice.getDueDate() == null || invoice.isCreditInvoice()) {
-      return false;
-    }
-
-    if (invoice.hasReminder(autoMethod, SENT_STATUS)) {
-      return false;
-    }
-
-    long daysUntilDue = ChronoUnit.DAYS.between(today, invoice.getDueDate());
-    return daysUntilDue == reminderDaysBeforeDue;
-  }
-
-  private boolean shouldSendOverdueReminder(Order invoice, LocalDate today, int overdueDaysAfterDue, String autoMethod) {
-    if (!invoice.hasRemainingAmount() || invoice.getDueDate() == null || invoice.isCreditInvoice()) {
-      return false;
-    }
-
-    if (invoice.hasReminder(autoMethod, SENT_STATUS)) {
-      return false;
-    }
-
-    long daysOverdue = ChronoUnit.DAYS.between(invoice.getDueDate(), today);
-    return daysOverdue == overdueDaysAfterDue;
-  }
-
-  private String reminderEmail(Order invoice) {
-    if (invoice.getCustomer() == null) {
-      return null;
-    }
-
-    return invoice.getCustomer().getEmail();
-  }
 }

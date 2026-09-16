@@ -20,7 +20,7 @@ class InvoicePdfControllerTest {
   private final JwtService jwtService = new JwtService("test_secret");
   private final AuthHeader authHeader = new AuthHeader(jwtService);
   private final OrderRepository orderRepository = mock(OrderRepository.class);
-  private final InvoicePdfService invoicePdfService = mock(InvoicePdfService.class);
+  private final InvoiceOriginalService invoicePdfService = mock(InvoiceOriginalService.class);
   private final InvoicePdfController controller = new InvoicePdfController(
       authHeader,
       orderRepository,
@@ -32,7 +32,7 @@ class InvoicePdfControllerTest {
     Order invoice = new Order("Ali Wafa", new Product("PT", "Training", 1000), Instant.now());
     invoice.setInvoiceNumber("F-2026-0001\r\n../evil");
     when(orderRepository.findById(1L)).thenReturn(Optional.of(invoice));
-    when(invoicePdfService.createInvoicePdf(invoice)).thenReturn("%PDF".getBytes());
+    when(invoicePdfService.read(invoice)).thenReturn(new InvoiceOriginalService.InvoicePdfDocument("%PDF".getBytes(), "original", "test-hash"));
 
     ResponseEntity<byte[]> response = controller.getInvoicePdf("Bearer " + token(), 1L);
 
@@ -40,6 +40,8 @@ class InvoicePdfControllerTest {
     assertThat(contentDisposition).contains("inline");
     assertThat(contentDisposition).doesNotContain("\r").doesNotContain("\n").doesNotContain("/");
     assertThat(contentDisposition).contains("F-2026-0001__.._evil.pdf");
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+    assertThat(response.getHeaders().getFirst("X-Invoice-Document")).isEqualTo("original");
   }
 
   private String token() {

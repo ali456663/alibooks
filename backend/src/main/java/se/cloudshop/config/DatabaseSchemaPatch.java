@@ -315,5 +315,11 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS company_type varchar(255) DEFAULT 'BOTH'");
     jdbcTemplate.execute("UPDATE accounts SET company_type = 'BOTH' WHERE company_type IS NULL");
     jdbcTemplate.execute("UPDATE journal_entries SET voucher_date = CURRENT_DATE WHERE voucher_date IS NULL");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS journal_entry_id bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS document_snapshot text");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS invoice_originals (invoice_id bigint PRIMARY KEY REFERENCES customer_orders(id), pdf bytea NOT NULL, sha256 varchar(64) NOT NULL, archived_at timestamp with time zone NOT NULL)");
+    jdbcTemplate.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_invoice_originals_invoice') THEN ALTER TABLE invoice_originals ADD CONSTRAINT fk_invoice_originals_invoice FOREIGN KEY (invoice_id) REFERENCES customer_orders(id); END IF; END $$");
+    jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_bank_reconciliation_journal ON bank_reconciliation_entries (journal_entry_id)");
+    jdbcTemplate.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_bank_reconciliation_journal' AND conrelid = 'bank_reconciliation_entries'::regclass) THEN ALTER TABLE bank_reconciliation_entries ADD CONSTRAINT fk_bank_reconciliation_journal FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id); END IF; END $$");
   }
 }

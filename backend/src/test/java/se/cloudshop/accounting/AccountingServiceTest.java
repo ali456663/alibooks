@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import se.cloudshop.bank.BankReconciliationReport;
 import se.cloudshop.bank.BankReconciliationService;
@@ -31,6 +33,149 @@ import se.cloudshop.supplier.Supplier;
 import se.cloudshop.supplier.SupplierInvoice;
 
 class AccountingServiceTest {
+
+  @ParameterizedTest
+  @ValueSource(strings = {"balance", "trial", "ledger", "sign", "integrity", "voucher", "sie"})
+  void stopsReportsWhenAccumulatedAmountsExceedSupportedRange(String report) {
+    Account bank = new Account("1930", "Bank");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "M-1", Integer.MAX_VALUE, 0, "Test", LocalDate.now()),
+        new JournalEntry(null, bank, "M-1", 1, 0, "Test", LocalDate.now())
+    ));
+    assertThatThrownBy(() -> {
+      switch (report) {
+        case "balance" -> accountingService.createBalanceReport();
+        case "trial" -> accountingService.createTrialBalanceReport(null, null);
+        case "ledger" -> accountingService.createGeneralLedgerReport(null, null, "1930");
+        case "sign" -> accountingService.createAccountSignControlReport(null, null);
+        case "integrity" -> accountingService.createJournalIntegrityReport(null, null);
+        case "voucher" -> accountingService.createVoucherControlReport(null, null);
+        case "sie" -> accountingService.createSieExportReceipt(null, null);
+        default -> throw new AssertionError(report);
+      }
+    }).isInstanceOf(ReportAmounts.LimitExceeded.class);
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void stopsProfitReportWhenSeparateAccountsOverflowRevenueTotal() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, Integer.MAX_VALUE), reportEntry("3051", 0, 1)
+    ));
+    assertThatThrownBy(accountingService::createProfitAndLossReport).isInstanceOf(ReportAmounts.LimitExceeded.class);
+  }
+
+  @Test
+  void stopsProfitReportWhenSignedResultOverflowsDespiteValidAccountTotals() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, Integer.MAX_VALUE), reportEntry("5420", 0, 1)
+    ));
+    assertThatThrownBy(accountingService::createProfitAndLossReport).isInstanceOf(ReportAmounts.LimitExceeded.class);
+  }
+
+  @Test
+  void lossIsNotClampedAndReducesEquityInBalanceReport() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("1930", 1000, 0), reportEntry("2018", 0, 1000),
+        reportEntry("5420", 300, 0), reportEntry("1930", 0, 300)
+    ));
+    assertThat(accountingService.createProfitAndLossReport().result()).isEqualTo(-300);
+    BalanceReport balance = accountingService.createBalanceReport();
+    assertThat(balance.totalAssets()).isEqualTo(700);
+    assertThat(balance.totalLiabilitiesAndEquity()).isEqualTo(700);
+    assertThat(balance.difference()).isZero();
+  }
+
+  @Test
+  void netReportSumUsesLongIntermediateEvenWhenFinalSumFits() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, Integer.MAX_VALUE), reportEntry("3041", 0, 1),
+        reportEntry("3041", 1, 0)
+    ));
+    assertThat(accountingService.createProfitAndLossReport().result()).isEqualTo(Integer.MAX_VALUE);
+  }
+
+  @Test
+  void stopsVatReportWhenOutputMinusInputOverflows() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("2611", 0, Integer.MAX_VALUE), reportEntry("2641", 0, 1)
+    ));
+    assertThatThrownBy(() -> accountingService.createVatReport(null, null)).isInstanceOf(ReportAmounts.LimitExceeded.class);
+  }
+
+  @Test
+  void stopsVatControlWhenAccumulatedSalesOverflow() {
+    Account sales = new Account("3041", "Sales");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, sales, "M-1", 0, Integer.MAX_VALUE, "Test", LocalDate.now()),
+        new JournalEntry(null, sales, "M-2", 0, 1, "Test", LocalDate.now())
+    ));
+    assertThatThrownBy(() -> accountingService.createVatControlReport(null, null)).isInstanceOf(ReportAmounts.LimitExceeded.class);
+  }
+
+  @Test
+  void stopsLedgerWhenOpeningBalancePlusPeriodMovementOverflows() {
+    Account bank = new Account("1930", "Bank");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "M-1", Integer.MAX_VALUE, 0, "Test", LocalDate.now().minusDays(1)),
+        new JournalEntry(null, bank, "M-2", 1, 0, "Test", LocalDate.now())
+    ));
+    assertThatThrownBy(() -> accountingService.createGeneralLedgerReport(LocalDate.now(), LocalDate.now(), "1930"))
+        .isInstanceOf(ReportAmounts.LimitExceeded.class);
+    assertThatThrownBy(() -> accountingService.createTrialBalanceReport(LocalDate.now(), LocalDate.now()))
+        .isInstanceOf(ReportAmounts.LimitExceeded.class);
+  }
+
+  private JournalEntry reportEntry(String accountNumber, int debit, int credit) {
+    return new JournalEntry(null, new Account(accountNumber, "Test account"), "M-1", debit, credit, "Test", LocalDate.now());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {100_000, 100_000_003, 1_000_000_000})
+  void largeCashPaymentsAndRefundsPreserveExactInvoiceVat(int net) {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    Order invoice = testInvoice(net);
+    invoice.setStatus("SENT");
+    int first = invoice.getTotalAmount() / 3;
+    int last = invoice.getTotalAmount() - first;
+    accountingService.createPaymentEntries(invoice, invoice.getInvoiceDate(), first);
+    invoice.registerPayment(invoice.getInvoiceDate(), first, "first");
+    accountingService.createPaymentEntries(invoice, invoice.getInvoiceDate(), last);
+    invoice.registerPayment(invoice.getInvoiceDate(), last, "last");
+    invoice.setStatus("CREDITED");
+    accountingService.createRefundEntries(invoice, invoice.getInvoiceDate(), first);
+    invoice.registerRefund(invoice.getInvoiceDate(), first, "first refund");
+    accountingService.createRefundEntries(invoice, invoice.getInvoiceDate(), last);
+    List<JournalEntry> entries = savedJournalEntries();
+    assertThat(entries.stream().filter(e -> "2611".equals(e.getAccountNumber())).mapToLong(JournalEntry::getCredit).sum())
+        .isEqualTo(invoice.getVatAmount());
+    assertThat(entries.stream().filter(e -> "2611".equals(e.getAccountNumber())).mapToLong(JournalEntry::getDebit).sum())
+        .isEqualTo(invoice.getVatAmount());
+    assertThat(entries).allSatisfy(e -> {
+      assertThat(e.getDebit()).isNotNegative();
+      assertThat(e.getCredit()).isNotNegative();
+    });
+    assertThat(entries.stream().mapToLong(JournalEntry::getDebit).sum())
+        .isEqualTo(entries.stream().mapToLong(JournalEntry::getCredit).sum());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {125_000, 125_000_004, 1_250_000_000})
+  void largeSupplierPartialPaymentsPreserveInputVat(int total) {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    Supplier supplier = new Supplier("Test", "test@example.invalid", "", "", "");
+    int vat = total / 5;
+    SupplierInvoice invoice = new SupplierInvoice(supplier, LocalDate.now(), LocalDate.now().plusDays(30), "Test", "", total, vat, "5420");
+    int first = total / 3;
+    accountingService.createSupplierInvoicePaymentEntries(invoice, LocalDate.now(), first, "first");
+    invoice.registerPayment(LocalDate.now(), first, "first");
+    accountingService.createSupplierInvoicePaymentEntries(invoice, LocalDate.now(), total - first, "last");
+    List<JournalEntry> entries = savedJournalEntries();
+    assertThat(entries.stream().filter(e -> "2641".equals(e.getAccountNumber())).mapToLong(JournalEntry::getDebit).sum())
+        .isEqualTo(vat);
+    assertThat(entries.stream().mapToLong(JournalEntry::getDebit).sum()).isEqualTo(total);
+    assertThat(entries.stream().mapToLong(JournalEntry::getCredit).sum()).isEqualTo(total);
+  }
 
   private final AccountRepository accountRepository = mock(AccountRepository.class);
   private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
@@ -58,6 +203,7 @@ class AccountingServiceTest {
   @BeforeEach
   void setUp() {
     when(settingsService.getSettings()).thenReturn(AppSettings.defaults());
+    when(settingsService.lockSettingsForAccounting()).thenAnswer(invocation -> settingsService.getSettings());
     when(journalEntryRepository.findAll()).thenReturn(List.of());
     when(journalEntryRepository.findByInvoice(any(Order.class))).thenReturn(List.of());
     when(journalEntryRepository.findBySupplierInvoice(any(SupplierInvoice.class))).thenReturn(List.of());

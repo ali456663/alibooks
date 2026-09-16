@@ -49,17 +49,20 @@ public class ExpenseController {
   private final ExpenseRepository expenseRepository;
   private final AccountingService accountingService;
   private final AuditService auditService;
+  private final se.cloudshop.bank.BankImportBookingService bankImport;
 
   public ExpenseController(
       AuthHeader authHeader,
       ExpenseRepository expenseRepository,
       AccountingService accountingService,
-      AuditService auditService
+      AuditService auditService,
+      se.cloudshop.bank.BankImportBookingService bankImport
   ) {
     this.authHeader = authHeader;
     this.expenseRepository = expenseRepository;
     this.accountingService = accountingService;
     this.auditService = auditService;
+    this.bankImport = bankImport;
   }
 
   @GetMapping("/expenses")
@@ -78,6 +81,11 @@ public class ExpenseController {
       @RequestBody CreateExpenseRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expense is required.");
+    if (request.bankRow() != null) {
+      if (!"1930".equals(request.paidFrom())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank import must use account 1930.");
+      bankImport.reserve(request.bankRow(), request.expenseDate(), -((long) request.netAmount() + request.vatAmount()));
+    }
 
     if (request.description() == null || request.description().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Description is required.");
@@ -85,6 +93,12 @@ public class ExpenseController {
 
     if (request.netAmount() <= 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Net amount must be greater than zero.");
+    }
+    if (request.vatAmount() < 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VAT amount must not be negative.");
+    }
+    if ((long) request.netAmount() + request.vatAmount() > Integer.MAX_VALUE) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expense total exceeds the supported limit.");
     }
 
     LocalDate expenseDate = request.expenseDate() == null ? LocalDate.now() : request.expenseDate();
@@ -94,14 +108,25 @@ public class ExpenseController {
         expenseDate,
         request.description(),
         request.netAmount(),
-        Math.max(request.vatAmount(), 0),
+        request.vatAmount(),
         request.category() == null || request.category().isBlank() ? "5420" : request.category(),
         request.paidFrom() == null || request.paidFrom().isBlank() ? "1930" : request.paidFrom()
     ));
 
-    accountingService.createExpenseEntries(expense);
+    var bankEntry = accountingService.createExpenseEntries(expense);
     auditService.record("expense", "expense", expense.getId(), "created", expense.getDescription(), "Expense created and booked", expense.getTotalAmount(), authorizationHeader);
+    if (request.bankRow() != null) bankImport.record(request.bankRow(), "expense", "Expense " + expense.getId(), bankEntry, authorizationHeader);
     return expense;
+  }
+
+  @PostMapping("/bank-import/expenses")
+  @Transactional
+  @ResponseStatus(HttpStatus.CREATED)
+  public Expense createBankExpense(@RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody CreateExpenseRequest request) {
+    authHeader.requireValidToken(authorization);
+    if (request == null || request.bankRow() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank row is required.");
+    return createExpense(authorization, request);
   }
 
   @PostMapping("/expenses/{id}/receipt")

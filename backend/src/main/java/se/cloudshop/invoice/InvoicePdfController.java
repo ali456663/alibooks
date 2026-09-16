@@ -20,16 +20,16 @@ public class InvoicePdfController {
 
   private final AuthHeader authHeader;
   private final OrderRepository orderRepository;
-  private final InvoicePdfService invoicePdfService;
+  private final InvoiceOriginalService invoiceOriginalService;
 
   public InvoicePdfController(
       AuthHeader authHeader,
       OrderRepository orderRepository,
-      InvoicePdfService invoicePdfService
+      InvoiceOriginalService invoiceOriginalService
   ) {
     this.authHeader = authHeader;
     this.orderRepository = orderRepository;
-    this.invoicePdfService = invoicePdfService;
+    this.invoiceOriginalService = invoiceOriginalService;
   }
 
   @GetMapping("/invoices/{id}/pdf")
@@ -40,7 +40,7 @@ public class InvoicePdfController {
     authHeader.requireValidToken(authorizationHeader);
     Order invoice = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
-    byte[] pdf = invoicePdfService.createInvoicePdf(invoice);
+    var document = invoiceOriginalService.read(invoice);
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
     ContentDisposition contentDisposition = ContentDisposition.inline()
         .filename(safeDownloadFilename(filename), StandardCharsets.UTF_8)
@@ -48,8 +48,11 @@ public class InvoicePdfController {
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
+        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+        .header("X-Invoice-Document", document.source())
+        .header("X-Invoice-SHA256", document.sha256())
         .contentType(MediaType.APPLICATION_PDF)
-        .body(pdf);
+        .body(document.pdf());
   }
 
   private String safeDownloadFilename(String filename) {

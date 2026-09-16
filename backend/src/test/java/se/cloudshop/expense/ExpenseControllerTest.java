@@ -41,7 +41,8 @@ class ExpenseControllerTest {
       authHeader,
       expenseRepository,
       accountingService,
-      auditService
+      auditService,
+      mock(se.cloudshop.bank.BankImportBookingService.class)
   );
 
   @Test

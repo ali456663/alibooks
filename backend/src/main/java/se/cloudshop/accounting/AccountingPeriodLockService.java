@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.bank.BankReconciliationReport;
@@ -38,6 +39,7 @@ public class AccountingPeriodLockService {
   private final ReceivablesReportService receivablesReportService;
   private final PayablesReportService payablesReportService;
   private final VoucherApprovalRepository voucherApprovalRepository;
+  private final SubledgerControlService subledgerControlService;
 
   public AccountingPeriodLockService(
       JournalEntryRepository journalEntryRepository,
@@ -49,7 +51,8 @@ public class AccountingPeriodLockService {
       BankReconciliationService bankReconciliationService,
       ReceivablesReportService receivablesReportService,
       PayablesReportService payablesReportService,
-      VoucherApprovalRepository voucherApprovalRepository
+      VoucherApprovalRepository voucherApprovalRepository,
+      SubledgerControlService subledgerControlService
   ) {
     this.journalEntryRepository = journalEntryRepository;
     this.orderRepository = orderRepository;
@@ -61,8 +64,10 @@ public class AccountingPeriodLockService {
     this.receivablesReportService = receivablesReportService;
     this.payablesReportService = payablesReportService;
     this.voucherApprovalRepository = voucherApprovalRepository;
+    this.subledgerControlService = subledgerControlService;
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PeriodCloseCheckResult checkPeriod(LocalDate lockedThroughDate) {
     LocalDate date = requireValidLockDate(lockedThroughDate);
 
@@ -97,8 +102,8 @@ public class AccountingPeriodLockService {
 
     long unbalancedVoucherCount = voucherGroups.values().stream()
         .filter(group -> {
-          int debit = group.stream().mapToInt(JournalEntry::getDebit).sum();
-          int credit = group.stream().mapToInt(JournalEntry::getCredit).sum();
+          long debit = group.stream().mapToLong(JournalEntry::getDebit).sum();
+          long credit = group.stream().mapToLong(JournalEntry::getCredit).sum();
           return debit != credit;
         })
         .count();
@@ -186,6 +191,12 @@ public class AccountingPeriodLockService {
       blockers.add(voucherBlockedApprovalCount + " verifikat ar blockerade i attestkontrollen.");
     }
     blockers.addAll(accountSignBlockers);
+    SubledgerControlReport subledgerControl = subledgerControlService.createReport(date);
+    if ("REVIEW_REQUIRED".equals(subledgerControl.status())) {
+      blockers.add("Reskontra och huvudbok kravs avstamda per faktura. Differenser eller saknade kallkopplingar finns pa konto 1510/2440.");
+    } else if (!List.of("MATCHED", "NO_DATA").contains(subledgerControl.status())) {
+      blockers.add("Automatisk reskontraavstamning stodjer inte vald bokforingsmetod. Kontrollerat bokslutsflode kravs innan lasning.");
+    }
 
     List<String> warnings = new ArrayList<>();
     if (voucherControlReport.warningIssueCount() > 0) {
@@ -269,6 +280,8 @@ public class AccountingPeriodLockService {
 
   @Transactional
   public PeriodCloseCheckResult closePeriod(LocalDate lockedThroughDate, String authorizationHeader) {
+    requireValidLockDate(lockedThroughDate);
+    settingsService.lockSettingsForAccounting();
     PeriodCloseCheckResult result = checkPeriod(lockedThroughDate);
 
     if (result.locked()) {
@@ -373,8 +386,8 @@ public class AccountingPeriodLockService {
       int lagDays = Math.toIntExact(ChronoUnit.DAYS.between(voucherDate, createdDate));
       if (lagDays > 35) {
         longestLagDays = Math.max(longestLagDays, lagDays);
-        int debit = entries.stream().mapToInt(JournalEntry::getDebit).sum();
-        int credit = entries.stream().mapToInt(JournalEntry::getCredit).sum();
+        int debit = ReportAmounts.reportAmount(entries.stream().mapToLong(JournalEntry::getDebit).sum());
+        int credit = ReportAmounts.reportAmount(entries.stream().mapToLong(JournalEntry::getCredit).sum());
         String description = entries.stream()
             .map(JournalEntry::getDescription)
             .filter(value -> value != null && !value.isBlank())

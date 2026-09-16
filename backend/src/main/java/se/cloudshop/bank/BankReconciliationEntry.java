@@ -5,6 +5,11 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ForeignKey;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import se.cloudshop.accounting.JournalEntry;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -25,6 +30,27 @@ public class BankReconciliationEntry {
   private String status;
   private String matchLabel;
   private Instant bookedAt;
+
+  @JsonIgnore
+  @OneToOne
+  @JoinColumn(name = "journal_entry_id", unique = true,
+      foreignKey = @ForeignKey(name = "fk_bank_reconciliation_journal"))
+  private JournalEntry journalEntry;
+
+  public Long getJournalEntryId() {
+    return journalEntry == null ? null : journalEntry.getId();
+  }
+
+  public void linkJournalEntry(JournalEntry entry) {
+    if (journalEntry != null || !"booked".equals(status) || entry == null || entry.getId() == null
+        || !"1930".equals(entry.getAccountNumber()) || bankDate == null
+        || !bankDate.equals(entry.getVoucherDate()) || amount == 0
+        || (long) entry.getDebit() - entry.getCredit() != amount) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.CONFLICT, "Bank row must match one unlinked journal entry on 1930 with the same date and signed amount.");
+    }
+    journalEntry = entry;
+  }
 
   public BankReconciliationEntry() {
   }

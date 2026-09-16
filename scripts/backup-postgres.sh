@@ -28,5 +28,6 @@ docker run --rm \
   postgres:16 \
   pg_restore -l "/backups/${filename}" >/dev/null
 
-echo "Backup verified: ${backup_dir_abs}/${filename}"
+echo "Backup verified (catalog only, not a restore test): ${backup_dir_abs}/${filename}"
+echo "Also copy uploads/receipts while all writers are stopped. A database dump does not contain receipt files."
 echo "Store this file securely and never commit it to Git."

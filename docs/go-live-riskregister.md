@@ -4,6 +4,10 @@ Det har registret skiljer pa lokal MVP-stabilitet och riktig produktionsklarhet.
 Den sista lokala anvandningsgransen kontrolleras med `npm run check:use-today`.
 Det slutliga beslutet fore skarp drift finns i [go-live-beslut.md](go-live-beslut.md) och kontrolleras med `npm run check:go-live-decision`.
 AliBooks far inte anvandas med skarp kunddata, bokforingsdata eller betalningar innan blockerande externa kontroller ar verifierade.
+Det finns aven interna blockerare: fullt ore-stod och en bredare beloppsmodell
+ar inte fardiga. Centrala rapporter stoppar nu summor utanfor nuvarande grans;
+andra modulers summering aterstar. En gron release-gate godkanner inte skarp bokforing.
+Se [beloppssakerhet](money-safety.md) for verifierade rattningar och kvarvarande risker.
 
 ## Statusnivaer
 
@@ -13,15 +17,30 @@ AliBooks far inte anvandas med skarp kunddata, bokforingsdata eller betalningar 
 
 ## Risker fore skarp drift
 
+Bankimportens nya betalnings- och kostnadsfloden sparar bokforing, historik och
+audit atomiskt, med serialiserade aterforsok. Detta minskar risken for dubbla och
+halvsparade bokningar men ersatter inte historisk avstamning eller bankens egna
+transaktionsidentiteter. Gamla timestamp-ID:n migreras inte automatiskt.
+Se [bank-import-atomicity.md](bank-import-atomicity.md).
+
+Bankrader har nu sparad unik journalradskoppling. Aldre okopplade rader och
+felmatchningar ger kritiska avstamningsfel aven vid noll nettodifferens.
+Manuell koppling till befintlig bokforing ar mojlig efter uttryckligt val,
+utan att skapa nya betalningar. Detta loser inte fullstandigheten hos utdrag,
+klumpsummor eller ingangsbalanser. Se [bank-journal-links.md](bank-journal-links.md).
+
 | Omrade | Status | Risk | Kontroll | Bevis som kravs |
 | --- | --- | --- | --- | --- |
+| Fakturadokument och utskicksatervinning | BLOCKERAR SKARP DRIFT | Nya utstallda fakturor har nu immutable snapshot och original-PDF med kontrollsumma. Aldre dokument kan sakna original. SMTP och databascommit ar inte atomiska. | Bevara originalunderlag, granska rekonstruerade kopior och infor bestaende outbox med hantering av osakra utskick. Se invoice-document-snapshots.md. | Originaldokument kan aterlasas oforandrade och SMTP-timeout/commitfel kan avstammas utan blinda dubbla utskick. |
+| Historisk reskontra och bankmatchning | BLOCKERAR SKARP DRIFT | Faktureringsmetodens 1510/2440 kontrolleras per faktura mot huvudboken. Bankkontrollen kraver nu journalradskoppling, inte bara lika totalsummor. Importerad/raderad historik, ingangsbalanser, klumpsummor och kontantmetodens bokslutsflode aterstar. | Verifiera verkliga underlag och ingangsbalanser, migrera leverantorsbetalningar fran text och granska varje aldre bankkoppling. Periodlasning och journalbokforing har gemensamt databaslas. Se bank-journal-links.md, period-write-serialization.md och subledger-control.md. | Verkliga saldon per rapportdatum stammer med underlag/huvudbok; varje bankrad har sparad koppling och dubblettkontroll samt verifierat originalutdrag. |
+| Oren och beloppssummering | BLOCKERAR SKARP DRIFT | Heltals-SEK kan inte bevara alla underlagsbelopp; centrala rapporter avvisar for stora summor, ovriga moduler aterstar att granska. | Genomfor versionssatt beloppsmigrering med databas-, API-, rapport- och importtester. | Underlag med oren och stora sammanlagda saldon bevaras exakt hela vagen, inklusive moms och Stripe. |
 | GitHub Actions CI | KRAVER EXTERN VERIFIERING | Lokala tester kan vara grona medan GitHub Actions failar efter push. | Pusha release-commits och kontrollera CI. | Backend build and test, Frontend release gate och Docker build ar green i GitHub Actions. |
 | GitHub sync | BLOCKERAR SKARP DRIFT | Lokala commits kan saknas pa GitHub, sa moln och demo kor gammal kod. | Kor `npm run check:sync` efter push. | `check:sync` ar gron och branch ar inte ahead of origin/main. |
 | Dockerhub images | KRAVER EXTERN VERIFIERING | EC2 kan inte deploya om images inte finns eller har fel tagg. | Kor Dockerhub workflow manuellt eller via versionstagg. | Backend/frontend images finns i Dockerhub med `latest`, `sha-*` eller `v*` tagg. |
 | EC2 deploy | BLOCKERAR SKARP DRIFT | Appen kan fungera lokalt men inte som publik URL. | Kor `scripts/ec2-deploy.sh` pa EC2. | Frontend container, backend container och smoke test ar green pa EC2. |
 | RDS databas | BLOCKERAR SKARP DRIFT | Backend startar inte eller skriver mot fel databas. | Kor `npm run check:prod -- --env-file ../.env --strict` pa EC2. | `/api/system/status` visar `database.ok = true` mot RDS. |
 | Miljo variabler och CORS | BLOCKERAR SKARP DRIFT | Publik frontend kan prata med fel backend, localhost kan ligga kvar, eller svag JWT kan skydda riktig data for daligt. | Kor `npm run check:env-go-live` och `npm run check:prod -- --env-file ../.env --strict`. | `JWT_SECRET` ar stark, `APP_CORS_ALLOWED_ORIGINS` matchar publik frontend, `APP_CORS_LOCAL_DEV_ENABLED=false`, RDS-env ar satt och hemligheter ligger utanfor GitHub. |
-| Backup och restore drill | BLOCKERAR SKARP DRIFT | Bokforing och underlag kan ga forlorade eller inte ga att aterlasa. | Kor `scripts/backup-postgres.*` och aterlas till separat testdatabas. | `pg_dump` skapas, `pg_restore -l` passerar och restore drill ar dokumenterad. |
+| Backup och restore drill | BLOCKERAR SKARP DRIFT | Lokal databas och nio filer aterlastes isolerat 2026-09-09, men nio filer saknar kostnadskoppling och en kostnad saknar kvittoreferens. Skyddad extern kopia och appfloden mot aterlast data ar inte verifierade. | Kor `npm run backup:local` med samtliga skrivare pausade. Granska underlagskopplingar, ordna krypterad separat kopia och prova appens floden i isolerad aterstallningsmiljo. Se backup-restore-runbook.md och release-evidence.md. | Matchande radantal och filhashar finns lokalt. Kompletta underlag, fungerande appaterlasning och aterstallning fran separat lagringsplats aterstar. Enbart `pg_restore -l` ar inte ett aterlasningsprov. |
 | Databas-schema och Hibernate | BLOCKERAR SKARP DRIFT | Fel schema kan ge `column does not exist` eller tysta databasandringar om `ddl-auto` eller startup-patchar inte ar valt medvetet. | Kor `npm run check:schema`, `npm run check:migrations` och `npm run check:schema-bootstrap`. Testa schema-dump och `db/migrations/001_startup_schema_patch.sql` mot restore/staging och kontrollera att produktion anvander `SPRING_JPA_HIBERNATE_DDL_AUTO=validate` eller `none` samt `APP_SCHEMA_PATCH_ENABLED=false` fore RDS-deploy. | Schema-lage och schema-patch-flagga ar explicita i `.env`, Docker Compose och production readiness, migrationsfilen speglar backendens startup-SQL, schema-dump ar testad enligt `schema-bootstrap-runbook.md`, och produktion muterar inte RDS-schema automatiskt. |
 | Frontend beroenden | KRAVER EXTERN VERIFIERING | Appen kan bygga lokalt men ha stale lockfile, osakra package-specs eller aktuella sarbarheter i npm-ekosystemet. | Kor `npm run check:dependencies` lokalt och `npm run check:audit` med internet fore skarp deploy. | Lockfile/Docker-installation ar gron lokalt och online-audit visar inga hoga eller kritiska produktionsberoenden. |
 | Stripe betalningar | KRAVER EXTERN VERIFIERING | Betalningar kan tas emot men inte bokforas korrekt om webhook saknas eller ar fel. | Testa Stripe test-webhook och `checkout.session.completed`. | AliBooks skapar/uppdaterar faktura eller Stripe-forsaljning och bokforingen balanserar. |
@@ -49,5 +68,5 @@ Innan riktig drift ska dessa vara sant:
 
 ## Snabbt beslut just nu
 
-AliBooks kan betraktas som nara MVP-klar lokalt nar release-gaten ar gron.
+En gron release-gate visar lokal teknisk teststatus, inte att AliBooks ar klart som enda bokforingssystem.
 AliBooks ar inte skarp produktionsklar for riktig kunddata forran punkterna ovan har externt bevis.

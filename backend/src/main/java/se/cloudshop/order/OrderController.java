@@ -38,6 +38,8 @@ public class OrderController {
   private final InvoiceReminderEmailService invoiceReminderEmailService;
   private final InvoiceEmailService invoiceEmailService;
   private final AuditService auditService;
+  private final se.cloudshop.bank.BankImportBookingService bankImport;
+  private final se.cloudshop.invoice.InvoiceOriginalService invoiceOriginals;
 
   public OrderController(
       ProductService productService,
@@ -48,7 +50,9 @@ public class OrderController {
       SettingsService settingsService,
       InvoiceReminderEmailService invoiceReminderEmailService,
       InvoiceEmailService invoiceEmailService,
-      AuditService auditService
+      AuditService auditService,
+      se.cloudshop.bank.BankImportBookingService bankImport,
+      se.cloudshop.invoice.InvoiceOriginalService invoiceOriginals
   ) {
     this.productService = productService;
     this.authHeader = authHeader;
@@ -59,6 +63,8 @@ public class OrderController {
     this.invoiceReminderEmailService = invoiceReminderEmailService;
     this.invoiceEmailService = invoiceEmailService;
     this.auditService = auditService;
+    this.bankImport = bankImport;
+    this.invoiceOriginals = invoiceOriginals;
   }
 
   @GetMapping("/orders")
@@ -98,15 +104,19 @@ public class OrderController {
 
     Order order;
 
-    if (request.customerId() != null) {
-      Customer customer = customerRepository.findById(request.customerId())
-          .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer not found."));
-      order = new Order(customer, product, Instant.now(), quantity);
-    } else {
-      if (request.customerName() == null || request.customerName().isBlank()) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer is required.");
+    try {
+      if (request.customerId() != null) {
+        Customer customer = customerRepository.findById(request.customerId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer not found."));
+        order = new Order(customer, product, Instant.now(), quantity);
+      } else {
+        if (request.customerName() == null || request.customerName().isBlank()) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer is required.");
+        }
+        order = new Order(request.customerName(), product, Instant.now(), quantity);
       }
-      order = new Order(request.customerName(), product, Instant.now(), quantity);
+    } catch (ArithmeticException | IllegalArgumentException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice amounts are invalid or exceed the supported limit.");
     }
 
     Order savedOrder = orderRepository.save(order);
@@ -117,6 +127,7 @@ public class OrderController {
     savedOrder.setOcrNumber(settings.getDefaultOcr());
     savedOrder.setPlusGiro(settings.getPlusGiro());
     savedOrder.setPaymentRecipient(settings.getPaymentRecipient());
+    savedOrder.captureDocumentSnapshot(settings);
     savedOrder = orderRepository.save(savedOrder);
     auditService.record("invoice", "invoice", savedOrder.getId(), "created", savedOrder.getInvoiceNumber(), "Invoice created", savedOrder.getTotalAmount(), authorizationHeader);
     return savedOrder;
@@ -151,8 +162,15 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid invoices keep their payment status.");
     }
 
+    if ("SENT".equals(order.getStatus())) return order;
+    if (!"DRAFT".equals(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only a draft can be issued.");
+    }
+    accountingService.requireUnlockedAccountingDate(order.getInvoiceDate());
     accountingService.createInvoiceEntries(order);
+    if (!order.isDocumentSnapshotAvailable()) order.captureDocumentSnapshot(settingsService.getSettings());
     order.setStatus("SENT");
+    invoiceOriginals.archiveAtIssuance(order);
     order.addReminderHistory("INVOICE_MARKED_SENT", "SAVED", order.getCustomer() == null ? null : order.getCustomer().getEmail());
     Order savedOrder = orderRepository.save(order);
     auditService.record("invoice", "invoice", savedOrder.getId(), "marked_sent", savedOrder.getInvoiceNumber(), "Invoice marked as sent", savedOrder.getTotalAmount(), authorizationHeader);
@@ -167,6 +185,10 @@ public class OrderController {
       @RequestBody(required = false) MarkInvoicePaidRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    if (request != null && request.bankRow() != null) {
+      if (request.paidAmount() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Explicit bank payment amount is required.");
+      bankImport.reserve(request.bankRow(), request.paymentDate(), request.paidAmount());
+    }
     orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
@@ -205,11 +227,23 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "This payment is already registered on the invoice.");
     }
 
-    accountingService.createPaymentEntries(order, paymentDate, paidAmount);
+    var bankEntry = accountingService.createPaymentEntries(order, paymentDate, paidAmount);
     order.registerPayment(paymentDate, paidAmount, paymentReference);
     Order savedOrder = orderRepository.save(order);
     auditService.record("payment", "invoice", savedOrder.getId(), "payment_registered", savedOrder.getInvoiceNumber(), "Invoice payment registered", paidAmount, authorizationHeader);
+    if (request != null && request.bankRow() != null) {
+      bankImport.record(request.bankRow(), "invoice_payment", "Invoice " + savedOrder.getId(), bankEntry, authorizationHeader);
+    }
     return savedOrder;
+  }
+
+  @PostMapping("/bank-import/invoices/{id}/paid")
+  @Transactional
+  public Order registerBankPayment(@RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id, @RequestBody MarkInvoicePaidRequest request) {
+    authHeader.requireValidToken(authorization);
+    if (request == null || request.bankRow() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank row is required.");
+    return markInvoiceAsPaid(authorization, id, request);
   }
 
   @PostMapping("/invoices/{id}/refund")
@@ -271,11 +305,13 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/email")
+  @Transactional
   public Order sendInvoiceEmail(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
@@ -283,18 +319,23 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credited original invoice cannot be sent. Send the credit invoice instead.");
     }
 
-    if (!"PAID".equals(order.getStatus()) && !"PARTIALLY_PAID".equals(order.getStatus())) {
-      accountingService.requireUnlockedAccountingDate(order.getInvoiceDate());
+    if (order.getStatus() == null || !java.util.Set.of("DRAFT", "SENT", "PAID", "PARTIALLY_PAID").contains(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice status does not allow sending.");
     }
 
-    invoiceEmailService.sendInvoice(order);
-    if (!"PAID".equals(order.getStatus()) && !"PARTIALLY_PAID".equals(order.getStatus())) {
+    if ("DRAFT".equals(order.getStatus())) {
+      if (order.isCreditInvoice()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit invoice must be issued before sending.");
+      accountingService.requireUnlockedAccountingDate(order.getInvoiceDate());
       accountingService.createInvoiceEntries(order);
+      if (!order.isDocumentSnapshotAvailable()) order.captureDocumentSnapshot(settingsService.getSettings());
       order.setStatus("SENT");
+      invoiceOriginals.archiveAtIssuance(order);
     }
     order.addReminderHistory("INVOICE_EMAIL", "SENT", order.getCustomer() == null ? null : order.getCustomer().getEmail());
-    Order savedOrder = orderRepository.save(order);
+    Order savedOrder = orderRepository.saveAndFlush(order);
     auditService.record("invoice", "invoice", savedOrder.getId(), "email_sent", savedOrder.getInvoiceNumber(), "Invoice email sent", savedOrder.getTotalAmount(), authorizationHeader);
+    // Validate and flush bookkeeping before the external side effect. SMTP cannot join the database transaction.
+    invoiceEmailService.sendInvoice(savedOrder);
     return savedOrder;
   }
 
@@ -312,17 +353,19 @@ public class OrderController {
   }
 
   @PostMapping("/invoices/{id}/reminder-email")
+  @Transactional
   public Order sendInvoiceReminderEmail(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    orderRepository.lockById(id);
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
     invoiceReminderEmailService.sendReminder(order);
     order.addReminder("EMAIL", "SENT", order.getCustomer() == null ? null : order.getCustomer().getEmail());
-    Order savedOrder = orderRepository.save(order);
+    Order savedOrder = orderRepository.saveAndFlush(order);
     auditService.record("reminder", "invoice", savedOrder.getId(), "reminder_email_sent", savedOrder.getInvoiceNumber(), "Invoice reminder email sent", savedOrder.getRemainingAmount(), authorizationHeader);
     return savedOrder;
   }
@@ -379,9 +422,7 @@ public class OrderController {
 
     accountingService.requireUnlockedAccountingDate(LocalDate.now());
 
-    Order creditInvoice = original.getCustomer() != null
-        ? new Order(original.getCustomer(), original.getProduct(), Instant.now(), original.getQuantity())
-        : new Order(original.getCustomerName(), original.getProduct(), Instant.now(), original.getQuantity());
+    Order creditInvoice = Order.draftFromInvoiceSnapshot(original, Instant.now());
     creditInvoice.setCreditInvoice(true);
     creditInvoice.setCreditedInvoiceId(original.getId());
     creditInvoice.setAmounts(
@@ -403,6 +444,7 @@ public class OrderController {
     original.setStatus("CREDITED");
     orderRepository.save(original);
     accountingService.createCreditInvoiceEntries(savedCreditInvoice);
+    invoiceOriginals.archiveAtIssuance(savedCreditInvoice);
     auditService.record("invoice", "invoice", savedCreditInvoice.getId(), "credited", savedCreditInvoice.getInvoiceNumber(), "Credit invoice created for " + original.getInvoiceNumber(), Math.abs(savedCreditInvoice.getTotalAmount()), authorizationHeader);
 
     return savedCreditInvoice;

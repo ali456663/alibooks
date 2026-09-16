@@ -11,8 +11,57 @@ import org.junit.jupiter.api.Test;
 
 class PayablesReportServiceTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void rejectsBucketOrReportOverflow(boolean sameBucket) {
+    Supplier supplier = supplier("Test");
+    SupplierInvoice first = invoice(1L, supplier, LocalDate.now().plusDays(2), 1_500_000_000, 0, "unpaid");
+    SupplierInvoice second = invoice(2L, supplier, sameBucket ? first.getDueDate() : LocalDate.now().minusDays(60), 1_500_000_000, 0, "unpaid");
+    when(supplierInvoiceRepository.findAll()).thenReturn(List.of(first, second));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> payablesReportService.createAgingReport(LocalDate.now()))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(422));
+  }
+
   private final SupplierInvoiceRepository supplierInvoiceRepository = mock(SupplierInvoiceRepository.class);
-  private final PayablesReportService payablesReportService = new PayablesReportService(supplierInvoiceRepository);
+  private final se.cloudshop.audit.AuditEventRepository auditRepository = mock(se.cloudshop.audit.AuditEventRepository.class);
+  private final PayablesReportService payablesReportService = new PayablesReportService(supplierInvoiceRepository, auditRepository);
+
+  @Test
+  void reconstructsSupplierPaymentsAndCancellationByDate() {
+    SupplierInvoice paid = invoice(1L, supplier("Test"), LocalDate.of(2026, 7, 10), 1250, 250, "unpaid");
+    paid.registerPayment(LocalDate.of(2026, 7, 5), 500, "first");
+    paid.registerPayment(LocalDate.of(2026, 7, 20), 750, "last");
+    SupplierInvoice cancelled = invoice(2L, supplier("Test"), LocalDate.of(2026, 7, 10), 100, 20, "unpaid");
+    cancelled.markCancelled(LocalDate.of(2026, 7, 15), "R-1");
+    when(supplierInvoiceRepository.findAll()).thenReturn(List.of(paid, cancelled));
+    assertThat(payablesReportService.createAgingReport(LocalDate.of(2026, 6, 30)).invoiceCount()).isZero();
+    assertThat(payablesReportService.createAgingReport(LocalDate.of(2026, 7, 4)).totalOutstanding()).isEqualTo(1350);
+    assertThat(payablesReportService.createAgingReport(LocalDate.of(2026, 7, 5)).totalOutstanding()).isEqualTo(850);
+    var report = payablesReportService.createAgingReport(LocalDate.of(2026, 7, 15));
+    assertThat(report.totalOutstanding()).isEqualTo(750);
+    assertThat(report.invoices()).singleElement().satisfies(row -> {
+      assertThat(row.status()).isEqualTo("partial");
+      assertThat(row.paymentRecommended()).isFalse();
+    });
+    assertThat(payablesReportService.createAgingReport(LocalDate.of(2026, 7, 20)).invoiceCount()).isZero();
+  }
+
+  @Test
+  void refusesLegacyPaidAmountWithoutDatedHistory() {
+    SupplierInvoice invoice = invoice(1L, supplier("Test"), LocalDate.of(2026, 7, 10), 1250, 250, "partial");
+    setField(invoice, "paidAmount", 500);
+    when(supplierInvoiceRepository.findAll()).thenReturn(List.of(invoice));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> payablesReportService.createAgingReport(LocalDate.of(2026, 7, 10)))
+        .isInstanceOf(se.cloudshop.accounting.SettlementSnapshot.HistoryIncomplete.class);
+  }
+
+  @Test
+  void refusesHistoricalReportWhenOlderVersionsDeletedSupplierInvoices() {
+    when(auditRepository.existsByEntityTypeAndAction("supplier_invoice", "deleted")).thenReturn(true);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> payablesReportService.createAgingReport(LocalDate.now().minusDays(1)))
+        .isInstanceOf(se.cloudshop.accounting.SettlementSnapshot.HistoryIncomplete.class);
+  }
 
   @Test
   void createsAgingReportForOpenSupplierInvoicesOnly() {
@@ -24,7 +73,9 @@ class PayablesReportServiceTest {
     SupplierInvoice bookedUnpaid = invoice(5L, supplier, LocalDate.of(2026, 6, 1), 700, 140, "booked");
     SupplierInvoice cancelled = invoice(6L, supplier, LocalDate.of(2026, 6, 1), 900, 180, "cancelled");
     SupplierInvoice partial = invoice(7L, supplier, LocalDate.of(2026, 7, 30), 1000, 200, "partial");
-    setField(partial, "paidAmount", 400);
+    partial.registerPayment(LocalDate.of(2026, 7, 2), 400, "test");
+    paid.registerPayment(LocalDate.of(2026, 7, 2), paid.getTotalAmount(), "test");
+    cancelled.markCancelled(LocalDate.of(2026, 7, 2), "");
 
     when(supplierInvoiceRepository.findAll()).thenReturn(List.of(notDue, overdue, oldOverdue, paid, bookedUnpaid, cancelled, partial));
 

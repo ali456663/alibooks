@@ -34,7 +34,7 @@ public class InvoiceExportController {
     csv.append("Id,Fakturanummer,Fakturadatum,Forfallodatum,Kund,Status,Antal,Netto,Moms,Totalt,OCR,PlusGiro,Kreditfaktura,Krediterar faktura\n");
 
     int exportedCount = 0;
-    int totalAmount = 0;
+    long totalAmount = 0;
     for (Order invoice : orderRepository.findAll()) {
       csv.append(invoice.getId()).append(",");
       csv.append(escape(invoice.getInvoiceNumber())).append(",");
@@ -61,7 +61,7 @@ public class InvoiceExportController {
         "invoices_exported",
         "invoices",
         "Invoices exported. Rows: " + exportedCount + ".",
-        totalAmount,
+        se.cloudshop.accounting.ReportAmounts.reportAmount(totalAmount),
         authorizationHeader
     );
 

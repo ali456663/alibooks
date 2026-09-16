@@ -79,6 +79,7 @@ jobs:
           path: |
             backend/target/surefire-reports
             backend/target/failsafe-reports
+            backend/target/pdf-proof/*.pdf
           if-no-files-found: warn
           retention-days: 14
 
@@ -111,6 +112,9 @@ jobs:
       - name: Audit frontend dependencies
         working-directory: frontend
         run: npm run check:audit
+
+      - name: Test report error handling and numeric contracts
+        run: npm run test:reports
 
       - name: Install pinned headless test browser
         env:
@@ -145,6 +149,23 @@ jobs:
           echo "- Release gate: npm run check:release" >> "$GITHUB_STEP_SUMMARY"
           echo "- Production bundle: frontend-dist artifact" >> "$GITHUB_STEP_SUMMARY"
 
+  backup-restore:
+    name: Isolated backup and receipt restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Test database and receipt restore
+        run: npm run test:backup
+      - name: Test PowerShell backup failure handling
+        shell: pwsh
+        run: ./scripts/backup-scripts-test.ps1
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest
@@ -152,6 +173,7 @@ jobs:
     needs:
       - backend
       - frontend
+      - backup-restore
 
     steps:
       - name: Checkout

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,7 +17,23 @@ class SettingsServiceTest {
 
   private final AppSettingsRepository appSettingsRepository = mock(AppSettingsRepository.class);
   private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
-  private final SettingsService settingsService = new SettingsService(appSettingsRepository, journalEntryRepository);
+  private final EntityManager entityManager = mock(EntityManager.class);
+  private final SettingsService settingsService = new SettingsService(appSettingsRepository, journalEntryRepository, entityManager);
+
+  @Test
+  void refreshesSettingsUnderDatabaseWriteLock() {
+    AppSettings current = AppSettings.defaults();
+    when(appSettingsRepository.findById(1L)).thenReturn(Optional.of(current));
+    assertThat(settingsService.lockSettingsForAccounting()).isSameAs(current);
+    org.mockito.Mockito.verify(entityManager).refresh(current, LockModeType.PESSIMISTIC_WRITE);
+  }
+
+  @Test
+  void rejectsMissingSettingsInsteadOfCreatingUnlockedDefaults() {
+    assertThatThrownBy(settingsService::lockSettingsForAccounting)
+        .isInstanceOf(ResponseStatusException.class).hasMessageContaining("initialized");
+    org.mockito.Mockito.verify(appSettingsRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+  }
 
   @Test
   void allowsAccountingLockToMoveForward() {

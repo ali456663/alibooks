@@ -227,7 +227,7 @@ public class AccountingController {
         .append(csvEscape(event.getMessage())).append(",")
         .append(event.getAmount()).append(",")
         .append(csvEscape(event.getActorEmail())).append("\n"));
-    int totalVatToPay = filings.stream().mapToInt(VatFiling::getVatToPay).sum();
+    int totalVatToPay = ReportAmounts.reportAmount(filings.stream().mapToLong(VatFiling::getVatToPay).sum());
 
     auditService.record(
         "export",

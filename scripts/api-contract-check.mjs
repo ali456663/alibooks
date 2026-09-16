@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const backendRoot = path.join(repoRoot, "backend", "src", "main", "java");
-const frontendSource = readFileSync(path.join(repoRoot, "frontend", "src", "main.jsx"), "utf8");
+const frontendSource = ["main.jsx", "components/ui/BankJournalLink.jsx"]
+  .map(file => readFileSync(path.join(repoRoot, "frontend", "src", file), "utf8")).join("\n");
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -44,6 +45,10 @@ const criticalContracts = [
   ["GET", "/accounting-period/close-check", "period close check"],
   ["POST", "/accounting-period/close", "period lock"],
   ["GET", "/bank-reconciliations", "bank import/reconciliation"],
+  ["POST", "/bank-import/invoices/:param/paid", "atomic bank payment", "/bank-import/invoices/${invoiceItem.id}/paid"],
+  ["POST", "/bank-import/expenses", "atomic bank expense"],
+  ["GET", "/bank-reconciliations/:param/journal-candidates", "journal link candidates", '"journal-candidates"'],
+  ["POST", "/bank-reconciliations/:param/journal-link", "explicit journal link", '"journal-link"'],
   ["GET", "/accountant-package", "accountant handoff"],
   ["GET", "/archive-year", "year archive control"],
   ["POST", "/ai/assistant", "AI assistant"],

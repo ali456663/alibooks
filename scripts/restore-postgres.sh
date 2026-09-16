@@ -16,10 +16,10 @@ if [ "$RESTORE_CONFIRM" != "RESTORE_TO_TEST_DATABASE" ]; then
 fi
 
 case "$PGDATABASE" in
-  *test*|*restore*|*drill*)
+  alibooks_restore_*|alibooks_drill_*)
     ;;
   *)
-    echo "Refusing restore: PGDATABASE must look like a test/restore/drill database."
+    echo "Refusing restore: PGDATABASE must start with alibooks_restore_ or alibooks_drill_."
     echo "Use a separate database such as alibooks_restore_test. Do not restore into production first."
     exit 1
     ;;
@@ -45,7 +45,7 @@ docker run --rm \
   -e PGPASSWORD="$PGPASSWORD" \
   -v "${restore_dir_abs}:/backups" \
   postgres:16 \
-  pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --clean --if-exists --no-owner --no-privileges "/backups/${restore_file_base}"
+  pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --single-transaction --exit-on-error --no-owner --no-privileges "/backups/${restore_file_base}"
 
 echo "Restore drill completed for ${PGDATABASE}."
 echo "Start the backend against this test database and verify system status, customers, invoices, bookkeeping and VAT report."

@@ -1,12 +1,18 @@
 package se.cloudshop.order;
 
+import static se.cloudshop.accounting.ReportAmounts.reportAmount;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import se.cloudshop.accounting.SettlementSnapshot;
 import se.cloudshop.customer.Customer;
 
 @Service
@@ -18,12 +24,18 @@ public class ReceivablesReportService {
     this.orderRepository = orderRepository;
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public ReceivablesAgingReport createAgingReport(LocalDate asOfDate) {
     LocalDate asOf = asOfDate == null ? LocalDate.now() : asOfDate;
-    List<ReceivablesAgingInvoice> invoices = orderRepository.findAll()
-        .stream()
-        .filter(invoice -> invoice.getRemainingAmount() > 0)
-        .map(invoice -> toAgingInvoice(invoice, asOf))
+    List<Order> allInvoices = orderRepository.findAll();
+    Map<Long, List<Order>> credits = allInvoices.stream()
+        .filter(Order::isCreditInvoice)
+        .filter(invoice -> invoice.getCreditedInvoiceId() != null)
+        .collect(Collectors.groupingBy(Order::getCreditedInvoiceId));
+    List<ReceivablesAgingInvoice> invoices = allInvoices.stream()
+        .filter(invoice -> !invoice.isCreditInvoice() && !"DRAFT".equals(invoice.getStatus()))
+        .map(invoice -> toAgingInvoice(invoice, asOf, credits.getOrDefault(invoice.getId(), List.of())))
+        .filter(invoice -> invoice.remainingAmount() > 0)
         .sorted(Comparator
             .comparing((ReceivablesAgingInvoice invoice) -> invoice.dueDate() == null)
             .thenComparing(invoice -> invoice.dueDate() == null ? LocalDate.MAX : invoice.dueDate())
@@ -45,27 +57,27 @@ public class ReceivablesReportService {
         .map(entry -> entry.getValue().toBucket(entry.getKey()))
         .toList();
 
-    int totalOutstanding = invoices.stream().mapToInt(ReceivablesAgingInvoice::remainingAmount).sum();
-    int overdueOutstanding = invoices.stream()
+    int totalOutstanding = reportAmount(invoices.stream().mapToLong(ReceivablesAgingInvoice::remainingAmount).sum());
+    int overdueOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.daysOverdue() > 0)
-        .mapToInt(ReceivablesAgingInvoice::remainingAmount)
-        .sum();
-    int notDueOutstanding = invoices.stream()
+        .mapToLong(ReceivablesAgingInvoice::remainingAmount)
+        .sum());
+    int notDueOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.daysOverdue() <= 0 && invoice.dueDate() != null)
-        .mapToInt(ReceivablesAgingInvoice::remainingAmount)
-        .sum();
-    int noDueDateOutstanding = invoices.stream()
+        .mapToLong(ReceivablesAgingInvoice::remainingAmount)
+        .sum());
+    int noDueDateOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.dueDate() == null)
-        .mapToInt(ReceivablesAgingInvoice::remainingAmount)
-        .sum();
-    int dueSoonOutstanding = invoices.stream()
+        .mapToLong(ReceivablesAgingInvoice::remainingAmount)
+        .sum());
+    int dueSoonOutstanding = reportAmount(invoices.stream()
         .filter(invoice -> invoice.dueDate() != null)
         .filter(invoice -> {
           long daysUntilDue = ChronoUnit.DAYS.between(asOf, invoice.dueDate());
           return daysUntilDue >= 0 && daysUntilDue <= 5;
         })
-        .mapToInt(ReceivablesAgingInvoice::remainingAmount)
-        .sum();
+        .mapToLong(ReceivablesAgingInvoice::remainingAmount)
+        .sum());
 
     return new ReceivablesAgingReport(
         asOf,
@@ -80,14 +92,35 @@ public class ReceivablesReportService {
     );
   }
 
-  private ReceivablesAgingInvoice toAgingInvoice(Order invoice, LocalDate asOf) {
+  private ReceivablesAgingInvoice toAgingInvoice(Order invoice, LocalDate asOf, List<Order> credits) {
+    if (!List.of("SENT", "PARTIALLY_PAID", "PAID", "CREDITED").contains(String.valueOf(invoice.getStatus()))
+        || ("PAID".equals(invoice.getStatus()) && invoice.getPaidAmount() != invoice.getTotalAmount())
+        || ("SENT".equals(invoice.getStatus()) && invoice.getPaidAmount() != 0)
+        || ("PARTIALLY_PAID".equals(invoice.getStatus())
+            && (invoice.getPaidAmount() <= 0 || invoice.getPaidAmount() >= invoice.getTotalAmount()))) {
+      throw SettlementSnapshot.incomplete();
+    }
+    LocalDate closedDate = null;
+    if ("CREDITED".equals(invoice.getStatus())) {
+      if (credits.size() != 1 || credits.get(0).getInvoiceDate() == null || !"SENT".equals(credits.get(0).getStatus())
+          || (long) credits.get(0).getTotalAmount() != -(long) invoice.getTotalAmount()) {
+        throw SettlementSnapshot.incomplete();
+      }
+      closedDate = credits.get(0).getInvoiceDate();
+    } else if (!credits.isEmpty()) {
+      throw SettlementSnapshot.incomplete();
+    }
+    SettlementSnapshot balance = SettlementSnapshot.at(invoice.getTotalAmount(), invoice.getPaidAmount(),
+        invoice.getInvoiceDate(), closedDate, invoice.getPayments().stream()
+            .map(payment -> new SettlementSnapshot.Payment(payment.getPaymentDate(), payment.getAmount())).toList(), asOf);
     long daysOverdue = invoice.getDueDate() == null ? 0 : ChronoUnit.DAYS.between(invoice.getDueDate(), asOf);
     String bucketKey = bucketKey(invoice.getDueDate(), daysOverdue);
     String bucketTitle = bucketTitle(bucketKey);
     Customer customer = invoice.getCustomer();
     String customerName = customer == null ? invoice.getCustomerName() : customer.getName();
     String customerEmail = customer == null ? "" : customer.getEmail();
-    boolean reminderRecommended = invoice.getDueDate() != null && daysOverdue > 0 && customerEmail != null && !customerEmail.isBlank();
+    boolean reminderRecommended = asOf.equals(LocalDate.now()) && invoice.hasRemainingAmount()
+        && invoice.getDueDate() != null && daysOverdue > 0 && customerEmail != null && !customerEmail.isBlank();
 
     return new ReceivablesAgingInvoice(
         invoice.getId(),
@@ -96,10 +129,10 @@ public class ReceivablesReportService {
         customerEmail,
         invoice.getInvoiceDate(),
         invoice.getDueDate(),
-        invoice.getStatus(),
+        balance.paidAmount() > 0 ? "PARTIALLY_PAID" : "SENT",
         invoice.getTotalAmount(),
-        invoice.getPaidAmount(),
-        invoice.getRemainingAmount(),
+        balance.paidAmount(),
+        balance.remainingAmount(),
         Math.max(daysOverdue, 0),
         bucketKey,
         bucketTitle,
@@ -144,7 +177,7 @@ public class ReceivablesReportService {
   private static class BucketSummary {
     private final String title;
     private int invoiceCount;
-    private int totalRemaining;
+    private long totalRemaining;
     private LocalDate oldestDueDate;
 
     BucketSummary(String title) {
@@ -160,7 +193,7 @@ public class ReceivablesReportService {
     }
 
     ReceivablesAgingBucket toBucket(String key) {
-      return new ReceivablesAgingBucket(key, title, invoiceCount, totalRemaining, oldestDueDate);
+      return new ReceivablesAgingBucket(key, title, invoiceCount, reportAmount(totalRemaining), oldestDueDate);
     }
   }
 }

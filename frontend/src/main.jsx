@@ -4,6 +4,13 @@ import AiLoader from "./components/ui/AiLoader.jsx";
 import AnimatedGlowingSearchBar from "./components/ui/AnimatedGlowingSearchBar.jsx";
 import HeroErrorBoundary from "./components/ui/hero-error-boundary.jsx";
 import SafeRenderBoundary from "./components/ui/SafeRenderBoundary.jsx";
+import { readReportResponse } from "./lib/report-response.js";
+import SubledgerControl from "./components/ui/SubledgerControl.jsx";
+import BankJournalLink from "./components/ui/BankJournalLink.jsx";
+import { verifiedSieLines } from "./lib/import-money.js";
+import { analyzeSieText } from "./lib/sie-analysis.js";
+import { parseBankCsv, splitCsvLine } from "./lib/bank-csv.js";
+import { identifyBankRows, bankRowPayload, bankPaymentPayload, bankRequest, uniqueBankInvoice } from "./lib/bank-booking.js";
 import "./styles.css";
 
 const apiUrl =
@@ -1343,86 +1350,6 @@ function monthRangeFromKey(monthKey) {
   };
 }
 
-function splitCsvLine(line, separator) {
-  const cells = [];
-  let current = "";
-  let quoted = false;
-
-  for (const character of line) {
-    if (character === "\"") {
-      quoted = !quoted;
-    } else if (character === separator && !quoted) {
-      cells.push(current.trim().replace(/^"|"$/g, ""));
-      current = "";
-    } else {
-      current += character;
-    }
-  }
-
-  cells.push(current.trim().replace(/^"|"$/g, ""));
-  return cells;
-}
-
-function normalizeHeader(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replaceAll("\u00e5", "a")
-    .replaceAll("\u00e4", "a")
-    .replaceAll("\u00f6", "o")
-    .replaceAll("å", "a")
-    .replaceAll("ä", "a")
-    .replaceAll("ö", "o")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function parseMoneyValue(value) {
-  const normalized = String(value || "")
-    .replace(/\s/g, "")
-    .replace("SEK", "")
-    .replace("kr", "")
-    .replace(",", ".");
-  const amount = Number(normalized.replace(/[^0-9.-]/g, ""));
-
-  return Number.isFinite(amount) ? Math.round(amount) : 0;
-}
-
-function parseBankCsv(text) {
-  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-
-  if (lines.length < 2) {
-    return [];
-  }
-
-  const separator = lines[0].includes(";") ? ";" : ",";
-  const headers = splitCsvLine(lines[0], separator).map(normalizeHeader);
-  const findHeader = (names) => {
-    return headers.findIndex((header) => names.some((name) => (name.length <= 2 ? header === name : header.includes(name))));
-  };
-  const dateIndex = findHeader(["datum", "date", "bokforingsdag", "transaktionsdag"]);
-  const descriptionIndex = findHeader(["text", "beskrivning", "description", "meddelande", "namn"]);
-  const referenceIndex = findHeader(["referens", "reference", "ocr", "meddelande"]);
-  const amountIndex = findHeader(["belopp", "amount", "summa"]);
-  const creditIndex = findHeader(["in", "credit", "kredit", "insattning", "insatt"]);
-  const debitIndex = findHeader(["ut", "debit", "debet", "uttag"]);
-
-  return lines.slice(1).map((line, index) => {
-    const cells = splitCsvLine(line, separator);
-    const fallbackDescription = cells.filter(Boolean).join(" ");
-    const singleAmount = amountIndex >= 0 ? parseMoneyValue(cells[amountIndex]) : 0;
-    const creditAmount = creditIndex >= 0 ? parseMoneyValue(cells[creditIndex]) : 0;
-    const debitAmount = debitIndex >= 0 ? parseMoneyValue(cells[debitIndex]) : 0;
-    const amount = singleAmount || creditAmount || -Math.abs(debitAmount) || parseMoneyValue(cells.at(-1));
-
-    return {
-      id: `bank-${Date.now()}-${index}`,
-      date: cells[dateIndex] || "",
-      description: cells[descriptionIndex] || fallbackDescription,
-      reference: cells[referenceIndex] || "",
-      amount,
-      raw: line
-    };
-  }).filter((row) => row.description || row.amount);
-}
 
 function currentQuarterRange() {
   const now = new Date();
@@ -2068,6 +1995,7 @@ function App() {
   const [refundAmounts, setRefundAmounts] = useState({});
   const [refundReferences, setRefundReferences] = useState({});
   const [bankImportRows, setBankImportRows] = useState([]);
+  const bankImportReader = useRef(null);
   const [bankImportFilter, setBankImportFilter] = useState("all");
   const [bankImportSearch, setBankImportSearch] = useState("");
   const [bankImportMessage, setBankImportMessage] = useState("");
@@ -2601,6 +2529,8 @@ function App() {
   }
 
   async function loadVatReport(authToken = token) {
+    setVatReport(null);
+    const fallback = language === "sv" ? "Kunde inte ladda momsrapport." : "Could not load VAT report.";
     try {
       const query = new URLSearchParams();
       if (vatPeriodFrom) query.set("from", vatPeriodFrom);
@@ -2609,10 +2539,9 @@ function App() {
       const response = await fetch(`${apiUrl}/vat-report${suffix}`, {
         headers: authHeaders(authToken)
       });
-      const data = await response.json();
-      setVatReport(data);
-    } catch {
-      setError("Could not load VAT report.");
+      setVatReport(await readReportResponse(response, "vat", fallback));
+    } catch (error) {
+      setError(error?.message || fallback);
     }
   }
 
@@ -3067,13 +2996,13 @@ function App() {
       const response = await fetch(`${apiUrl}/bank-reconciliations`, {
         headers: authHeaders(authToken)
       });
-      const data = await response.json().catch(() => []);
-
-      if (response.ok && Array.isArray(data)) {
-        setBankReconciliationHistory(data);
-      }
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) throw new Error("Invalid bank history response");
+      setBankReconciliationHistory(data);
     } catch {
-      setBankReconciliationHistory([]);
+      setBankImportMessage(language === "sv"
+        ? "Bankhistoriken kunde inte uppdateras. Tidigare visad historik kan vara inaktuell."
+        : "Bank history could not be refreshed. Previously displayed history may be outdated.");
     }
   }
 
@@ -3162,43 +3091,41 @@ function App() {
   }
 
   async function loadProfitAndLoss(authToken = token) {
+    setProfitAndLoss(null);
+    const fallback = language === "sv" ? "Kunde inte ladda resultatrapport." : "Could not load profit and loss report.";
     try {
       const response = await fetch(`${apiUrl}/profit-and-loss${selectedReportQuery(true)}`, {
         headers: authHeaders(authToken)
       });
-      const data = await response.json();
-      setProfitAndLoss(data);
-    } catch {
-      setError("Could not load profit and loss report.");
+      setProfitAndLoss(await readReportResponse(response, "profit", fallback));
+    } catch (error) {
+      setError(error?.message || fallback);
     }
   }
 
   async function loadBalanceReport(authToken = token) {
+    setBalanceReport(null);
+    const fallback = language === "sv" ? "Kunde inte ladda balansrapport." : "Could not load balance report.";
     try {
       const response = await fetch(`${apiUrl}/balance-report${selectedReportQuery(false)}`, {
         headers: authHeaders(authToken)
       });
-      const data = await response.json();
-      setBalanceReport(data);
-    } catch {
-      setError("Could not load balance report.");
+      setBalanceReport(await readReportResponse(response, "balance", fallback));
+    } catch (error) {
+      setError(error?.message || fallback);
     }
   }
 
   async function loadTrialBalanceReport(authToken = token) {
+    setTrialBalanceReport(null);
+    const fallback = language === "sv" ? "Kunde inte ladda saldobalans." : "Could not load trial balance.";
     try {
       const response = await fetch(`${apiUrl}/trial-balance${selectedReportQuery(true)}`, {
         headers: authHeaders(authToken)
       });
-      const data = await response.json();
-      if (!response.ok) {
-        setTrialBalanceReport(null);
-        setError(apiErrorMessage(data, language === "sv" ? "Kunde inte ladda saldobalans." : "Could not load trial balance."));
-        return;
-      }
-      setTrialBalanceReport(data);
-    } catch {
-      setError(language === "sv" ? "Kunde inte ladda saldobalans." : "Could not load trial balance.");
+      setTrialBalanceReport(await readReportResponse(response, "trial", fallback));
+    } catch (error) {
+      setError(error?.message || fallback);
     }
   }
 
@@ -3990,42 +3917,6 @@ function App() {
         : currentInvoice
     )));
     setSupplierMessage(language === "sv" ? "Leverantorsfakturan makulerades lokalt." : "Supplier invoice cancelled locally.");
-  }
-
-  async function deleteSupplierInvoice(invoiceId) {
-    const invoice = supplierInvoices.find((item) => String(item.id) === String(invoiceId));
-    if (!invoice) return;
-
-    if (["paid", "partial", "booked"].includes(invoice.status) || supplierInvoicePaidAmount(invoice) > 0) {
-      setSupplierMessage(language === "sv"
-        ? "Leverantorsfakturan har betalning eller bokforing. Makulera eller skapa rattelse i stallet for att radera."
-        : "The supplier invoice has payment or bookkeeping. Cancel or create a correction instead of deleting.");
-      return;
-    }
-
-    if (!window.confirm(language === "sv"
-      ? "Ta bort leverantorsfakturan? Detta ska bara anvandas om den inte ar bokford eller betald."
-      : "Delete the supplier invoice? Only use this if it is not booked or paid.")) {
-      return;
-    }
-
-    if (token && !String(invoiceId).startsWith("supplier-invoice-")) {
-      const response = await fetch(`${apiUrl}/supplier-invoices/${invoiceId}`, {
-        method: "DELETE",
-        headers: authHeaders()
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setSupplierMessage(apiErrorMessage(data, language === "sv"
-          ? "Kunde inte ta bort leverantorsfakturan. Den kan redan ha bokforingsrader."
-          : "Could not delete supplier invoice. It may already have journal entries."));
-        return;
-      }
-    }
-
-    setSupplierInvoices((current) => current.filter((currentInvoice) => String(currentInvoice.id) !== String(invoiceId)));
-    setSupplierMessage(language === "sv" ? "Leverantorsfakturan togs bort." : "Supplier invoice deleted.");
   }
 
   function downloadSuppliersCsv() {
@@ -5688,6 +5579,17 @@ function App() {
     event.preventDefault();
     setError("");
 
+    const netAmount = Number(expenseNetAmount);
+    const vatAmount = Number(expenseVatAmount);
+    if (!Number.isSafeInteger(netAmount) || netAmount <= 0
+        || !Number.isSafeInteger(vatAmount) || vatAmount < 0
+        || netAmount + vatAmount > 2147483647) {
+      setError(language === "sv"
+        ? "Kostnaden kunde inte sparas. Denna version kraver hela kronor: belopp over noll, moms minst noll och totalt hogst 2147483647 kr. Belopp med oren stods inte annu."
+        : "Expense not saved. This version requires whole SEK: positive net amount, nonnegative VAT and a total at most 2147483647 SEK. Fractional amounts are not supported yet.");
+      return;
+    }
+
     if (expenseDateIsLocked) {
       setError(lockedAccountingMessage(expenseDate));
       return;
@@ -5702,8 +5604,8 @@ function App() {
       body: JSON.stringify({
         expenseDate,
         description: expenseDescription,
-        netAmount: Number(expenseNetAmount),
-        vatAmount: Number(expenseVatAmount),
+        netAmount,
+        vatAmount,
         category: expenseCategory,
         paidFrom: expensePaidFrom
       })
@@ -6539,9 +6441,23 @@ function App() {
       return;
     }
 
+    bankImportReader.current?.abort();
+    setBankImportRows([]);
+    setBankImportMessage("");
     const reader = new FileReader();
-    reader.onload = () => {
-      const rows = parseBankCsv(reader.result);
+    bankImportReader.current = reader;
+    reader.onload = async () => {
+      if (bankImportReader.current !== reader) return;
+      let rows;
+      try {
+        rows = await identifyBankRows(parseBankCsv(reader.result));
+      } catch (error) {
+        if (bankImportReader.current !== reader) return;
+        setBankImportRows([]);
+        setBankImportMessage(error.message);
+        return;
+      }
+      if (bankImportReader.current !== reader) return;
       setBankImportRows(rows);
       setBankImportExpenseCategories({});
       setBankImportExpenseVatRates({});
@@ -6555,6 +6471,7 @@ function App() {
       );
     };
     reader.onerror = () => {
+      if (bankImportReader.current !== reader) return;
       setBankImportMessage(language === "sv" ? "Kunde inte lasa bankfilen." : "Could not read the bank file.");
     };
     reader.readAsText(file, "utf-8");
@@ -6562,26 +6479,11 @@ function App() {
   }
 
   function findBankImportMatch(row) {
-    if ((row.amount || 0) <= 0) {
-      return null;
-    }
-
-    const haystack = `${row.description || ""} ${row.reference || ""}`.toLowerCase();
-    const amount = row.amount || 0;
-    const openInvoices = invoices.filter((item) => invoiceRemainingAmount(item) > 0);
-
-    return openInvoices.find((item) => {
-      return Boolean(item.ocrNumber && haystack.includes(String(item.ocrNumber).toLowerCase()))
-        || Boolean(invoiceNumber(item) && haystack.includes(invoiceNumber(item).toLowerCase()))
-        || Boolean(item.customerName && haystack.includes(String(item.customerName).toLowerCase()))
-        || amount === invoiceRemainingAmount(item);
-    }) || null;
+    return uniqueBankInvoice(row, invoices, invoiceRemainingAmount, invoiceNumber);
   }
 
   function bankImportPaymentDate(row) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(row.date || "")
-      ? row.date
-      : new Date().toISOString().slice(0, 10);
+    return row.date || "";
   }
 
   function suggestExpenseCategoryFromBankRow(row) {
@@ -6745,43 +6647,13 @@ function App() {
   }
 
   async function addBankReconciliationHistory(entry) {
-    const savedEntry = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      bookedAt: new Date().toISOString(),
-      ...entry
-    };
-
-    try {
-      const response = await fetch(`${apiUrl}/bank-reconciliations`, {
-        method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(entry)
-      });
-      const data = await response.json().catch(() => null);
-
-      if (response.ok && data) {
-        setBankReconciliationHistory((current) => [data, ...current.filter((item) => item.id !== data.id)].slice(0, 100));
-        return data;
-      }
-    } catch {
-      // Keep the UI usable even if the backend has not been restarted with the new endpoint yet.
-    }
-
-    setBankReconciliationHistory((current) => [savedEntry, ...current].slice(0, 100));
-    return savedEntry;
+    const data = await bankRequest(`${apiUrl}/bank-reconciliations`, authHeaders(), entry);
+    setBankReconciliationHistory((current) => [data, ...current.filter((item) => item.id !== data.id)]);
+    return data;
   }
 
   function bankReconciliationRowBase(row) {
-    return {
-      bankRowId: row.id,
-      date: bankImportPaymentDate(row),
-      description: row.description || "",
-      reference: row.reference || "",
-      amount: row.amount || 0
-    };
+    return bankRowPayload(row);
   }
 
   async function clearBankReconciliationHistory() {
@@ -6827,7 +6699,7 @@ function App() {
 
   function downloadBankReconciliationCsv() {
     const rows = [
-      ["Datum", "Typ", "Status", "Beskrivning", "Referens", "Belopp", "Matchning", "Bokad tid"]
+      ["Datum", "Typ", "Status", "Beskrivning", "Referens", "Belopp", "Matchning", "Bokad tid", "Bankrad-ID", "Bokforingsrad-ID"]
     ];
 
     bankReconciliationHistory.forEach((entry) => {
@@ -6839,7 +6711,9 @@ function App() {
         entry.reference || "",
         entry.amount || 0,
         entry.matchLabel || "",
-        entry.bookedAt || ""
+        entry.bookedAt || "",
+        entry.bankRowId || "",
+        entry.journalEntryId ?? ""
       ]);
     });
 
@@ -6865,31 +6739,34 @@ function App() {
     });
   }
 
-  function skipBankImportRow(row) {
-    removeBankImportRow(row.id);
-    setSkippedBankImportRows((current) => [row, ...current].slice(0, 8));
-    addBankReconciliationHistory({
+  async function skipBankImportRow(row) {
+    try {
+      await addBankReconciliationHistory({
       ...bankReconciliationRowBase(row),
       type: (row.amount || 0) < 0 ? "outgoing" : "incoming",
       status: "skipped",
       matchLabel: language === "sv" ? "Hoppades over" : "Skipped"
-    });
+      });
+    } catch (error) {
+      setBankImportMessage(error.message);
+      return;
+    }
+    removeBankImportRow(row.id);
+    setSkippedBankImportRows((current) => [row, ...current.filter(item => item.id !== row.id)]);
     setLastCreatedBankImportExpense(null);
     setBankImportMessage(language === "sv" ? "Bankrad hoppades over." : "Bank row skipped.");
   }
 
   async function restoreSkippedBankImportRow(row) {
-    setBankImportRows((current) => [row, ...current]);
+    try {
+      await bankRequest(`${apiUrl}/bank-reconciliations/skipped/${encodeURIComponent(row.id)}`, authHeaders(), null, "DELETE");
+    } catch (error) {
+      setBankImportMessage(error.message);
+      return;
+    }
+    setBankImportRows((current) => [row, ...current.filter(item => item.id !== row.id)]);
     setSkippedBankImportRows((current) => current.filter((item) => item.id !== row.id));
     setBankReconciliationHistory((current) => current.filter((item) => !(item.bankRowId === row.id && item.status === "skipped")));
-    try {
-      await fetch(`${apiUrl}/bank-reconciliations/skipped/${encodeURIComponent(row.id)}`, {
-        method: "DELETE",
-        headers: authHeaders()
-      });
-    } catch {
-      // The row is restored in the UI; the persisted history will catch up after backend restart.
-    }
     setBankImportMessage(language === "sv" ? "Bankrad aterstalldes." : "Bank row restored.");
   }
 
@@ -6934,22 +6811,23 @@ function App() {
   }
 
   async function registerBankImportPayment(row, invoiceItem) {
-    const paidAmount = Math.min(Math.abs(row.amount || 0), invoiceRemainingAmount(invoiceItem));
-
-    await updateInvoiceStatus(invoiceItem.id, "PAID", {
-      paymentDate: bankImportPaymentDate(row),
-      paidAmount,
-      paymentReference: row.reference || row.description || "Bank CSV"
-    });
-
+    try {
+      const payload = bankPaymentPayload(row, invoiceRemainingAmount(invoiceItem));
+      const data = await bankRequest(`${apiUrl}/bank-import/invoices/${invoiceItem.id}/paid`, authHeaders(), payload);
+      setInvoices((current) => current.map(item => item.id === invoiceItem.id ? data : item));
+    } catch (error) {
+      setBankImportMessage(error.message);
+      loadBankReconciliations();
+      return;
+    }
     removeBankImportRow(row.id);
-    addBankReconciliationHistory({
-      ...bankReconciliationRowBase(row),
-      type: "invoice_payment",
-      status: "booked",
-      amount: paidAmount,
-      matchLabel: `${invoiceNumber(invoiceItem)} - ${invoiceItem.customerName || ""}`.trim()
-    });
+    loadBankReconciliations();
+    loadJournalEntries();
+    loadVatReport();
+    loadReminders();
+    loadAdvisorSummary();
+    loadProfitAndLoss();
+    loadBalanceReport();
     setBankImportMessage(language === "sv" ? "Bankbetalning registrerad." : "Bank payment registered.");
     setLastCreatedBankImportExpense(null);
   }
@@ -6973,37 +6851,26 @@ function App() {
     const vatRate = bankImportExpenseVatRate(row, category);
     const amounts = bankImportExpenseAmounts(row, category, vatRate);
 
-    const response = await fetch(`${apiUrl}/expenses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    let data;
+    try {
+      data = await bankRequest(`${apiUrl}/bank-import/expenses`, authHeaders(), {
+        bankRow: bankReconciliationRowBase(row),
         expenseDate: bankImportPaymentDate(row),
         description: bankImportExpenseDescription(row),
         netAmount: amounts.netAmount,
         vatAmount: amounts.vatAmount,
         category,
         paidFrom: "1930"
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      setError(apiErrorMessage(data, "Could not create expense from bank row."));
+      });
+    } catch (error) {
+      setBankImportMessage(error.message);
+      loadBankReconciliations();
       return;
     }
 
     setExpenses((current) => [...current, data]);
     removeBankImportRow(row.id);
-    addBankReconciliationHistory({
-      ...bankReconciliationRowBase(row),
-      type: "expense",
-      status: "booked",
-      matchLabel: `${data.category || category} - ${data.description || bankImportExpenseDescription(row)}`
-    });
+    loadBankReconciliations();
     setBankImportMessage(language === "sv" ? "Kostnad skapad fran bankrad." : "Expense created from bank row.");
     setLastCreatedBankImportExpense(data);
     loadJournalEntries();
@@ -7708,109 +7575,6 @@ function App() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function parseSieAmount(value = "") {
-    return Number(String(value).replace(",", ".").replace(/[^\d.-]/g, "")) || 0;
-  }
-
-  function normalizeSieDate(value = "") {
-    if (!/^\d{8}$/.test(value)) return "";
-    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
-  }
-
-  function analyzeSieText(text = "") {
-    const lines = text.split(/\r?\n/);
-    const vouchers = [];
-    const accounts = new Set();
-    let currentVoucher = null;
-
-    function closeVoucher() {
-      if (!currentVoucher) return;
-      const difference = Math.round(currentVoucher.sum * 100) / 100;
-      vouchers.push({
-        ...currentVoucher,
-        difference,
-        simpleManualImport: currentVoucher.transactionsList.length === 2
-          && Math.abs(difference) <= 0.01
-          && currentVoucher.transactionsList.some((line) => line.debit > 0)
-          && currentVoucher.transactionsList.some((line) => line.credit > 0)
-      });
-      currentVoucher = null;
-    }
-
-    lines.forEach((rawLine) => {
-      const line = rawLine.trim();
-
-      if (line.startsWith("#VER ")) {
-        closeVoucher();
-        const dateMatch = line.match(/\s(\d{8})(?:\s|$)/);
-        const quotedValues = [...line.matchAll(/"([^"]*)"/g)].map((match) => match[1]);
-        currentVoucher = {
-          key: `${vouchers.length + 1}-${dateMatch?.[1] || "nodate"}`,
-          date: normalizeSieDate(dateMatch?.[1] || ""),
-          number: quotedValues[1] || String(vouchers.length + 1),
-          description: quotedValues[2] || quotedValues[quotedValues.length - 1] || "SIE-verifikat",
-          transactions: 0,
-          transactionsList: [],
-          sum: 0
-        };
-        return;
-      }
-
-      if (line.startsWith("#TRANS ") || line.startsWith("#RTRANS ") || line.startsWith("#BTRANS ")) {
-        const match = line.match(/^#(?:R|B)?TRANS\s+(\d+)\s+(?:\{[^}]*\}\s+)?(-?\d+(?:[.,]\d+)?)/);
-        if (!match) return;
-
-        if (!currentVoucher) {
-          currentVoucher = {
-            key: `${vouchers.length + 1}-nodate`,
-            date: "",
-            number: String(vouchers.length + 1),
-            description: "SIE-verifikat",
-            transactions: 0,
-            transactionsList: [],
-            sum: 0
-          };
-        }
-
-        const amount = parseSieAmount(match[2]);
-        const quotedValues = [...line.matchAll(/"([^"]*)"/g)].map((quoteMatch) => quoteMatch[1]);
-        accounts.add(match[1]);
-        currentVoucher.transactions += 1;
-        currentVoucher.sum += amount;
-        currentVoucher.transactionsList.push({
-          account: match[1],
-          debit: amount > 0 ? Math.round(amount) : 0,
-          credit: amount < 0 ? Math.round(Math.abs(amount)) : 0,
-          amount,
-          description: quotedValues[quotedValues.length - 1] || ""
-        });
-      }
-    });
-
-    closeVoucher();
-
-    const dates = vouchers.map((voucher) => voucher.date).filter(Boolean).sort();
-    const totalTransactions = vouchers.reduce((sum, voucher) => sum + voucher.transactions, 0);
-    const totalDifference = vouchers.reduce((sum, voucher) => sum + voucher.difference, 0);
-    const unbalancedVouchers = vouchers.filter((voucher) => Math.abs(voucher.difference) > 0.01).length;
-    const accountList = [...accounts].sort((first, second) => Number(first) - Number(second));
-
-    return {
-      kind: "SIE",
-      vouchers: vouchers.length,
-      transactions: totalTransactions,
-      accounts: accountList.length,
-      sampleAccounts: accountList.slice(0, 8).join(", "),
-      unbalancedVouchers,
-      totalDifference: Math.round(totalDifference * 100) / 100,
-      firstDate: dates[0] || "",
-      lastDate: dates[dates.length - 1] || "",
-      previewVouchers: vouchers.slice(0, 25).map((voucher, index) => ({
-        ...voucher,
-        key: voucher.key || `${index + 1}-${voucher.date || "nodate"}`
-      }))
-    };
-  }
 
   function analyzeCsvText(text = "") {
     const rows = text.split(/\r?\n/).filter((line) => line.trim());
@@ -7835,10 +7599,10 @@ function App() {
     try {
       const text = await file.text();
       return kind === "SIE" ? analyzeSieText(text) : analyzeCsvText(text);
-    } catch {
+    } catch (error) {
       return {
         kind,
-        error: language === "sv" ? "Kunde inte lasa filen." : "Could not read file."
+        error: error.message || (language === "sv" ? "Kunde inte lasa filen." : "Could not read file.")
       };
     }
   }
@@ -7868,9 +7632,9 @@ function App() {
         vatAmount: "",
         category: "5420",
         analysis,
-        note: analysis?.kind === "SIE"
-          ? (language === "sv" ? "SIE kontrollerad. Importera verifikat i nasta steg." : "SIE checked. Import vouchers in the next step.")
-          : ""
+        note: analysis?.error || (analysis?.kind === "SIE"
+          ? (language === "sv" ? "SIE analyserad. Granska belopp och importhinder." : "SIE analyzed. Review amounts and import blockers.")
+          : "")
       };
     }));
 
@@ -7920,6 +7684,11 @@ function App() {
   }
 
   function sieVoucherImportStatus(voucher) {
+    try {
+      verifiedSieLines(voucher);
+    } catch (error) {
+      return { ok: false, reason: error.message };
+    }
     if (!voucher?.simpleManualImport) {
       return {
         ok: false,
@@ -8280,7 +8049,7 @@ function App() {
   async function downloadBackendReceivablesAgingCsv() {
     setError("");
     await downloadCsv(
-      `/receivables/aging/export?asOf=${new Date().toISOString().slice(0, 10)}`,
+      "/receivables/aging/export",
       "kundreskontra-aging-backend.csv",
       language === "sv" ? "Kunde inte exportera backend-aldringsrapport." : "Could not export backend aging report."
     );
@@ -27575,6 +27344,7 @@ function App() {
 
         {token && activeView === "reconciliation" && (
           <section className="orders-section daily-routine-section reconciliation-routine-section">
+            <SubledgerControl apiUrl={apiUrl} token={token} language={language} />
             <div className="section-heading">
               <div>
                 <h2>{t.reconciliation}</h2>
@@ -31156,9 +30926,6 @@ function App() {
                       </button>
                       <button type="button" className="secondary-button" onClick={() => cancelSupplierInvoice(invoice)} disabled={["paid", "partial", "cancelled"].includes(invoice.status) || paidAmount > 0}>
                         {language === "sv" ? "Makulera" : "Cancel"}
-                      </button>
-                      <button type="button" className="danger-button soft" onClick={() => deleteSupplierInvoice(invoice.id)} disabled={["paid", "partial", "booked"].includes(invoice.status) || paidAmount > 0}>
-                        {language === "sv" ? "Ta bort" : "Delete"}
                       </button>
                     </div>
                   </article>
@@ -36698,12 +36465,9 @@ function App() {
                                 className="secondary-button"
                                 onClick={() => {
                                   setPaymentOverviewSearch(invoiceNumber(match));
-                                  setPaymentDates((current) => ({ ...current, [match.id]: bankImportPaymentDate(row) }));
-                                  setPaymentAmounts((current) => ({ ...current, [match.id]: Math.abs(row.amount || 0) }));
-                                  setPaymentReferences((current) => ({ ...current, [match.id]: row.reference || row.description || "Bank CSV" }));
                                 }}
                               >
-                                {language === "sv" ? "Anvand forslag" : "Use suggestion"}
+                                {language === "sv" ? "Visa faktura" : "Show invoice"}
                               </button>
                               <button
                                 type="button"
@@ -36871,7 +36635,7 @@ function App() {
               </p>
             ) : (
               <div className="bank-reconciliation-list">
-                {bankReconciliationHistory.slice(0, 12).map((entry) => (
+                {bankReconciliationHistory.map((entry) => (
                   <article className={`bank-reconciliation-row bank-reconciliation-${entry.status}`} key={entry.id}>
                     <div>
                       <strong>{entry.date || "-"}</strong>
@@ -36881,6 +36645,8 @@ function App() {
                     <div>
                       <strong>{entry.amount || 0} SEK</strong>
                       <span>{entry.matchLabel || "-"}</span>
+                      <BankJournalLink entry={entry} apiUrl={apiUrl} token={token} language={language}
+                        onMatched={(updated) => setBankReconciliationHistory((history) => history.map((row) => row.id === updated.id ? updated : row))} />
                       <span className="status">{entry.status === "booked" ? (language === "sv" ? "Bokad" : "Booked") : (language === "sv" ? "Overhoppad" : "Skipped")}</span>
                     </div>
                   </article>

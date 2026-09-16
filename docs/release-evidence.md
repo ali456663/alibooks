@@ -1,5 +1,384 @@
 # AliBooks release evidence
 
+## Original-PDF-arkiv och integritetskontroll 2026-09-16
+
+Slutlig `npm run test:integration` passerade: 365 enhetstester och 207
+PostgreSQL-integrationstestfall, totalt **572**, utan failures, errors eller
+hoppade tester. Testcontainrar och isolerad databas avvecklades med exit code 0.
+
+Nya utstallda fakturor och krediter arkiverar PDF-bytes i invoice_originals
+med SHA-256. Nedladdning och e-postbilaga laser samma arkiverade bytes;
+betalning och registerandringar kan inte skriva om originalet. Skadad fil eller
+kontrollsumma ger HTTP 409 i stallet for tyst nygenerering. Foreign key och
+unik faktura-ID skyddar mot orphan/originalersattning. Aldre fakturor utan
+arkiv markeras fortsatt rekonstruerade och backfylls inte.
+
+Den forsta arkivmodellen gav Hibernate null identifier i 94 integrationstest-
+fall. `@OneToOne/@MapsId` ersattes med explicit faktura-ID och databasens
+foreign key; hela sviten kordes om och ar gron. `node scripts/schema-migration-check.mjs`
+passerade 5/5 med 292/292 startup-satser. `node scripts/ci-pipeline-check.mjs`
+passerade 39/39. Lokal `npm run check:release` passerade med produktionsbuild
+och runtime-smoke.
+
+Ingen riktig e-post, anvandarens databas eller migration mot produktion
+anvandes. GitHub Actions ar inte verifierad for dessa lokala andringar.
+Originalarkivet loser inte att SMTP-acceptans och databascommit ar separata;
+en bestaende outbox och avstamning behovs fore skarp drift. Fullt ore-stod,
+verifierad historik/ingangsbalans, kontantmetodens bokslut och externa drift-
+kontroller kvarstar ocksa. Se [invoice-document-snapshots.md](invoice-document-snapshots.md).
+
+## Fakturadokument, avtalsrollback och e-postordning 2026-09-09
+
+Slutlig `npm run test:integration` passerade: 339 enhetstester och 199
+PostgreSQL-integrationstestfall, totalt **538**, utan failures, errors eller
+hoppade tester. Detta steg tillfor 22 enhetstestfall och 15 integrationstestfall.
+Testcontainrar och deras isolerade databas avvecklades med exit code 0.
+
+Verifierat: registerandringar skriver inte om nya fakturors PDF-uppgifter;
+snapshoten aterlasas fran PostgreSQL och arvs av krediten; aldre NULL-snapshot
+backfylls inte vid PDF-lasning; stor fakturaexport avvisas utan auditframgang.
+Avtalsfaktura, nasta datum och audit rullas tillbaka tillsammans vid loggfel.
+Oversized avtal sparas inte. Mejlets transport mockas: kontroller/bokforing
+kommer fore SMTP, fel rullar tillbaka och aterutskick av utstalld faktura,
+betald faktura eller kredit skapar inga nya journalrader.
+
+Syntetiska partial-payment.pdf och credit.pdf i backend/target/pdf-proof
+renderades och granskades visuellt efter slutversionens enhetstester.
+Delbetalning 50 av 125 visar 75 kvar; kredit visar -125 utan betalningsbegaran.
+CI:s befintliga backendartefakt inkluderar nu dessa PDF-prov.
+
+Slutlig lokal `npm run check:release` passerade inklusive produktionsbuild och
+runtime-smoke. Backendtesterna ovan kordes separat; produktionsbilder byggdes
+inte. `node scripts/ci-pipeline-check.mjs` passerade 39/39 och
+`node scripts/schema-migration-check.mjs` passerade 5/5 med 290/290 SQL-satser.
+`git diff --check` passerade. Ingen riktig SMTP, migrering av anvandarens databas,
+betalning eller GitHub-push har gjorts i detta steg. GitHub CI ar inte verifierad
+for dessa lokala andringar.
+
+Se [invoice-document-snapshots.md](invoice-document-snapshots.md).
+**Inte klar som enda bokforingssystem:** fullt ore-stod, verifierad historik och
+ingangsbalans, kontantmetodens bokslut, originaldokumentarkiv, SMTP/commit-
+atervinning och aterstaende driftkontroller kvarstar. En dokument-snapshot ar
+inte ett oforanderligt arkiv av de skickade PDF-bytesen.
+
+## Journalradskoppling for bankavstamning 2026-09-09
+
+Slutlig `npm run test:integration`: 317 enhetstester och 184 PostgreSQL-testfall,
+totalt **501**, utan failures, errors eller hoppade tester. Detta steg tillfor
+9 enhetstester och 16 integrationstestfall. Nollnetto med saknade kopplingar,
+felaktiga kopplingar, unikhet/foreign key, samtidig matchning, audit-rollback,
+periodlasning, autentisering, HTTP-svar och additiv/upprepad migrering provas.
+Forsta korningen hade ett fel i den nya testfragans kolumnnamn for audit;
+event_action rattades och hela sviten kordes om. Testcontainrarna avvecklades.
+
+`npm run test:reports`: 113 godkanda tester. Bankens riktiga React-vy provades
+med mockade API-svar i separat webblasarkontext: inget forvalt matchningsval,
+409 behaller raden okopplad, lyckad bekraftelse sparar journal-ID utan ny
+betalning, och CSV-exporten innehaller bankradens och journalradens ID.
+Mobil 390x844 och desktop 1280x900 provas; mobilens historikrad rattades efter
+visuell granskning och testet kontrollerar att falt och knappar ryms i raden.
+
+`npm run check:release` passerade, inklusive 26 API-kontrakt och runtime-smoke.
+Efter tillagget av CSV-kolumner passerade produktionsbuild och webblasarprov igen.
+`git diff --check` passerade. Forsoket med `check:release:full` stoppades vid
+Docker-atkomst i sandboxen; backend korningen ovan gjordes sedan separat med
+godkand Docker-atkomst. Produktionsbilder har inte byggts i detta steg.
+
+Se [bank-journal-links.md](bank-journal-links.md) for API, migration och handhavande.
+Ingen riktig bankrad har kopplats och ingen migrering har korts mot anvandarens
+databas. Gamla kopplingar maste granskas uttryckligen. Andringarna ar lokala,
+inte pushade; GitHub CI ar inte verifierad for denna version. Befintlig CI kor
+de nya Maven-testerna och API-kontrakten; webblasarprovet har korts lokalt.
+
+**Inte redo som enda bokforingssystem:** oren, verifierad historik/ingangsbalans,
+klumpsummor, kontantmetodens bokslut och aterstaende driftkontroller kvarstar.
+
+## Atomisk bankimport 2026-09-09
+
+Slutversionens `npm run test:integration` passerade: 308 enhetstester och 168
+PostgreSQL-integrationstestfall, totalt 476, utan failures, errors eller hoppade
+tester. De 22 nya integrationstestfallen provar atomisk bankbokning, samtidiga
+dubbletter, rollback, autentisering, periodlasning, datum och fullstandiga belopp.
+Forsta korningen hade ett fel i testklientens hantering av HTTP 401 i streaming
+mode; autentiseringsprovet bytte till Java HttpClient och hela sviten kordes om.
+Testcontainrarna avvecklades efter korningen med exit code 0.
+
+`npm run test:reports` passerade 113 tester, inklusive 34 nya banktester.
+`scripts/bank-import-ui-test.mjs` provade den faktiska React-vyn med testdata
+och blockerade alla verkliga backendanrop. Serverfel och 409 behaller bankraden;
+lyckad sparning tar bort den och overbetalning stoppas innan anrop. Desktop
+1280x900 och mobil 390x844 granskades. Mobilens rutnat och bankknappar rattades
+efter att breddprovet hittade overflow. Ingen generell redesign ingar.
+
+Slutlig lokal `npm run check:release` passerade inklusive produktionsbuild,
+24 API-kontrakt och runtime-smoke. Datasakerhetskontrollen kontrollerar nu den
+flyttade skipped-raderingen i tjansten och dess periodskydd. Dockerproduktionsbilder
+byggdes inte; backendtesterna ovan kordes separat fran frontendens release-gate.
+
+Nya bankanrop, bokforing, historik och audit ar en transaktion. Separat POST
+av pastadd booked-historik avvisas. CSV-identiteter ar stabila for oforandrade
+rader, men ar inte bankens transaktions-ID och migrerar inte gamla rader.
+Se [bank-import-atomicity.md](bank-import-atomicity.md) for omfattning och risker.
+
+**Inte redo som enda bokforingssystem:** oren, historiska importer/ingangsbalanser,
+fullstandig transaktionsvis bankavstamning och ovriga go-live-kontroller kvarstar.
+Ingen riktig betalning, e-post, kostnad eller bokforingspost skapades i detta steg.
+Andringarna ar lokala, inte pushade; GitHub CI ar inte verifierad for denna version.
+Backend maste startas om och bankfilen lasas in pa nytt for att prova de nya anropen.
+
+## Verklig lokal backup och isolerad aterlasning 2026-09-09
+
+Efter anvandarens bekraftelse att CloudshopApplication pausats kontrollerades
+att port 3000 inte lyssnade. PostgreSQL lamnades igang. `npm run backup:local`
+skapade `backups/local-20260909T192913Z/verified-manifest.json` efter godkand
+aterlasning i en separat tillfallig PostgreSQL-container utan natverk eller
+vardmonteringar. Originaldatabasen och originalfilerna andrades inte.
+
+Verifierat: 74 journalrader, samma radantal i samtliga public-tabeller fore och
+efter backup samt i aterlast kopia, och nio kopierade filer med matchande SHA-256.
+Verifikationsbalanskontrollen passerade. Manifestet skapades 19:30:01 UTC.
+**Nio filer saknar kostnadskoppling och en kostnad saknar kvittoreferens.** Antalet
+databaskopplade verifierade kvitton ar darfor noll. Inga kopplingar gissades eller
+skapades automatiskt. Filernas affarsmassiga tillhorighet maste granskas separat.
+
+Slutversionens `npm run test:backup` passerade 16/16 syntetiska tester, inklusive
+samlad backup, radantalsjamforelse, okopplade filer, saknade referenser och
+avvisning av ateranvand backupmapp. `npm run check:backup` passerade 18/18.
+Ingen ny backend- eller frontendtestkorning ingar i detta steg.
+
+Backupen ar lokal, Git-ignorerad och inte krypterad av verktyget. En skyddad
+kopia pa annan lagringsplats och appens floden mot aterlast data ar fortfarande
+inte verifierade. Radantal, filhashar och verifikationsbalans ar inte ett
+godkannande av originalbokforingen. Fullt ore-stod och ovriga go-live-blockerare
+kvarstar. Kodandringarna ar inte pushade eller verifierade i GitHub CI.
+
+## Samtidig periodlasning och bokforing 2026-09-09
+
+`npm run test:integration` passerade pa slutversionen: 308 enhetstester och
+146 PostgreSQL-integrationstestfall, totalt 454, utan failures, errors eller
+hoppade tester. Den forsta korningen hittade ett felaktigt SQL-kolumnnamn i ett
+nytt test; testfragan rattades till event_action och hela sviten kordes om.
+Testcontainrarna avvecklades och kommandot avslutades med exit code 0.
+
+Sju nya integrationstestfall verifierar periodlasning fore bokforing, bokforing
+fore periodlasning, gammal JPA-cache, tillaten bokforing efter lasdatum,
+samtidiga lasningar, rollback vid auditfel, vantande installningsandring samt
+krav pa en yttre transaktion. Tva nya enhetstester kontrollerar refresh med
+PESSIMISTIC_WRITE och avvisning nar installningsraden saknas.
+
+`npm run test:reports` passerade 79 frontendtester. Backend wiring och
+period-close-kontrollerna passerade. `npm run check:release` passerade inklusive
+frontendbuild och runtime-smoke. Produktions-Dockerbilder byggdes inte.
+
+Skyddet ligger bakom befintliga floden och kraver ingen ny meny. En gemensam
+databaslasning varar genom kontroll, journalbokforing eller periodlasning till
+commit/rollback. Se [period-write-serialization.md](period-write-serialization.md).
+
+Andringarna ar lokala och inte pushade; GitHub CI ar inte verifierad for denna
+version. Den riktiga CloudshopApplication startades inte om. Ingen verklig
+bokforing, betalning, e-post eller produktionsdatabas andrades.
+
+**Fortfarande inte redo som enda bokforingssystem:** fullt ore-stod,
+verifierade importer/ingangsbalanser, kontantmetodens bokslutsflode, verklig
+backupaterlasning och ovriga go-live-kontroller kvarstar.
+
+## Exakta importbelopp 2026-09-09
+
+Bank-CSV och SIE-analys har separata testbara moduler. Belopp parsas till BigInt
+i oren, utan flyttalsavrundning eller borttagning av godtyckliga tecken. En bankfil
+med unsupported oren stoppas helt; SIE visar beloppet men stoppar bokforing.
+Gamla cachade SIE-analyser, saknade datum, tvetydiga bankkolumner och forvrangda
+belopp godkanns inte av importkontrollen. En ore i differens ar inte balans.
+
+`npm run test:reports` passerade 79 tester (41 nya importtester och 38 tidigare
+rapporttester). Detta kommando kors redan i frontendjobbet i CI, men den nya
+versionen ar inte pushad och har inte verifierats pa GitHub. Lokal release-gate
+passerade inklusive build och runtime-smoke. Backendkoden andrades inte i detta
+steg; tidigare 445 backendtestresultat ar inte en ny backendkorning.
+
+Inga verkliga importfiler eller bokforingsposter andrades. Detta steg hindrar
+tyst forlust av oren vid dessa importer, men migrerar inte databasen eller andra
+beloppsfloden. Fullt ore-stod och ovriga go-live-blockerare aterstar. AliBooks ar
+fortfarande inte godkant som enda bokforingssystem. Se money-safety.md.
+
+## Reskontra mot huvudbok 2026-09-09
+
+`npm run test:integration` passerade med 306 enhetstester och 139 integrationstestfall:
+445 totalt, inga failures, errors eller hoppade tester. Testcontainrarna avvecklades.
+Den nya kontrollen jamfor 1510/2440 per faktura och totalt. Integrationstester
+verifierar delbetalningar, kredit/aterbetalning, felkopplade betalningar med oforandrad
+totalsumma, saknade kallkopplingar, autentisering och blockerad periodlasning.
+
+`npm run test:reports` passerade 38 frontendtestfall. `npm run check:release`
+passerade inklusive produktionsbuild och runtime-smoke. Separat Playwright-prov
+`scripts/subledger-ui-test.mjs` passerade med isolerade mockade API-svar:
+desktop 1280x800, mobil 375x812, aterforsok, HTTP-fel, ogiltiga rapportsvar,
+datumbyte under pagaende hamtning och sessionsbyte. Skarmbilder granskades;
+mobilens tabell rullar horisontellt utan att bredda sidan. Testets ursprungliga
+Vite/React-importfel rattades i testharnessen innan slutprovet passerade.
+Detta ar komponentprov, inte ett fullstandigt inloggat end-to-end-flode.
+
+Under Avstamning finns nu Reskontra mot huvudbok. Fel och ofullstandig historik
+ger inte ett godkant saldo. Kontantmetoden ar uttryckligen ej stodd av denna
+automatiska jamforelse och blockerar periodlasning tills kontrollerat bokslutsflode
+finns. MATCHED ar inte ett bevis pa fullstandiga importer eller skarp driftklarhet.
+
+Andringarna ar lokala, inte pushade. GitHub Actions och produktionsbilder har inte
+verifierats for denna version. Den riktiga CloudshopApplication har inte startats om;
+inga riktiga bokforingsposter, betalningar, underlag eller e-postutskick andrades.
+
+**Inte godkant som enda bokforingssystem.** Fullt ore-stod, verkliga importer och
+ingangsbalanser, kontantmetodens bokslut, transaktionsvis bankmatchning, gemensam
+serialisering av periodlasning/bokforing och verklig backupaterlasning aterstar.
+Se [subledger-control.md](subledger-control.md) och go-live-riskregister.md.
+
+## Historiska reskontrasaldon 2026-09-09
+
+`npm run test:integration` passerade med 291 enhetstester och 133 integrationstestfall:
+424 totalt, inga failures, errors eller hoppade tester. Detta steg lade till
+30 enhetstestfall och 10 integrationstestfall jamfort med leverantorsbetalningsskyddet.
+Den isolerade PostgreSQL-testmiljon avvecklades efter korningen.
+
+Backendens kund-/leverantorsreskontra och CSV-export beraknar nu saldo fran
+fakturadatum, daterade betalningar och krediter/makuleringar. Testerna provar
+saldo fore, pa och efter betalningsdatum, fullbetalning, kredit, aterbetalning,
+makulering, felaktig historik samt tidigare radering. HTTP/CSV-testfallen provar
+verkligt sparade del- och slutbetalningar och att fel inte skriver journal/audit.
+Databasfelen i felinjektionstesterna ar avsiktliga och kontrollerar rollback.
+
+Registrerade leverantorsfakturor kan inte raderas, inte heller obetalda
+kontantmetodsfakturor. Makulering kravs med datum. Frontendens raderingsknapp och
+raderingsfunktion for leverantorsfakturor ar borttagna. Flerradiga betalningsreferenser
+avvisas sa att nya referenser inte kan skada det befintliga historikformatet.
+
+`npm run test:reports` passerade 19 frontendtestfall. Sista `npm run check:release`
+passerade pa slutversionen, inklusive produktionsbuild och webblasarens runtime-smoke.
+Statiska raderingskontroller uppdaterades till den nya striktare bevaranderegeln;
+integrationsprovet verifierar att den riktiga databasraden finns kvar efter avvisad
+radering. Runtime-smoke testar startsida/inloggningsskal, inte alla inloggade vyer.
+
+Frontend pa http://localhost:5157 gav HTTP 200. Den riktiga CloudshopApplication
+har inte startats om. Andringarna ar lokala och inte pushade till GitHub; inga
+produktions-Dockerbilder byggdes och inga riktiga bokforingsposter, betalningar,
+e-postutskick eller underlag andrades.
+
+**Fortfarande inte godkant som enda bokforingssystem.** Fullt ore-stod,
+reskontra/huvudboksavstamning, verifierade importer/ingangsbalanser och verklig
+backupaterlasning aterstar. Historiken bygger pa sparade handelser, inte pa
+frysta historiska kunduppgifter eller bevisad fullstandighet hos aldre importer.
+Se [historical-settlement-reports.md](historical-settlement-reports.md).
+
+## Leverantorsbetalningar och saldokontroller 2026-09-09
+
+`npm run test:integration` passerade med 261 enhetstester och 123 integrationstestfall:
+inga failures, errors eller hoppade tester. Detta steg lade till 13 enhetstestfall
+och 17 integrationstestfall jamfort med rapportskyddet nedan.
+
+Verifierat mot isolerad PostgreSQL: samtidiga leverantorsbetalningar bevarar bada
+beloppen; dubbletter och overbetalningar avvisas; makulering kan inte radera en
+betalning och betalning kan inte ateraktivera en makulerad faktura. Journal, saldo,
+historik och audit aterstalls tillsammans vid fel. En redan bokford faktura fran
+en last period kan betalas pa ett tillatet datum i en oppen period.
+
+Bankavstamning, kund-/leverantorsreskontra och leverantorsexport summerar med
+kontrollerade mellanbelopp. Overskriden rapportkapacitet ger HTTP 422 med
+REPORT_AMOUNT_LIMIT, inte ett lyckat svar med fel saldo eller en felaktig export.
+
+`npm run test:reports` passerade 19 frontendtestfall. `npm run check:release`
+passerade inklusive produktionsbuild och webblasarens runtime-smoke. Produktions-
+Dockerbilder byggdes inte i detta steg. Testcontainrarna avvecklades efter testen.
+Andringarna ar lokala, inte pushade eller verifierade i GitHub Actions. Den riktiga
+CloudshopApplication-processen har inte startats om. Inga riktiga betalningar,
+e-postutskick, bokforingsposter eller underlag har andrats.
+
+**Inte klart som enda bokforingssystem:** fullt ore-stod, historiska reskontrasaldon,
+transaktionsvis bankmatchning och prov med riktig backup/ingangsbalanser aterstar.
+Reskontrans asOfDate styr idag alder men aterstaller inte historiskt saldo.
+Se [supplier-payment-safety.md](supplier-payment-safety.md) och
+[go-live-riskregister.md](go-live-riskregister.md).
+
+## Rapportskydd 2026-09-09
+
+`npm run test:integration` passerade med 248 enhetstester och 106 integrationstestfall:
+inga failures, errors eller hoppade tester. Detta steg lade till 26 enhetstestfall
+och 15 HTTP-testfall mot isolerad PostgreSQL, jamfort med foregaende avsnitt.
+
+Verifierat: ackumulerade belopp och differenser kan inte sla runt till fel tecken
+i centrala rapporter; negativa resultat bevaras; overskriden beloppsgrans ger
+HTTP 422 och REPORT_AMOUNT_LIMIT. Misslyckade HTTP-rapporter/exporter skapar inga
+journalposter eller export-audithandelser. Periodlasning upptacker obalans aven
+nar en gammal int-summering skulle gett lika debet och kredit.
+
+`npm run test:reports` passerade 19 frontendtestfall for giltiga rapporter,
+negativa resultat, felaktig JSON, felpayload och ogiltiga belopps-/radtyper.
+Testkommandot ar tillagt i GitHub Actions frontendjobb, men andringarna ar lokala
+och har INTE pushats eller verifierats i GitHub Actions i detta steg.
+
+`npm run check:release` passerade inklusive produktionsbuild och webblasarens
+runtime-smoke. Gate-korningen omfattar manga statiska kontroller; dessa ersatter
+inte integrationstest eller granskning av riktig bokforing. Docker-produktionsbilder
+byggdes inte i detta steg. Testdatabas/container avvecklades efter integrationstesten.
+
+Frontend svarar HTTP 200 pa http://localhost:5157. CloudshopApplication maste startas
+om for att den riktiga lokala backendprocessen ska ladda andringarna. Riktig
+bokforing och historiska underlag har inte andrats.
+
+**Inte klart som enda bokforingssystem:** skydden stoppar belopp utanfor nuvarande
+kapacitet men implementerar inte ore-stod. Folj kvarvarande beloppsmigrering,
+granskning av ovriga modulers summering, historisk avstamning och verkligt backup-/
+betalningsprov i [money-safety.md](money-safety.md).
+
+## Beloppshardning 2026-09-09
+
+Slutkorningen av `npm run test:integration` passerade med 222 enhetstester och
+91 integrationstestfall: inga fel, inga errors och inga hoppade tester.
+Det ar 37 nya testfall jamfort med Stripe-hardningens 203 + 73. Den exakta
+berakningshjalpen jamfors dessutom mot BigDecimal i 2 000 deterministiska fall.
+
+Tester omfattar stora momsmellanprodukter, delbetalning/aterbetalning,
+leverantorsmoms, overflow i fakturapris/antal/total, negativ kostnadsmoms,
+decimalinput som tidigare kunde kapas, kredit efter prisandring samt
+overslag i fler-radiga verifikationer och ingangsbalanser. HTTP-fel kontrolleras
+mot den isolerade PostgreSQL-databasen sa att ogiltiga anrop inte sparar bokforing.
+
+`npm run check:release` passerade pa slutversionen inklusive produktionsbuild
+och webblasarens runtime-smoke. Testcontainrarna avvecklades. Frontendens lokala
+testserver startades pa port 5157 och gav HTTP 200. Riktig bokforing andrades inte.
+Backend maste startas om for att ladda andringarna i den vanliga utvecklingsmiljon.
+Andringarna ar lokala; ingen ny push eller GitHub-korning ar verifierad har.
+
+Detta ger INTE fullt ore-stod eller ett go-live-godkannande.
+[Beloppssakerhet och kvarvarande migrering](money-safety.md) beskriver exakt vad
+som fortfarande blockerar skarp anvandning, inklusive rapporternas int-summeringar.
+
+## Backup och kvittoaterlasning 2026-09-09
+
+`npm run test:backup`: 11/11 dynamiska tester godkanda med verklig PostgreSQL 16,
+pg_dump, pg_restore och kopiering/hashkontroll av syntetiska kvittofiler.
+Provar lyckad aterlasning, saknad/skadad fil, saknad hash, flyttad Windows-sokvag,
+skydd mot lasning utanfor backupmappen, obalanserad verifikation och skadad dump.
+Tre av fallen kor deployskriptet med simulerad Docker: gammal oskyddad container
+blockeras, befintlig kvittovolym och nyinstallation tillats.
+`scripts/backup-scripts-test.ps1`: 7/7 tester godkanda med simulerade Docker-exitkoder.
+Inga riktiga databaser, kvitton eller nycklar anvandes. Alla testcontainrar avvecklades.
+
+`npm run check:release` passerade inklusive produktionsbuild och browser-smoke.
+`check:backup`, `check:ci`, `check:docker` samt shell-syntaxkontroll passerade.
+Backendens Maven-tester och produktions-imagebyggen kordes inte om i detta steg;
+inga Java-kallfiler andrades. Den nya backupverifieringen kor riktig PostgreSQL.
+
+Produktions-compose lagrar nu uploads i en beststandig volym. Deployskriptet
+stoppar uppgradering av gamla containrar utan denna volym tills filer migrerats.
+Backupskripten stoppar vid fel och skiljer katalogkontroll fran provad aterlasning.
+GitHub Actions har ett nytt obligatoriskt backup/restore-jobb fore Docker build;
+en korning pa GitHub av dessa andringar ar annu inte verifierad.
+
+Detta ar INTE ett go-live-godkannande. Kvar: riktig databas+filbackup fran samma
+tidpunkt och provade appfloden efter aterlasning, komplett hantering av oren,
+Stripe-flode med granskat momsunderlag och verifierade ingangsbalanser/rapporter.
+Se [backup-runbook](backup-restore-runbook.md). Gamla absoluta kvittosokvagar
+migreras inte automatiskt; de rapporteras som `relocatedPaths`.
+
 ## Stripe-hardning 2026-09-09
 
 `npm run test:integration` passerade med 203 enhetstester och 73 integrationstestfall,

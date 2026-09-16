@@ -168,9 +168,10 @@ check(
 );
 
 check(
-  "Supplier invoices are immutable after booking or payment",
-  methodHas("/supplier-invoices/{id}", ["hasSupplierInvoiceEntries(invoice)", "invoice.getPaidAmount() > 0", "Create a correction or cancellation instead of deleting it", "requireUnlockedAccountingDate(invoice.getInvoiceDate())"]),
-  "Booked or paid supplier invoices should not be hard-deleted."
+  "Registered supplier invoices are retained even before payment",
+  methodHas("/supplier-invoices/{id}", ["hasSupplierInvoiceEntries(invoice)", "invoice.getPaidAmount() > 0", "Create a correction or cancellation instead of deleting it", "Registered supplier invoices must be retained for dated balances"])
+    && !supplierController.includes("supplierInvoiceRepository.delete("),
+  "Registered supplier invoices should be cancelled with a date, not hard-deleted."
 );
 
 check(

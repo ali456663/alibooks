@@ -22,6 +22,8 @@ class BankReconciliationControllerTest {
   private final BankReconciliationEntryRepository bankReconciliationEntryRepository = mock(BankReconciliationEntryRepository.class);
   private final BankReconciliationService bankReconciliationService = mock(BankReconciliationService.class);
   private final AuditService auditService = mock(AuditService.class);
+  private final BankImportBookingService bankImport = new BankImportBookingService(bankReconciliationEntryRepository,
+      mock(se.cloudshop.accounting.AccountingService.class), auditService);
   private final BankReconciliationController bankReconciliationController = controller(true);
 
   @Test
@@ -33,7 +35,7 @@ class BankReconciliationControllerTest {
         "txn_123",
         1250,
         "payment",
-        "booked",
+        "skipped",
         "Matched invoice F-2026-0001"
     );
     when(bankReconciliationEntryRepository.save(any(BankReconciliationEntry.class))).thenAnswer(invocation -> {
@@ -130,7 +132,8 @@ class BankReconciliationControllerTest {
         bankReconciliationEntryRepository,
         bankReconciliationService,
         auditService,
-        bankReconciliationResetEnabled
+        bankReconciliationResetEnabled,
+        bankImport
     );
   }
 

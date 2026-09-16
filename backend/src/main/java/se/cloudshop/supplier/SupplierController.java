@@ -166,12 +166,16 @@ public class SupplierController {
       @RequestBody UpdateSupplierInvoiceStatusRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    supplierInvoiceRepository.lockById(id);
     SupplierInvoice invoice = supplierInvoiceRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Supplier invoice not found."));
 
     String status = normalizeStatus(request == null ? "" : request.status());
     requireSupplierInvoiceStatusChangeAllowed(invoice, status);
     if ("paid".equals(status)) {
+      if (request.paymentReference() != null && java.util.regex.Pattern.compile("\\R").matcher(request.paymentReference()).find()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference must be a single line.");
+      }
       LocalDate paymentDate = request.paidAt() == null ? LocalDate.now() : request.paidAt();
       int paidAmount = request.paidAmount() == null ? invoice.getRemainingAmount() : request.paidAmount();
       if (paidAmount <= 0) {
@@ -198,6 +202,15 @@ public class SupplierController {
   }
 
   private void requireSupplierInvoiceStatusChangeAllowed(SupplierInvoice invoice, String nextStatus) {
+    if ("cancelled".equals(nextStatus)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Use the cancellation endpoint with an effective cancellation date.");
+    }
+    if ("cancelled".equals(invoice.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled supplier invoices cannot be reactivated or paid.");
+    }
+    if ("booked".equals(nextStatus) && invoice.getPaidAmount() > 0) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice has payments. Keep its payment status.");
+    }
     if ("paid".equals(nextStatus) || "booked".equals(nextStatus)) {
       return;
     }
@@ -227,6 +240,7 @@ public class SupplierController {
       @RequestBody(required = false) CancelSupplierInvoiceRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    supplierInvoiceRepository.lockById(id);
     SupplierInvoice invoice = supplierInvoiceRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Supplier invoice not found."));
 
@@ -234,9 +248,16 @@ public class SupplierController {
       return invoice;
     }
 
+    if (invoice.getPaidAmount() > 0 || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Paid supplier invoices cannot be cancelled without a payment correction.");
+    }
+
     LocalDate cancellationDate = request == null || request.cancellationDate() == null
         ? LocalDate.now()
         : request.cancellationDate();
+    if (invoice.getInvoiceDate() != null && cancellationDate.isBefore(invoice.getInvoiceDate())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation date cannot be before supplier invoice date.");
+    }
     accountingService.requireUnlockedAccountingDate(cancellationDate);
     List<JournalEntry> correctionEntries = accountingService.hasSupplierInvoiceEntries(invoice)
         ? accountingService.createSupplierInvoiceCancellationEntries(
@@ -285,7 +306,7 @@ public class SupplierController {
         cell(invoice.getCancelledAt()),
         cell(invoice.getCancellationVoucherNumber())
     )).append("\r\n"));
-    int totalAmount = invoices.stream().mapToInt(SupplierInvoice::getTotalAmount).sum();
+    int totalAmount = se.cloudshop.accounting.ReportAmounts.reportAmount(invoices.stream().mapToLong(SupplierInvoice::getTotalAmount).sum());
 
     auditService.record(
         "export",
@@ -311,6 +332,7 @@ public class SupplierController {
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    supplierInvoiceRepository.lockById(id);
     SupplierInvoice invoice = supplierInvoiceRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Supplier invoice not found."));
 
@@ -318,9 +340,8 @@ public class SupplierController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice has bookkeeping or payments. Create a correction or cancellation instead of deleting it.");
     }
 
-    accountingService.requireUnlockedAccountingDate(invoice.getInvoiceDate());
-    supplierInvoiceRepository.delete(invoice);
-    auditService.record("supplier_invoice", "supplier_invoice", id, "deleted", invoice.getReference(), "Supplier invoice deleted", invoice.getTotalAmount(), authorizationHeader);
+    throw new ResponseStatusException(HttpStatus.CONFLICT,
+        "Registered supplier invoices must be retained for dated balances. Create a correction or cancellation instead of deleting it.");
   }
 
   private String normalizeStatus(String status) {

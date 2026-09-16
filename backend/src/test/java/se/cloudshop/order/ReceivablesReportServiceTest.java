@@ -14,8 +14,66 @@ import se.cloudshop.product.Product;
 
 class ReceivablesReportServiceTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void rejectsBucketOrReportOverflow(boolean sameBucket) {
+    Product product = new Product("Test", "Test", 1000);
+    Order first = invoice(1L, "F-1", product, LocalDate.now().plusDays(2), "SENT");
+    Order second = invoice(2L, "F-2", product, sameBucket ? first.getDueDate() : LocalDate.now().minusDays(60), "SENT");
+    first.setAmounts(1_500_000_000, 0, 1_500_000_000);
+    second.setAmounts(1_500_000_000, 0, 1_500_000_000);
+    when(orderRepository.findAll()).thenReturn(List.of(first, second));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> receivablesReportService.createAgingReport(LocalDate.now()))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            e -> assertThat(e.getStatusCode().value()).isEqualTo(422));
+  }
+
   private final OrderRepository orderRepository = mock(OrderRepository.class);
   private final ReceivablesReportService receivablesReportService = new ReceivablesReportService(orderRepository);
+
+  @Test
+  void reconstructsPaidInvoiceBeforePartialAndFinalPayment() {
+    Order order = invoice(1L, "F-1", new Product("Test", "Test", 1000), LocalDate.of(2026, 4, 10), "SENT");
+    order.registerPayment(LocalDate.of(2026, 4, 5), 500, "first");
+    order.registerPayment(LocalDate.of(2026, 4, 20), 750, "last");
+    when(orderRepository.findAll()).thenReturn(List.of(order));
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 3, 31)).invoiceCount()).isZero();
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 4)).totalOutstanding()).isEqualTo(1250);
+    var report = receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 5));
+    assertThat(report.totalOutstanding()).isEqualTo(750);
+    assertThat(report.invoices()).singleElement().satisfies(row -> {
+      assertThat(row.paidAmount()).isEqualTo(500);
+      assertThat(row.status()).isEqualTo("PARTIALLY_PAID");
+      assertThat(row.reminderRecommended()).isFalse();
+    });
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 20)).invoiceCount()).isZero();
+  }
+
+  @Test
+  void creditRemovesOriginalOnlyFromCreditDateWithoutReopeningOnRefund() {
+    Order original = invoice(1L, "F-1", new Product("Test", "Test", 1000), LocalDate.of(2026, 4, 10), "SENT");
+    original.registerPayment(LocalDate.of(2026, 4, 5), 500, "first");
+    original.setStatus("CREDITED");
+    Order credit = Order.draftFromInvoiceSnapshot(original, Instant.now());
+    credit.setCreditInvoice(true);
+    credit.setStatus("SENT");
+    credit.setCreditedInvoiceId(1L);
+    credit.setAmounts(-1000, -250, -1250);
+    org.springframework.test.util.ReflectionTestUtils.setField(credit, "invoiceDate", LocalDate.of(2026, 4, 15));
+    original.registerRefund(LocalDate.of(2026, 4, 20), 500, "refund");
+    when(orderRepository.findAll()).thenReturn(List.of(original, credit));
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 14)).totalOutstanding()).isEqualTo(750);
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 15)).totalOutstanding()).isZero();
+    assertThat(receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 20)).totalOutstanding()).isZero();
+  }
+
+  @Test
+  void refusesCreditedInvoiceWithoutCreditEvidence() {
+    Order original = invoice(1L, "F-1", new Product("Test", "Test", 1000), LocalDate.of(2026, 4, 10), "CREDITED");
+    when(orderRepository.findAll()).thenReturn(List.of(original));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 10)))
+        .isInstanceOf(se.cloudshop.accounting.SettlementSnapshot.HistoryIncomplete.class);
+  }
 
   @Test
   void createsAgingReportForOpenReceivablesOnly() {
@@ -58,6 +116,7 @@ class ReceivablesReportServiceTest {
     order.setDueDate(dueDate);
     order.setStatus(status);
     order.setAmounts(1000, 250, 1250);
+    org.springframework.test.util.ReflectionTestUtils.setField(order, "invoiceDate", LocalDate.of(2026, 4, 1));
     return order;
   }
 

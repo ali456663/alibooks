@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 import se.cloudshop.customer.Customer;
 import se.cloudshop.product.Product;
+import se.cloudshop.money.WholeKronaMath;
 
 @Entity
 @Table(name = "customer_orders")
@@ -65,6 +66,27 @@ public class Order {
   private boolean creditInvoice = false;
   private Long creditedInvoiceId;
 
+  @jakarta.persistence.Convert(converter = se.cloudshop.invoice.InvoiceDocumentSnapshotConverter.class)
+  @Column(name = "document_snapshot", columnDefinition = "text")
+  private se.cloudshop.invoice.InvoiceDocumentSnapshot documentSnapshot;
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public se.cloudshop.invoice.InvoiceDocumentSnapshot getDocumentSnapshot() {
+    return documentSnapshot;
+  }
+
+  public boolean isDocumentSnapshotAvailable() {
+    return documentSnapshot != null;
+  }
+
+  public void captureDocumentSnapshot(se.cloudshop.settings.AppSettings settings) {
+    if (documentSnapshot != null || !"DRAFT".equals(status)) {
+      throw new IllegalStateException("Only a new draft may capture invoice document data once.");
+    }
+    documentSnapshot = se.cloudshop.invoice.InvoiceDocumentSnapshot.capture(this, settings);
+    fTaxApproved = documentSnapshot.fTaxApproved();
+  }
+
   @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
   private List<InvoicePayment> payments = new ArrayList<>();
 
@@ -111,6 +133,27 @@ public class Order {
 
   public Long getId() {
     return id;
+  }
+
+  public static Order draftFromInvoiceSnapshot(Order original, Instant createdAt) {
+    // A credit must use historical invoice values, not the product's current price.
+    Order copy = new Order();
+    copy.customer = original.customer;
+    copy.customerName = original.customerName;
+    copy.product = original.product;
+    copy.createdAt = createdAt;
+    copy.status = "DRAFT";
+    copy.invoiceDate = LocalDate.now();
+    copy.dueDate = original.dueDate;
+    copy.paymentTermsDays = original.paymentTermsDays;
+    copy.fTaxApproved = original.fTaxApproved;
+    copy.quantity = original.getQuantity();
+    copy.ordinaryPrice = original.ordinaryPrice;
+    copy.discountAmount = original.discountAmount;
+    copy.discountLabel = original.discountLabel;
+    copy.documentSnapshot = original.documentSnapshot;
+    copy.setAmounts(original.netAmount, original.vatAmount, original.totalAmount);
+    return copy;
   }
 
   public String getCustomerName() {
@@ -339,7 +382,7 @@ public class Order {
   }
 
   public void setAmounts(int netAmount, int vatAmount, int totalAmount) {
-    if (netAmount + vatAmount != totalAmount) {
+    if ((long) netAmount + vatAmount != totalAmount) {
       throw new IllegalArgumentException("Invoice total must equal net amount plus VAT amount.");
     }
 
@@ -364,12 +407,15 @@ public class Order {
 
   private void calculateAmounts(Product product) {
     int invoiceQuantity = getQuantity();
-    this.ordinaryPrice = product.getPrice() * invoiceQuantity;
-    this.netAmount = product.getEffectivePrice() * invoiceQuantity;
+    if (product.getPrice() < 0 || product.getEffectivePrice() < 0) {
+      throw new IllegalArgumentException("Invoice prices must not be negative.");
+    }
+    this.ordinaryPrice = Math.multiplyExact(product.getPrice(), invoiceQuantity);
+    this.netAmount = Math.multiplyExact(product.getEffectivePrice(), invoiceQuantity);
     this.discountAmount = Math.max(ordinaryPrice - netAmount, 0);
     this.discountLabel = product.getDiscountLabel();
-    this.vatAmount = Math.round(netAmount * 0.25f);
-    this.totalAmount = netAmount + vatAmount;
+    this.vatAmount = WholeKronaMath.roundedRatio(netAmount, 1, 4);
+    this.totalAmount = Math.addExact(netAmount, vatAmount);
   }
 
   private int normalizeQuantity(int quantity) {

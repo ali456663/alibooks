@@ -10,6 +10,21 @@ import se.cloudshop.product.Product;
 class OrderTest {
 
   @Test
+  void largePriceVatDoesNotLoseAWholeKronaToFloatPrecision() {
+    Order order = new Order("Test", new Product("Test", "Test", 100_000_003), Instant.now());
+    assertThat(order.getVatAmount()).isEqualTo(25_000_001);
+    assertThat(order.getTotalAmount()).isEqualTo(125_000_004);
+  }
+
+  @Test
+  void rejectsOverflowInQuantityAndTotal() {
+    assertThatThrownBy(() -> new Order("Test", new Product("Test", "Test", 1_000_000_000), Instant.now(), 3))
+        .isInstanceOf(ArithmeticException.class);
+    assertThatThrownBy(() -> new Order("Test", new Product("Test", "Test", 2_000_000_000), Instant.now()))
+        .isInstanceOf(ArithmeticException.class);
+  }
+
+  @Test
   void calculatesInvoiceAmountsFromProductPriceAndQuantity() {
     Order order = new Order("Ali Wafa", new Product("PT", "Training", 1000), Instant.now(), 2);
 

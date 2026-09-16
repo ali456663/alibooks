@@ -9,7 +9,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import se.cloudshop.invoice.InvoicePdfService;
+import se.cloudshop.invoice.InvoiceOriginalService;
 import se.cloudshop.order.Order;
 import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
@@ -19,20 +19,20 @@ public class InvoiceEmailService {
 
   private final JavaMailSender mailSender;
   private final SettingsService settingsService;
-  private final InvoicePdfService invoicePdfService;
+  private final InvoiceOriginalService invoiceOriginalService;
   private final String mailHost;
   private final String mailUsername;
 
   public InvoiceEmailService(
       JavaMailSender mailSender,
       SettingsService settingsService,
-      InvoicePdfService invoicePdfService,
+      InvoiceOriginalService invoiceOriginalService,
       @Value("${spring.mail.host:}") String mailHost,
       @Value("${spring.mail.username:}") String mailUsername
   ) {
     this.mailSender = mailSender;
     this.settingsService = settingsService;
-    this.invoicePdfService = invoicePdfService;
+    this.invoiceOriginalService = invoiceOriginalService;
     this.mailHost = mailHost;
     this.mailUsername = mailUsername;
   }
@@ -46,7 +46,7 @@ public class InvoiceEmailService {
 
     AppSettings settings = settingsService.getSettings();
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
-    byte[] pdf = invoicePdfService.createInvoicePdf(invoice);
+    byte[] pdf = invoiceOriginalService.read(invoice).pdf();
 
     try {
       MimeMessage message = mailSender.createMimeMessage();

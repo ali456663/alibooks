@@ -67,6 +67,7 @@ public class RecurringContractController {
   }
 
   @PostMapping("/contracts")
+  @org.springframework.transaction.annotation.Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public RecurringContract createContract(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -84,6 +85,11 @@ public class RecurringContractController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be at least 1.");
     }
 
+    long contractAmount = (long) product.getEffectivePrice() * quantity;
+    if (contractAmount < 0 || contractAmount > Integer.MAX_VALUE) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contract amount exceeds the supported whole-SEK range.");
+    }
+
     String interval = normalizeInterval(request.interval());
     LocalDate nextInvoiceDate = request.nextInvoiceDate() == null ? LocalDate.now() : request.nextInvoiceDate();
 
@@ -96,7 +102,7 @@ public class RecurringContractController {
         interval,
         nextInvoiceDate
     ));
-    auditService.record("contract", "recurring_contract", contract.getId(), "created", contract.getCustomerName(), "Recurring contract created", product.getEffectivePrice() * quantity, authorizationHeader);
+    auditService.record("contract", "recurring_contract", contract.getId(), "created", contract.getCustomerName(), "Recurring contract created", (int) contractAmount, authorizationHeader);
     return contract;
   }
 
@@ -134,12 +140,14 @@ public class RecurringContractController {
   }
 
   @PostMapping("/contracts/{id}/invoice")
+  @org.springframework.transaction.annotation.Transactional
   public Order createContractInvoice(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long id
   ) {
     authHeader.requireValidToken(authorizationHeader);
 
+    recurringContractRepository.lockById(id);
     RecurringContract contract = recurringContractRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found."));
 
@@ -166,12 +174,15 @@ public class RecurringContractController {
     savedOrder.setOcrNumber(settings.getDefaultOcr());
     savedOrder.setPlusGiro(settings.getPlusGiro());
     savedOrder.setPaymentRecipient(settings.getPaymentRecipient());
+    savedOrder.captureDocumentSnapshot(settings);
     savedOrder = orderRepository.save(savedOrder);
 
     contract.setLastInvoiceNumber(savedOrder.getInvoiceNumber());
     contract.setNextInvoiceDate(nextDate(contract.getNextInvoiceDate(), contract.getInterval()));
     recurringContractRepository.save(contract);
 
+    auditService.record("invoice", "invoice", savedOrder.getId(), "contract_invoice_created", savedOrder.getInvoiceNumber(),
+        "Contract invoice and document snapshot created for contract " + id, savedOrder.getTotalAmount(), authorizationHeader);
     return savedOrder;
   }
 
