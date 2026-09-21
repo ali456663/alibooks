@@ -40,4 +40,12 @@ class WholeKronaMathTest {
     assertThatThrownBy(() -> WholeKronaMath.roundedRatio(1, -1, 4)).isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> WholeKronaMath.roundedRatio(Integer.MAX_VALUE, 2, 1)).isInstanceOf(ArithmeticException.class);
   }
+
+  @Test
+  void exactRatioRejectsFractionalWholeKronaResult() {
+    assertThat(WholeKronaMath.exactRatio(1250, 100, 125)).isEqualTo(1000);
+    assertThatThrownBy(() -> WholeKronaMath.exactRatio(1001, 100, 125))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("whole kronor");
+  }
 }

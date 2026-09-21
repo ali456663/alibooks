@@ -101,20 +101,44 @@ public class CardPurchaseController {
       return purchase;
     }
 
+    int totalAmount = wholeKrona(purchase.getTotalAmountMinor(), purchase.getTotalAmount(), "kortköpets totalbelopp");
+    int netAmount = wholeKrona(purchase.getNetAmountMinor(), purchase.getNetAmount(), "kortköpets nettobelopp");
+    int vatAmount = wholeKrona(purchase.getVatAmountMinor(), purchase.getVatAmount(), "kortköpets momsbelopp");
     accountingService.requireUnlockedAccountingDate(purchase.getPurchaseDate());
     Expense expense = expenseRepository.save(new Expense(
         purchase.getPurchaseDate(),
         "Kortkop: " + purchase.getMerchantName(),
-        purchase.getNetAmount(),
-        purchase.getVatAmount(),
+        netAmount,
+        vatAmount,
         purchase.getCategory(),
         defaultValue(purchase.getClearingAccount(), "2890")
     ));
     accountingService.createExpenseEntries(expense);
     purchase.markBooked(expense.getId());
     CardPurchase savedPurchase = cardPurchaseRepository.save(purchase);
-    auditService.record("card_purchase", "card_purchase", savedPurchase.getId(), "booked", savedPurchase.getReference(), "Card purchase booked as expense " + expense.getId(), savedPurchase.getTotalAmount(), authorizationHeader);
+    auditService.record("card_purchase", "card_purchase", savedPurchase.getId(), "booked", savedPurchase.getReference(), "Card purchase booked as expense " + expense.getId(),
+        totalAmount, authorizationHeader);
     return savedPurchase;
+  }
+
+  private int wholeKrona(Long amountMinor, int legacyAmount, String field) {
+    long valueMinor;
+    try {
+      valueMinor = amountMinor == null ? Math.multiplyExact((long) legacyAmount, 100L) : amountMinor;
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          field + " ligger utanför det belopp som bokföringen kan representera.");
+    }
+    if (valueMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          field + " innehåller ören som bokföringen inte kan representera.");
+    }
+    long wholeKrona = valueMinor / 100L;
+    if (wholeKrona < Integer.MIN_VALUE || wholeKrona > Integer.MAX_VALUE) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          field + " ligger utanför det belopp som bokföringen kan representera.");
+    }
+    return (int) wholeKrona;
   }
 
   private String clean(String value) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -74,6 +75,9 @@ class CardPurchaseControllerTest {
     CardPurchase savedPurchase = cardPurchaseController.bookCardPurchaseAsExpense(authorizationHeader, 1L);
 
     assertThat(savedPurchase.getStatus()).isEqualTo("booked");
+    assertThat(savedPurchase.getNetAmountMinor()).isEqualTo(10000L);
+    assertThat(savedPurchase.getVatAmountMinor()).isEqualTo(2500L);
+    assertThat(savedPurchase.getTotalAmountMinor()).isEqualTo(12500L);
     verify(accountingService).requireUnlockedAccountingDate(LocalDate.of(2026, 8, 17));
     verify(accountingService).createExpenseEntries(any(Expense.class));
     verify(auditService).record(
@@ -86,6 +90,22 @@ class CardPurchaseControllerTest {
         eq(125),
         eq(authorizationHeader)
     );
+  }
+
+  @Test
+  void bookCardPurchaseStopsWhenMinorShadowContainsOre() {
+    CardPurchase purchase = new CardPurchase(
+        LocalDate.of(2026, 8, 17), "Adobe", "Ali", "1234", "card-ore", 125, 25, "5420", "2890");
+    org.springframework.test.util.ReflectionTestUtils.setField(purchase, "totalAmountMinor", 12_501L);
+    when(cardPurchaseRepository.findById(2L)).thenReturn(Optional.of(purchase));
+
+    assertThatThrownBy(() -> cardPurchaseController.bookCardPurchaseAsExpense(authorizationHeader(), 2L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("kortköpets totalbelopp")
+        .hasMessageContaining("ören");
+
+    verify(expenseRepository, never()).save(any(Expense.class));
+    verify(accountingService, never()).createExpenseEntries(any(Expense.class));
   }
 
   private String authorizationHeader() {

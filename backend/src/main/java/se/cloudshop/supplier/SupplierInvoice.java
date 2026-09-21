@@ -7,6 +7,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,10 +36,18 @@ public class SupplierInvoice {
   private int totalAmount;
   private int vatAmount;
   private int netAmount;
+  @Column(name = "total_amount_minor")
+  private Long totalAmountMinor;
+  @Column(name = "vat_amount_minor")
+  private Long vatAmountMinor;
+  @Column(name = "net_amount_minor")
+  private Long netAmountMinor;
   private String category;
   private String status;
   private LocalDate paidAt;
   private int paidAmount;
+  @Column(name = "paid_amount_minor")
+  private Long paidAmountMinor;
   private String paymentReference;
   private String paymentHistory;
   private LocalDate cancelledAt;
@@ -102,9 +113,13 @@ public class SupplierInvoice {
     this.totalAmount = totalAmount;
     this.vatAmount = vatAmount;
     this.netAmount = Math.max(0, totalAmount - vatAmount);
+    this.totalAmountMinor = toMinorUnits(this.totalAmount, "totalAmount");
+    this.vatAmountMinor = toMinorUnits(this.vatAmount, "vatAmount");
+    this.netAmountMinor = toMinorUnits(this.netAmount, "netAmount");
     this.category = category;
     this.status = "unpaid";
     this.paidAmount = 0;
+    this.paidAmountMinor = 0L;
     this.paymentReference = "";
     this.paymentHistory = "";
     this.selfBilling = selfBilling;
@@ -162,6 +177,21 @@ public class SupplierInvoice {
     return netAmount;
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getTotalAmountMinor() {
+    return totalAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getVatAmountMinor() {
+    return vatAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getNetAmountMinor() {
+    return netAmountMinor;
+  }
+
   public String getCategory() {
     return category;
   }
@@ -178,8 +208,18 @@ public class SupplierInvoice {
     return paidAmount;
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getPaidAmountMinor() {
+    return paidAmountMinor;
+  }
+
   public int getRemainingAmount() {
-    return Math.max(totalAmount - paidAmount, 0);
+    return wholeKrona(getRemainingAmountMinor(), "remainingAmount");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getRemainingAmountMinor() {
+    return Math.max(totalAmountMinorValue() - paidAmountMinorValue(), 0L);
   }
 
   public String getPaymentReference() {
@@ -233,14 +273,18 @@ public class SupplierInvoice {
 
   public void registerPayment(LocalDate paidAt, int amount, String reference) {
     LocalDate paymentDate = paidAt == null ? LocalDate.now() : paidAt;
-    if ("cancelled".equals(status) || amount <= 0 || paidAmount < 0
-        || (long) paidAmount + amount > totalAmount) {
+    if ("cancelled".equals(status) || amount <= 0 || paidAmountMinorValue() < 0) {
       throw new IllegalArgumentException("Supplier payment conflicts with invoice status or remaining amount.");
     }
-    this.paidAmount = Math.addExact(this.paidAmount, amount);
+    long newPaidAmountMinor = Math.addExact(paidAmountMinorValue(), toMinorUnits(amount, "paymentAmount"));
+    if (newPaidAmountMinor > totalAmountMinorValue()) {
+      throw new IllegalArgumentException("Supplier payment conflicts with invoice status or remaining amount.");
+    }
+    this.paidAmountMinor = newPaidAmountMinor;
+    this.paidAmount = wholeKrona(newPaidAmountMinor, "paidAmount");
     this.paymentReference = reference == null ? "" : reference.trim();
     this.paidAt = paymentDate;
-    this.status = getRemainingAmount() == 0 ? "paid" : "partial";
+    this.status = getRemainingAmountMinor() == 0 ? "paid" : "partial";
 
     String historyLine = paymentHistoryLine(paymentDate, amount, this.paymentReference);
     this.paymentHistory = (paymentHistory == null || paymentHistory.isBlank())
@@ -284,6 +328,52 @@ public class SupplierInvoice {
 
   private String normalizeReference(String reference) {
     return reference == null ? "" : reference.trim().toLowerCase();
+  }
+
+  private static long toMinorUnits(int amount, String field) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Supplier invoice " + field + " is outside the supported money range.", exception);
+    }
+  }
+
+  private static int wholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0) {
+      throw new IllegalStateException("Supplier invoice " + field + " contains ore that the legacy API cannot represent.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalStateException("Supplier invoice " + field + " is outside the supported whole-krona API range.", exception);
+    }
+  }
+
+  private long totalAmountMinorValue() {
+    return minorValue(totalAmountMinor, totalAmount, "totalAmount");
+  }
+
+  private long paidAmountMinorValue() {
+    return minorValue(paidAmountMinor, paidAmount, "paidAmount");
+  }
+
+  private static long minorValue(Long shadow, int legacy, String field) {
+    return shadow == null ? toMinorUnits(legacy, field) : shadow;
+  }
+
+  @PostLoad
+  private void synchronizeMinorUnitShadowsFromLegacy() {
+    // Legacy whole-krona columns remain authoritative during the staged migration.
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeMinorUnits() {
+    totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
+    vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
+    netAmountMinor = toMinorUnits(netAmount, "netAmount");
+    paidAmountMinor = toMinorUnits(paidAmount, "paidAmount");
   }
 
   private String clean(String value) {

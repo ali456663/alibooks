@@ -58,6 +58,7 @@ const requiredEnv = [
   "APP_SCHEMA_PATCH_ENABLED",
   "JWT_SECRET",
   "JWT_EXPIRATION_MINUTES",
+  "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY",
   "APP_TEST_DATA_RESET_ENABLED",
   "APP_BANK_RECONCILIATION_RESET_ENABLED",
   "STRIPE_SECRET_KEY",
@@ -88,7 +89,7 @@ check("Document forbids secrets in frontend and GitHub", includesAll(doc, ["aldr
 check("Document requires public production URL", includesAll(doc, ["publik frontend-URL", "APP_CORS_ALLOWED_ORIGINS", "APP_CORS_LOCAL_DEV_ENABLED=false"]), "Production origin rules should be explicit.");
 check("Document requires RDS or managed PostgreSQL", includesAll(doc, ["RDS", "hanterad PostgreSQL", "localhost"]), "Database target should be explicit.");
 check("Document requires safe schema mode", includesAll(doc, ["SPRING_JPA_HIBERNATE_DDL_AUTO=validate", "APP_SCHEMA_PATCH_ENABLED=false"]), "Production schema mutation should be blocked.");
-check("Document requires strong JWT", includesAll(doc, ["JWT_SECRET", "minst 32 tecken"]), "JWT strength should be visible.");
+check("Document requires strong JWT and first-owner key", includesAll(doc, ["JWT_SECRET", "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY", "minst 32 tecken"]), "Authentication secrets and first-owner setup should be visible.");
 check("Document shows JWT secret generator", includesAll(doc, ["npm run generate:jwt-secret", "IntelliJ Run Configuration"]), "The user should have a safe local way to generate JWT_SECRET.");
 check("Document covers Stripe formats", includesAll(doc, ["sk_test_", "sk_live_", "whsec_"]), "Stripe key and webhook formats should be visible.");
 check("Document covers SMTP group", includesAll(doc, ["SPRING_MAIL_HOST", "SPRING_MAIL_PORT", "SPRING_MAIL_USERNAME", "SPRING_MAIL_PASSWORD"]), "SMTP settings should be configured together.");
@@ -102,7 +103,9 @@ check("Production check validates same-origin API", includesAll(productionCheck,
 check("Production check validates CORS hardening", includesAll(productionCheck, ["APP_CORS_ALLOWED_ORIGINS", "APP_CORS_LOCAL_DEV_ENABLED", "Strict CORS is not localhost"]), "CORS hardening should be checked.");
 check("Backend status exposes effective CORS origins", includesAll(healthController, ["effectiveAllowedOrigins", "allowedOriginPatterns", "localDevelopmentReady"]), "System status should show the actual local/prod CORS mode.");
 check("Security view separates local and production CORS", includesAll(mainSource, ["localDevelopmentReady", "Effektiva origins", "APP_CORS_LOCAL_DEV_ENABLED=false"]), "Frontend should show local CORS as dev-ready without overclaiming production.");
-check("Production check validates JWT strength", includesAll(productionCheck, ["Strict JWT secret is strong", "32"]), "JWT strength should be checked.");
+check("Production check validates JWT and owner setup key strength", includesAll(productionCheck, ["Strict JWT secret is strong", "Owner setup key is strong", "32"]), "Authentication secrets should be checked.");
+check("Backend requires strong owner setup key in production", includesAll(read("backend/src/main/java/se/cloudshop/config/ProductionConfigurationGuard.java"), ["APP_AUTH_REGISTRATION_BOOTSTRAP_KEY", "distinctCharacterCount(bootstrapKey)"]), "Production startup should reject missing or weak initial-owner setup keys.");
+check("Registration closes after first owner", includesAll(read("backend/src/main/java/se/cloudshop/auth/UserService.java"), ["lockRegistrationTable", "userRepository.count() > 0", "Registration is closed"]), "Open signup must close after the initial owner account.");
 check("JWT generator creates a strong random secret", includesAll(jwtSecretGenerator, ["randomBytes(48)", "JWT_SECRET=", "Do not paste this value"]), "JWT generator should create a strong secret without writing it to the repo.");
 check("Production check validates schema safety", includesAll(productionCheck, ["validate", "none", "APP_SCHEMA_PATCH_ENABLED should be false"]), "Schema safety should be checked.");
 check("Production check validates Stripe and SMTP", includesAll(productionCheck, ["sk_test_", "sk_live_", "whsec_", "SMTP config is complete"]), "Integration config should be checked.");

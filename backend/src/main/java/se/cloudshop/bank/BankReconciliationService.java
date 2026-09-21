@@ -54,6 +54,9 @@ public class BankReconciliationService {
         .stream()
         .filter(entry -> isWithinPeriod(entry.getBankDate(), periodFrom, periodTo))
         .toList();
+    // Validate every source row before aggregation. Otherwise two invalid ore values
+    // could cancel each other in a legacy whole-krona report.
+    bankRows.forEach(row -> issueWholeKrona(row, "bankavstamningsrad"));
     List<BankReconciliationEntry> bookedRows = bankRows.stream()
         .filter(entry -> "booked".equalsIgnoreCase(entry.getStatus()))
         .toList();
@@ -61,13 +64,16 @@ public class BankReconciliationService {
         .filter(entry -> "skipped".equalsIgnoreCase(entry.getStatus()))
         .toList();
 
-    int ledgerMovement = reportAmount(bankJournalEntries.stream()
-        .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
-        .sum());
-    int reconciledMovement = reportAmount(bookedRows.stream()
-        .mapToLong(BankReconciliationEntry::getAmount)
-        .sum());
-    int difference = reportAmount((long) ledgerMovement - reconciledMovement);
+    long ledgerMovementMinor = bankJournalEntries.stream()
+        .mapToLong(this::signedMinorMovement)
+        .reduce(0L, Math::addExact);
+    long reconciledMovementMinor = bookedRows.stream()
+        .mapToLong(this::bankAmountMinor)
+        .reduce(0L, Math::addExact);
+    long differenceMinor = Math.subtractExact(ledgerMovementMinor, reconciledMovementMinor);
+    int ledgerMovement = reportWholeKrona(ledgerMovementMinor, "ledger movement");
+    int reconciledMovement = reportWholeKrona(reconciledMovementMinor, "reconciled movement");
+    int difference = reportWholeKrona(differenceMinor, "reconciliation difference");
 
     List<BankReconciliationIssue> issues = new ArrayList<>();
     checkJournalLinks(allJournalEntries, allBankRows, bankJournalEntries, bankRows, issues);
@@ -109,7 +115,7 @@ public class BankReconciliationService {
         "skipped_bank_row",
         entry.getBankDate(),
         entry.getReference(),
-        entry.getAmount(),
+        issueWholeKrona(entry, "skippad bankrad"),
         "A bank row was skipped and should be reviewed before period close."
     )));
 
@@ -120,7 +126,7 @@ public class BankReconciliationService {
             "missing_bank_reference",
             entry.getBankDate(),
             "",
-            entry.getAmount(),
+            issueWholeKrona(entry, "bokford bankrad"),
             "A booked bank row is missing reference or transaction id."
         )));
 
@@ -167,7 +173,7 @@ public class BankReconciliationService {
       if (row.getBankDate() == null || row.getBankRowId() == null || row.getBankRowId().isBlank()
           || bankIdCounts.getOrDefault(row.getBankRowId(), 0L) > 1) {
         issues.add(new BankReconciliationIssue("critical", "invalid_bank_identity_or_date", row.getBankDate(), row.getBankRowId(),
-            row.getAmount(), "Bank row has an absent date or missing/duplicated identity."));
+            issueWholeKrona(row, "bankrad"), "Bank row has an absent date or missing/duplicated identity."));
         continue;
       }
       if ("skipped".equalsIgnoreCase(row.getStatus()) && row.getJournalEntryId() == null) continue;
@@ -178,16 +184,16 @@ public class BankReconciliationService {
       else if (journal == null) problem = "missing_linked_journal_entry";
       else if (linkCounts.get(row.getJournalEntryId()) > 1) problem = "duplicate_journal_link";
       else if (!BANK_ACCOUNT_NUMBER.equals(journal.getAccountNumber()) || row.getBankDate() == null
-          || !row.getBankDate().equals(journal.getVoucherDate()) || row.getAmount() == 0
-          || (long) journal.getDebit() - journal.getCredit() != row.getAmount()) problem = "bank_journal_link_mismatch";
+          || !row.getBankDate().equals(journal.getVoucherDate()) || bankAmountMinor(row) == 0
+          || signedMinorMovement(journal) != bankAmountMinor(row)) problem = "bank_journal_link_mismatch";
       if (problem == null) matched.add(journal.getId());
       else issues.add(new BankReconciliationIssue("critical", problem, row.getBankDate(), row.getBankRowId(),
-          row.getAmount(), "Bank row " + row.getBankRowId() + " requires review: " + problem + "."));
+          issueWholeKrona(row, "bankrad"), "Bank row " + row.getBankRowId() + " requires review: " + problem + "."));
     }
     for (JournalEntry journal : periodJournal) {
       if (journal.getId() == null || !matched.contains(journal.getId())) {
         issues.add(new BankReconciliationIssue("critical", "unmatched_journal_entry", journal.getVoucherDate(),
-            journal.getVoucherNumber(), reportAmount((long) journal.getDebit() - journal.getCredit()),
+            journal.getVoucherNumber(), reportWholeKrona(signedMinorMovement(journal), "unmatched journal movement"),
             "Journal row " + journal.getId() + " on account 1930 has no verified bank row link."));
       }
     }
@@ -204,5 +210,36 @@ public class BankReconciliationService {
     }
 
     return periodTo == null || !date.isAfter(periodTo);
+  }
+
+  private long bankAmountMinor(BankReconciliationEntry row) {
+    Long shadow = row.getAmountMinor();
+    return shadow == null ? Math.multiplyExact((long) row.getAmount(), 100L) : shadow;
+  }
+
+  private int issueWholeKrona(BankReconciliationEntry row, String field) {
+    long amountMinor = bankAmountMinor(row);
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankavstamningen innehaller oren i " + field + ". Rapporten har stoppats tills beloppsmigreringen ar verifierad.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankavstamningen innehaller ett belopp utanfor rapportens stod i " + field + ".", exception);
+    }
+  }
+
+  private long signedMinorMovement(JournalEntry entry) {
+    return Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue());
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankavstamningen innehaller oren i " + field + ". Rapporten har stoppats tills beloppsmigreringen ar verifierad.");
+    }
+    return reportAmount(amountMinor / 100L);
   }
 }

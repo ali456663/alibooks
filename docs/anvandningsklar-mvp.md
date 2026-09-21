@@ -11,7 +11,7 @@ Statusnivaer:
 | Nr | Omrade | MVP-krav | Bevis |
 | --- | --- | --- | --- |
 | 01 | Lokal start | Docker/PostgreSQL, backend och frontend kan startas utan vit sida. | `npm run doctor`, `npm run smoke:runtime`, `npm run check:views` |
-| 02 | Inloggning | Registrering, login, JWT och skyddade API-anrop fungerar. | `npm run check:api-contract`, backendtester |
+| 02 | Inloggning | Forsta agarkontot kan skapas med skyddad startnyckel i produktion; oppen registrering stangs efterat. JWT skyddar API-anrop. | `npm run check:api-contract`, backend- och PostgreSQL-integrationstester |
 | 03 | Kundregister | Kund kan skapas, valideras, sokas och arkiveras utan att historik tappas. | `npm run check:acceptance`, `npm run check:data-safety` |
 | 04 | Fakturering | Faktura kan skapas, skickas, exporteras som PDF och foljas upp. | `npm run check:acceptance`, manuellt PDF-bevis |
 | 05 | Betalning | Betalning och delbetalning kan registreras, historik visas och forfallna fakturor foljs. | `npm run check:api-contract`, manuellt betalningsbevis |

@@ -110,9 +110,16 @@ public class PayrollEmailService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslips are required.");
     }
 
+    validatePeriod(request.period());
+
     AppSettings settings = settingsService.getSettings();
     List<PayrollPayslipEmailRequest> payslips = request.payslips();
-    payslips.forEach(this::validatePdfRequest);
+    for (PayrollPayslipEmailRequest payslip : payslips) {
+      validatePdfRequest(payslip);
+      if (!request.period().equals(payslip.period())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every payslip must match the archive period.");
+      }
+    }
 
     try {
       ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -154,6 +161,45 @@ public class PayrollEmailService {
     if (request.period() == null || request.period().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip period is required.");
     }
+
+    validatePeriod(request.period());
+
+    validateAmounts(request);
+  }
+
+  private void validatePeriod(String period) {
+    if (period == null || !period.matches("\\d{4}-(0[1-9]|1[0-2])")) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payslip period must use YYYY-MM format.");
+    }
+  }
+
+  private void validateAmounts(PayrollPayslipEmailRequest request) {
+    if (request.grossSalary() <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gross salary must be greater than zero.");
+    }
+
+    if (request.withheldTax() < 0 || request.withheldTax() > request.grossSalary()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Withheld tax must be between zero and gross salary.");
+    }
+
+    long expectedNetPay = request.grossSalary() - request.withheldTax();
+    if (request.netPay() != expectedNetPay) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Net pay must equal gross salary minus withheld tax.");
+    }
+
+    if (request.employerFee() < 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employer contribution cannot be negative.");
+    }
+
+    long expectedTotalCost;
+    try {
+      expectedTotalCost = Math.addExact(request.grossSalary(), request.employerFee());
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Total payroll cost exceeds the supported amount.");
+    }
+    if (request.totalCost() != expectedTotalCost) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Total payroll cost must equal gross salary plus employer contribution.");
+    }
   }
 
   private String safe(String value) {
@@ -183,7 +229,16 @@ public class PayrollEmailService {
   }
 
   private String csvValue(String value) {
-    return "\"" + safe(value).replace("\"", "\"\"") + "\"";
+    String clean = safe(value);
+    int firstVisible = 0;
+    while (firstVisible < clean.length()
+        && (Character.isWhitespace(clean.charAt(firstVisible)) || Character.isISOControl(clean.charAt(firstVisible)))) {
+      firstVisible += 1;
+    }
+    if (firstVisible < clean.length() && "=+-@".indexOf(clean.charAt(firstVisible)) >= 0) {
+      clean = "'" + clean;
+    }
+    return "\"" + clean.replace("\"", "\"\"") + "\"";
   }
 
   private byte[] buildPayslipPdf(PayrollPayslipEmailRequest request, AppSettings settings) {

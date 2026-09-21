@@ -14,6 +14,12 @@ public class AppSettings {
   private Long id = 1L;
 
   private String companyName;
+  @Column(length = 1000)
+  private String companyAddress;
+  private String companyPostalCode;
+  private String companyCity;
+  private String companyOrganizationNumber;
+  private String vatRegistrationNumber;
   private String contactEmail;
   private String plusGiro;
   private String defaultOcr;
@@ -47,6 +53,11 @@ public class AppSettings {
   public static AppSettings defaults() {
     AppSettings settings = new AppSettings();
     settings.companyName = "Muscle&Focus";
+    settings.companyAddress = "";
+    settings.companyPostalCode = "";
+    settings.companyCity = "";
+    settings.companyOrganizationNumber = "";
+    settings.vatRegistrationNumber = "";
     // Company-specific contact and payment details must be entered by the owner.
     // Never ship personal or potentially stale payment data as defaults.
     settings.contactEmail = "";
@@ -134,6 +145,46 @@ public class AppSettings {
 
   public void setCompanyName(String companyName) {
     this.companyName = companyName;
+  }
+
+  public String getCompanyAddress() {
+    return companyAddress;
+  }
+
+  public void setCompanyAddress(String companyAddress) {
+    this.companyAddress = companyAddress;
+  }
+
+  public String getCompanyPostalCode() {
+    return companyPostalCode;
+  }
+
+  public void setCompanyPostalCode(String companyPostalCode) {
+    this.companyPostalCode = companyPostalCode;
+  }
+
+  public String getCompanyCity() {
+    return companyCity;
+  }
+
+  public void setCompanyCity(String companyCity) {
+    this.companyCity = companyCity;
+  }
+
+  public String getCompanyOrganizationNumber() {
+    return companyOrganizationNumber;
+  }
+
+  public void setCompanyOrganizationNumber(String companyOrganizationNumber) {
+    this.companyOrganizationNumber = companyOrganizationNumber;
+  }
+
+  public String getVatRegistrationNumber() {
+    return vatRegistrationNumber;
+  }
+
+  public void setVatRegistrationNumber(String vatRegistrationNumber) {
+    this.vatRegistrationNumber = vatRegistrationNumber;
   }
 
   public String getContactEmail() {

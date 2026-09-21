@@ -5,6 +5,7 @@ import java.util.List;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 import se.cloudshop.audit.AuditEvent;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
@@ -61,6 +64,7 @@ public class AccountingController {
   }
 
   @PostMapping("/journal-entries/manual")
+  @Transactional
   public List<JournalEntry> createManualJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody CreateManualJournalEntryRequest request
@@ -72,30 +76,33 @@ public class AccountingController {
   }
 
   @PostMapping("/journal-entries/manual-multi")
+  @Transactional
   public List<JournalEntry> createManualMultiLineJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody CreateManualMultiLineJournalEntryRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
     List<JournalEntry> entries = accountingService.createManualMultiLineEntry(request);
-    int amount = entries.stream().mapToInt(entry -> Math.max(entry.getDebit(), entry.getCredit())).max().orElse(0);
+    int amount = auditAmount(entries, "manuella fleradiga verifikatets auditbelopp");
     auditService.record("voucher", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "manual_multi_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Manual multi-line voucher created", amount, authorizationHeader);
     return entries;
   }
 
   @PostMapping("/journal-entries/opening-balance")
+  @Transactional
   public List<JournalEntry> createOpeningBalanceJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody CreateOpeningBalanceRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
     List<JournalEntry> entries = accountingService.createOpeningBalanceEntry(request);
-    int amount = entries.stream().mapToInt(entry -> Math.max(entry.getDebit(), entry.getCredit())).max().orElse(0);
+    int amount = auditAmount(entries, "ingående balansens auditbelopp");
     auditService.record("voucher", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "opening_balance_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Opening balance voucher created", amount, authorizationHeader);
     return entries;
   }
 
   @PostMapping("/journal-entries/stripe-website-sale")
+  @Transactional
   public List<JournalEntry> createStripeWebsiteSaleJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody CreateStripeWebsiteSaleRequest request
@@ -107,6 +114,7 @@ public class AccountingController {
   }
 
   @PostMapping("/journal-entries/stripe-payout")
+  @Transactional
   public List<JournalEntry> createStripePayoutJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody CreateStripePayoutRequest request
@@ -118,6 +126,7 @@ public class AccountingController {
   }
 
   @PostMapping("/journal-entries/{voucherNumber}/correction")
+  @Transactional
   public List<JournalEntry> createCorrectionJournalEntry(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable String voucherNumber,
@@ -125,7 +134,7 @@ public class AccountingController {
   ) {
     authHeader.requireValidToken(authorizationHeader);
     List<JournalEntry> entries = accountingService.createCorrectionEntry(voucherNumber, request);
-    int amount = entries.stream().mapToInt(entry -> Math.max(entry.getDebit(), entry.getCredit())).max().orElse(0);
+    int amount = auditAmount(entries, "korrigeringsverifikatets auditbelopp");
     String correctionVoucherNumber = entries.isEmpty() ? "" : entries.get(0).getVoucherNumber();
     auditService.record(
         "voucher",
@@ -177,7 +186,7 @@ public class AccountingController {
   ) {
     authHeader.requireValidToken(authorizationHeader);
     List<JournalEntry> entries = accountingService.createVatSettlementEntry(request);
-    auditService.record("vat", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "vat_settlement_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "VAT settlement created", entries.stream().mapToInt(entry -> Math.max(entry.getDebit(), entry.getCredit())).max().orElse(0), authorizationHeader);
+    auditService.record("vat", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "vat_settlement_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "VAT settlement created", auditAmount(entries, "momsavräkningens auditbelopp"), authorizationHeader);
     return entries;
   }
 
@@ -201,21 +210,28 @@ public class AccountingController {
     csv.append("Antal perioder,").append(filings.size()).append("\n");
     csv.append("Antal handelser,").append(auditEvents.size()).append("\n\n");
 
-    csv.append("Period fran,Period till,Status,Utgaende moms,Ingaende moms,Moms att betala,Referens deklaration,Referens betalning,Notering,Deklarerad datum,Betald datum,Skapad,Uppdaterad\n");
-    filings.forEach(filing -> csv
-        .append(filing.getPeriodFrom()).append(",")
-        .append(filing.getPeriodTo()).append(",")
-        .append(csvEscape(filing.getStatus())).append(",")
-        .append(filing.getOutputVat()).append(",")
-        .append(filing.getInputVat()).append(",")
-        .append(filing.getVatToPay()).append(",")
-        .append(csvEscape(filing.getSubmissionReference())).append(",")
-        .append(csvEscape(filing.getPaymentReference())).append(",")
-        .append(csvEscape(filing.getNote())).append(",")
-        .append(filing.getSubmittedAt() == null ? "" : filing.getSubmittedAt()).append(",")
-        .append(filing.getPaidAt() == null ? "" : filing.getPaidAt()).append(",")
-        .append(filing.getCreatedAt() == null ? "" : filing.getCreatedAt()).append(",")
-        .append(filing.getUpdatedAt() == null ? "" : filing.getUpdatedAt()).append("\n"));
+    csv.append("Period fran,Period till,Status,Utgaende moms,Ingaende moms,Moms att betala,UtgaendeMomsMinor,IngaendeMomsMinor,MomsAttBetalaMinor,Referens deklaration,Referens betalning,Notering,Deklarerad datum,Betald datum,Skapad,Uppdaterad\n");
+    filings.forEach(filing -> {
+      long outputVatMinor = minorOrWholeKrona(filing.getOutputVatMinor(), filing.getOutputVat());
+      long inputVatMinor = minorOrWholeKrona(filing.getInputVatMinor(), filing.getInputVat());
+      long vatToPayMinor = minorOrWholeKrona(filing.getVatToPayMinor(), filing.getVatToPay());
+      csv.append(filing.getPeriodFrom()).append(",")
+          .append(filing.getPeriodTo()).append(",")
+          .append(csvEscape(filing.getStatus())).append(",")
+          .append(reportWholeKrona(outputVatMinor, "momsarkivets utgående moms")).append(",")
+          .append(reportWholeKrona(inputVatMinor, "momsarkivets ingående moms")).append(",")
+          .append(reportWholeKrona(vatToPayMinor, "momsarkivets moms att betala")).append(",")
+          .append(outputVatMinor).append(",")
+          .append(inputVatMinor).append(",")
+          .append(vatToPayMinor).append(",")
+          .append(csvEscape(filing.getSubmissionReference())).append(",")
+          .append(csvEscape(filing.getPaymentReference())).append(",")
+          .append(csvEscape(filing.getNote())).append(",")
+          .append(filing.getSubmittedAt() == null ? "" : filing.getSubmittedAt()).append(",")
+          .append(filing.getPaidAt() == null ? "" : filing.getPaidAt()).append(",")
+          .append(filing.getCreatedAt() == null ? "" : filing.getCreatedAt()).append(",")
+          .append(filing.getUpdatedAt() == null ? "" : filing.getUpdatedAt()).append("\n");
+    });
 
     csv.append("\nAndringslogg\n");
     csv.append("Tid,Handelse,Entity ID,Referens,Meddelande,Belopp,Aktor\n");
@@ -227,7 +243,10 @@ public class AccountingController {
         .append(csvEscape(event.getMessage())).append(",")
         .append(event.getAmount()).append(",")
         .append(csvEscape(event.getActorEmail())).append("\n"));
-    int totalVatToPay = ReportAmounts.reportAmount(filings.stream().mapToLong(VatFiling::getVatToPay).sum());
+    long totalVatToPayMinor = filings.stream()
+        .mapToLong(filing -> minorOrWholeKrona(filing.getVatToPayMinor(), filing.getVatToPay()))
+        .sum();
+    int totalVatToPay = reportWholeKrona(totalVatToPayMinor, "momsarkivets totalsumma");
 
     auditService.record(
         "export",
@@ -245,6 +264,38 @@ public class AccountingController {
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=momsdeklarationsarkiv.csv")
         .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
         .body(csv.toString().getBytes(StandardCharsets.UTF_8));
+  }
+
+  private long minorOrWholeKrona(Long minor, int wholeKrona) {
+    return minor == null ? Math.multiplyExact((long) wholeKrona, 100L) : minor;
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Momsarkivet innehåller ören i " + field + ". Exporten har stoppats för att undvika avrundningsfel.");
+    }
+    return ReportAmounts.reportAmount(amountMinor / 100L);
+  }
+
+  private int auditAmount(List<JournalEntry> entries, String field) {
+    long maxAmountMinor = 0L;
+    for (JournalEntry entry : entries) {
+      long debitMinor = entry.getDebitMinorValue();
+      long creditMinor = entry.getCreditMinorValue();
+      auditWholeKrona(debitMinor, field + " debet");
+      auditWholeKrona(creditMinor, field + " kredit");
+      maxAmountMinor = Math.max(maxAmountMinor, Math.max(debitMinor, creditMinor));
+    }
+    return auditWholeKrona(maxAmountMinor, field);
+  }
+
+  private int auditWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Auditbeloppet innehåller ören i " + field + ". Händelsen har stoppats för att undvika avrundningsfel.");
+    }
+    return ReportAmounts.reportAmount(amountMinor / 100L);
   }
 
   @PostMapping("/vat-filings")
@@ -306,7 +357,7 @@ public class AccountingController {
   ) {
     authHeader.requireValidToken(authorizationHeader);
     List<JournalEntry> entries = accountingService.createAnnualResultVoucher(request);
-    int amount = entries.stream().mapToInt(entry -> Math.max(entry.getDebit(), entry.getCredit())).max().orElse(0);
+    int amount = auditAmount(entries, "årets resultatverifikations auditbelopp");
     auditService.record("closing", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "annual_result_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Annual result voucher created", amount, authorizationHeader);
     return entries;
   }

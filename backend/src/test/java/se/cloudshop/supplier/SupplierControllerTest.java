@@ -3,9 +3,12 @@ package se.cloudshop.supplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -74,6 +77,32 @@ class SupplierControllerTest {
     assertThat(invoice.getStatus()).isEqualTo("unpaid");
     verify(accountingService).requireUnlockedAccountingDate(LocalDate.of(2026, 7, 1));
     verify(accountingService).createSupplierInvoiceEntries(invoice);
+  }
+
+  @Test
+  void createSupplierInvoiceRequiresExplicitInvoiceDate() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    setSupplierId(supplier, 1L);
+    when(supplierRepository.findById(1L)).thenReturn(Optional.of(supplier));
+
+    assertThatThrownBy(() -> supplierController.createSupplierInvoice(
+        "Bearer " + authHeaderToken(),
+        new CreateSupplierInvoiceRequest(
+            1L,
+            null,
+            LocalDate.of(2026, 7, 31),
+            "Adobe Creative Cloud",
+            "OCR-DATE",
+            1250,
+            250,
+            "5420"
+        )
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Supplier invoice date is required");
+
+    verify(supplierInvoiceRepository, never()).save(any(SupplierInvoice.class));
+    verify(accountingService, never()).createSupplierInvoiceEntries(any(SupplierInvoice.class));
   }
 
   @Test
@@ -224,6 +253,98 @@ class SupplierControllerTest {
   }
 
   @Test
+  void supplierPaymentRequiresReferenceForReliableRetryProtection() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-REF",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 13L);
+    when(supplierInvoiceRepository.findById(13L)).thenReturn(Optional.of(invoice));
+
+    assertThatThrownBy(() -> supplierController.updateSupplierInvoiceStatus(
+        "Bearer " + authHeaderToken(),
+        13L,
+        new UpdateSupplierInvoiceStatusRequest("paid", LocalDate.of(2026, 7, 20), 100, " ")
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Payment reference is required");
+
+    assertThat(invoice.getPaidAmount()).isZero();
+    verify(supplierInvoiceRepository, never()).save(invoice);
+    verify(accountingService, never()).createSupplierInvoicePaymentEntries(any(SupplierInvoice.class), any(), anyInt(), any());
+  }
+
+  @Test
+  void supplierPaymentRequiresExplicitPaymentDate() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-DATE",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 12L);
+    when(supplierInvoiceRepository.findById(12L)).thenReturn(Optional.of(invoice));
+
+    assertThatThrownBy(() -> supplierController.updateSupplierInvoiceStatus(
+        "Bearer " + authHeaderToken(),
+        12L,
+        new UpdateSupplierInvoiceStatusRequest("paid", null, 100, "BANK-DATE")
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Supplier payment date is required");
+
+    assertThat(invoice.getPaidAmount()).isZero();
+    verify(supplierInvoiceRepository, never()).save(any(SupplierInvoice.class));
+    verify(accountingService, never()).createSupplierInvoiceEntries(invoice);
+    verify(accountingService, never()).createSupplierInvoicePaymentEntries(any(SupplierInvoice.class), any(), anyInt(), any());
+  }
+
+  @Test
+  void supplierInvoiceStatusCannotChangeAfterAccountingPeriodIsLocked() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-LOCKED",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 11L);
+    when(supplierInvoiceRepository.findById(11L)).thenReturn(Optional.of(invoice));
+    doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Bokforingen ar last"))
+        .when(accountingService)
+        .requireUnlockedAccountingDate(LocalDate.of(2026, 7, 1));
+
+    assertThatThrownBy(() -> supplierController.updateSupplierInvoiceStatus(
+        "Bearer " + authHeaderToken(),
+        11L,
+        new UpdateSupplierInvoiceStatusRequest("prepared", null, null, "")
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Bokforingen ar last");
+
+    assertThat(invoice.getStatus()).isEqualTo("unpaid");
+    verify(supplierInvoiceRepository, never()).save(any(SupplierInvoice.class));
+    verify(accountingService, never()).createSupplierInvoiceEntries(invoice);
+    verify(accountingService, never()).createSupplierInvoicePaymentEntries(any(SupplierInvoice.class), any(), anyInt(), any());
+  }
+
+  @Test
   void supplierInvoiceRejectsDuplicatePaymentReference() {
     Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
     SupplierInvoice invoice = new SupplierInvoice(
@@ -288,6 +409,29 @@ class SupplierControllerTest {
   }
 
   @Test
+  void supplierInvoiceExportStopsWhenMinorShadowContainsOre() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-ORE",
+        1250,
+        250,
+        "5420"
+    );
+    setField(invoice, "netAmountMinor", 100050L);
+    when(supplierInvoiceRepository.findAllByOrderByDueDateAscIdAsc()).thenReturn(List.of(invoice));
+
+    assertThatThrownBy(() -> supplierController.exportSupplierInvoices("Bearer " + authHeaderToken()))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("innehåller ören");
+
+    verifyNoInteractions(auditService);
+  }
+
+  @Test
   void deleteSupplierInvoiceRejectsBookedInvoice() {
     Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
     SupplierInvoice invoice = new SupplierInvoice(
@@ -343,6 +487,35 @@ class SupplierControllerTest {
     verify(accountingService).requireUnlockedAccountingDate(LocalDate.of(2026, 7, 10));
     verify(accountingService).createSupplierInvoiceCancellationEntries(invoice, LocalDate.of(2026, 7, 10));
     verify(supplierInvoiceRepository).save(invoice);
+  }
+
+  @Test
+  void supplierCancellationRequiresExplicitCancellationDate() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 1),
+        LocalDate.of(2026, 7, 31),
+        "Adobe Creative Cloud",
+        "OCR-DATE",
+        1250,
+        250,
+        "5420"
+    );
+    setSupplierInvoiceId(invoice, 13L);
+    when(supplierInvoiceRepository.findById(13L)).thenReturn(Optional.of(invoice));
+
+    assertThatThrownBy(() -> supplierController.cancelSupplierInvoice(
+        "Bearer " + authHeaderToken(),
+        13L,
+        new CancelSupplierInvoiceRequest(null)
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Supplier cancellation date is required");
+
+    assertThat(invoice.getStatus()).isEqualTo("unpaid");
+    verify(supplierInvoiceRepository, never()).save(any(SupplierInvoice.class));
+    verify(accountingService, never()).createSupplierInvoiceCancellationEntries(any(SupplierInvoice.class), any());
   }
 
   private String authHeaderToken() {

@@ -2,6 +2,7 @@ package se.cloudshop.auth;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,11 +30,14 @@ public class AuthController {
   }
 
   @PostMapping("/auth/register")
-  public Map<String, String> register(@RequestBody AuthRequest request) {
+  public Map<String, String> register(
+      @RequestBody AuthRequest request,
+      @RequestHeader(value = "X-AliBooks-Setup-Key", required = false) String setupKey
+  ) {
     String email = request == null ? "" : request.email();
     User user;
     try {
-      user = userService.register(email, request == null ? null : request.password());
+      user = userService.register(email, request == null ? null : request.password(), setupKey);
     } catch (ResponseStatusException exception) {
       auditService.record(
           "auth",
@@ -54,6 +58,10 @@ public class AuthController {
         "token", token,
         "email", user.getEmail()
     );
+  }
+
+  public Map<String, String> register(AuthRequest request) {
+    return register(request, null);
   }
 
   @PostMapping("/auth/login")

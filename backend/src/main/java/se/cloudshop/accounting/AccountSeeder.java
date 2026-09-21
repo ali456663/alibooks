@@ -22,9 +22,13 @@ public class AccountSeeder implements CommandLineRunner {
     upsert("1220", "Inventarier och verktyg", "BOTH");
     upsert("1229", "Ackumulerade avskrivningar pa inventarier", "BOTH");
     upsert("2611", "Utgaende moms", "BOTH");
+    upsert("2621", "Utgaende moms 12 procent", "BOTH");
+    upsert("2631", "Utgaende moms 6 procent", "BOTH");
     upsert("2641", "Ingaende moms", "BOTH");
     upsert("2650", "Redovisningskonto for moms", "BOTH");
     upsert("3041", "Forsaljning tjanster 25 procent", "BOTH");
+    upsert("3042", "Forsaljning tjanster 12 procent", "BOTH");
+    upsert("3043", "Forsaljning tjanster 6 procent", "BOTH");
     upsert("4010", "Inkop", "BOTH");
     upsert("5410", "Forbrukningsinventarier", "BOTH");
     upsert("5420", "Programvaror", "BOTH");

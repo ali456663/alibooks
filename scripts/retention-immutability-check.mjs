@@ -169,7 +169,7 @@ check(
 
 check(
   "Registered supplier invoices are retained even before payment",
-  methodHas("/supplier-invoices/{id}", ["hasSupplierInvoiceEntries(invoice)", "invoice.getPaidAmount() > 0", "Create a correction or cancellation instead of deleting it", "Registered supplier invoices must be retained for dated balances"])
+  methodHas("/supplier-invoices/{id}", ["hasSupplierInvoiceEntries(invoice)", "accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount()", "Create a correction or cancellation instead of deleting it", "Registered supplier invoices must be retained for dated balances"])
     && !supplierController.includes("supplierInvoiceRepository.delete("),
   "Registered supplier invoices should be cancelled with a date, not hard-deleted."
 );

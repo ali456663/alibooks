@@ -37,6 +37,7 @@ public class VatFilingService {
     VatReport report = accountingService.createVatReport(request.periodFrom(), request.periodTo());
     String normalizedStatus = normalizeStatus(request.status());
     validateControlsBeforeFiling(report.periodFrom(), report.periodTo(), normalizedStatus);
+    validatePaymentReference(report.vatToPay(), normalizedStatus, request.paymentReference());
     VatFiling filing = new VatFiling(report, request, normalizedStatus);
     if ("PAID".equals(normalizedStatus)) {
       accountingService.createVatFilingPaymentEntry(filing, request.paymentDate(), request.paymentReference());
@@ -55,6 +56,7 @@ public class VatFilingService {
     String normalizedStatus = normalizeStatus(request.status());
     validateStatusTransition(filing.getStatus(), normalizedStatus);
     validateControlsBeforeFiling(filing.getPeriodFrom(), filing.getPeriodTo(), normalizedStatus);
+    validatePaymentReference(filing.getVatToPay(), normalizedStatus, request.paymentReference());
     if ("PAID".equals(normalizedStatus) && !"PAID".equals(filing.getStatus())) {
       accountingService.createVatFilingPaymentEntry(filing, request.paymentDate(), request.paymentReference());
     }
@@ -96,6 +98,26 @@ public class VatFilingService {
       return 1;
     }
     return 0;
+  }
+
+  private void validatePaymentReference(int vatToPay, String status, String paymentReference) {
+    if (!"PAID".equals(status) || vatToPay == 0) {
+      return;
+    }
+
+    String reference = paymentReference == null ? "" : paymentReference.trim();
+    if (reference.isBlank()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Payment reference is required when a VAT filing is marked as paid."
+      );
+    }
+    if (reference.length() > 255 || reference.contains("\n") || reference.contains("\r")) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Payment reference must be a single line of max 255 characters."
+      );
+    }
   }
 
   private void validateControlsBeforeFiling(LocalDate periodFrom, LocalDate periodTo, String status) {

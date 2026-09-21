@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.bank.BankReconciliationIssue;
 import se.cloudshop.bank.BankReconciliationReport;
@@ -71,6 +72,39 @@ class AccountingPeriodLockServiceTest {
     assertThatThrownBy(() -> periodLockService.closePeriod(LocalDate.now(), "test"))
         .isInstanceOf(ReportAmounts.LimitExceeded.class);
     verify(settingsService, never()).lockAccountingThroughDate(any());
+  }
+
+  @Test
+  void lateVoucherOreStopsPeriodCloseInsteadOfRounding() {
+    LocalDate date = LocalDate.now().minusDays(50);
+    Account bank = new Account("1930", "Bank");
+    JournalEntry entry = new JournalEntry(null, bank, "M-1", 125, 0, "Test", date);
+    ReflectionTestUtils.setField(entry, "debitMinor", 12_550L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(entry));
+
+    assertThatThrownBy(() -> periodLockService.closePeriod(LocalDate.now(), "test"))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+    verify(settingsService, never()).lockAccountingThroughDate(any());
+  }
+
+  @Test
+  void periodCloseUsesMinorUnitsWhenCheckingVoucherBalance() {
+    LocalDate date = LocalDate.now().minusDays(1);
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Forsaljning");
+    JournalEntry debit = new JournalEntry(null, bank, "M-ORE", 125, 0, "Bank", date);
+    JournalEntry credit = new JournalEntry(null, sales, "M-ORE", 0, 125, "Sales", date);
+    ReflectionTestUtils.setField(debit, "debitMinor", 12_550L);
+    ReflectionTestUtils.setField(credit, "creditMinor", 12_500L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(debit, credit));
+    mockCleanProfessionalControls(date);
+
+    PeriodCloseCheckResult result = periodLockService.checkPeriod(date);
+
+    assertThat(result.unbalancedVoucherCount()).isEqualTo(1);
+    assertThat(result.readyToLock()).isFalse();
+    assertThat(result.blockers()).anyMatch(message -> message.contains("obalanserade verifikat"));
   }
 
   private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -18,9 +19,12 @@ import se.cloudshop.accounting.AccountingService;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
+import se.cloudshop.customer.Customer;
 import se.cloudshop.customer.CustomerRepository;
 import se.cloudshop.order.OrderRepository;
+import se.cloudshop.product.Product;
 import se.cloudshop.product.ProductService;
+import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
 
 class RecurringContractControllerTest {
@@ -85,6 +89,75 @@ class RecurringContractControllerTest {
     verify(orderRepository, never()).save(any());
   }
 
+  @Test
+  void futureContractInvoiceDateBlocksInvoiceBeforeCreatingAnyRecords() {
+    RecurringContract contract = contract();
+    contract.setNextInvoiceDate(LocalDate.of(2099, 1, 1));
+    when(recurringContractRepository.findById(5L)).thenReturn(Optional.of(contract));
+
+    assertThatThrownBy(() -> recurringContractController.createContractInvoice(
+        "Bearer " + authHeaderToken(), 5L))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+            .isEqualTo(org.springframework.http.HttpStatus.CONFLICT))
+        .hasMessageContaining("2099-01-01")
+        .hasMessageContaining("not due yet");
+
+    verifyNoInteractions(customerRepository, productService, accountingService, settingsService, orderRepository);
+  }
+
+  @Test
+  void contractWithoutNextInvoiceDateCannotCreateInvoice() {
+    RecurringContract contract = contract();
+    contract.setNextInvoiceDate(null);
+    when(recurringContractRepository.findById(5L)).thenReturn(Optional.of(contract));
+
+    assertThatThrownBy(() -> recurringContractController.createContractInvoice(
+        "Bearer " + authHeaderToken(), 5L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Set the next invoice date");
+
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void recurringInvoiceUsesConfiguredServiceVatRate() {
+    RecurringContract contract = contract();
+    setContractId(contract, 5L);
+    Customer customer = new Customer("Ali Wafa", "ali@example.invalid", "", "Street 1", "", "12345", "City");
+    when(customerRepository.findById(1L)).thenReturn(Optional.of(customer));
+    Product service = new Product("PT", "Training", 1000);
+    service.setVatPercent(6);
+    when(productService.findById(2L)).thenReturn(Optional.of(service));
+    when(recurringContractRepository.findById(5L)).thenReturn(Optional.of(contract));
+    AppSettings settings = AppSettings.defaults();
+    settings.setVatPercent(12);
+    when(settingsService.getSettings()).thenReturn(settings);
+    when(orderRepository.save(any())).thenAnswer(invocation -> {
+      se.cloudshop.order.Order order = invocation.getArgument(0);
+      setOrderId(order, 9L);
+      return order;
+    });
+
+    se.cloudshop.order.Order invoice = recurringContractController.createContractInvoice(
+        "Bearer " + authHeaderToken(), 5L);
+
+    assertThat(invoice.getVatPercent()).isEqualTo(6);
+    assertThat(invoice.getVatAmount()).isEqualTo(60);
+    assertThat(invoice.getTotalAmount()).isEqualTo(1060);
+    verify(orderRepository, org.mockito.Mockito.times(2)).save(any());
+    verify(auditService).record(
+        eq("invoice"),
+        eq("invoice"),
+        eq(9L),
+        eq("contract_invoice_created"),
+        eq(invoice.getInvoiceNumber()),
+        eq("Contract invoice and document snapshot created for contract 5"),
+        eq(1060),
+        any(String.class)
+    );
+  }
+
   private RecurringContract contract() {
     return new RecurringContract(1L, "Ali Wafa", 2L, "PT", 1, "monthly", LocalDate.of(2026, 8, 1));
   }
@@ -98,6 +171,16 @@ class RecurringContractControllerTest {
       Field field = RecurringContract.class.getDeclaredField("id");
       field.setAccessible(true);
       field.set(contract, id);
+    } catch (ReflectiveOperationException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private void setOrderId(se.cloudshop.order.Order order, Long id) {
+    try {
+      Field field = se.cloudshop.order.Order.class.getDeclaredField("id");
+      field.setAccessible(true);
+      field.set(order, id);
     } catch (ReflectiveOperationException exception) {
       throw new IllegalStateException(exception);
     }

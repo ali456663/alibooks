@@ -159,15 +159,26 @@ public class RecurringContractController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contract is paused.");
     }
 
+    LocalDate today = LocalDate.now();
+    LocalDate nextInvoiceDate = contract.getNextInvoiceDate();
+    if (nextInvoiceDate == null || nextInvoiceDate.isAfter(today)) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          nextInvoiceDate == null
+              ? "Set the next invoice date before invoicing this contract."
+              : "The next invoice is scheduled for " + nextInvoiceDate + " and is not due yet."
+      );
+    }
+
     Customer customer = customerRepository.findById(contract.getCustomerId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer not found."));
     Product product = productService.findById(contract.getServiceId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service not found."));
 
-    accountingService.requireUnlockedAccountingDate(LocalDate.now());
+    accountingService.requireUnlockedAccountingDate(today);
+    AppSettings settings = settingsService.getSettings();
 
     Order savedOrder = orderRepository.save(new Order(customer, product, Instant.now(), contract.getQuantity()));
-    AppSettings settings = settingsService.getSettings();
     savedOrder.setInvoiceNumber("F-" + savedOrder.getInvoiceDate().getYear() + "-" + String.format("%04d", savedOrder.getId()));
     savedOrder.setPaymentTermsDays(settings.getPaymentTermsDays() <= 0 ? 30 : settings.getPaymentTermsDays());
     savedOrder.setDueDate(savedOrder.getInvoiceDate().plusDays(savedOrder.getPaymentTermsDays()));
@@ -182,8 +193,23 @@ public class RecurringContractController {
     recurringContractRepository.save(contract);
 
     auditService.record("invoice", "invoice", savedOrder.getId(), "contract_invoice_created", savedOrder.getInvoiceNumber(),
-        "Contract invoice and document snapshot created for contract " + id, savedOrder.getTotalAmount(), authorizationHeader);
+        "Contract invoice and document snapshot created for contract " + id,
+        wholeKrona(savedOrder.getTotalAmountMinor(), savedOrder.getTotalAmount()), authorizationHeader);
     return savedOrder;
+  }
+
+  private int wholeKrona(Long amountMinor, int legacyAmount) {
+    long valueMinor = amountMinor == null ? Math.multiplyExact((long) legacyAmount, 100L) : amountMinor;
+    if (valueMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Avtalsfakturans auditbelopp innehaller oren och kan inte sparas som hela kronor.");
+    }
+    try {
+      return Math.toIntExact(valueMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Avtalsfakturans auditbelopp ligger utanfor stodet for hela kronor.", exception);
+    }
   }
 
   private String normalizeInterval(String interval) {

@@ -1,5 +1,567 @@
 # AliBooks release evidence
 
+## Momsbevis använder minor-unit-summor 2026-09-21
+
+Momsens settlement- och payment-bevis summerar nu verifikatradernas exakta
+minor-unit-värden i stället för de äldre hela-kronofälten. Ett öresbelopp som
+tidigare kunde döljas i beviskedjan stoppas nu med HTTP 422 innan periodstängning
+eller redovisningskontroll kan markera beviset som godkänt.
+
+Periodstängningens voucherbalans använder nu samma minor-unit-källa. Ett äldre
+kronfält kan därför inte längre markera ett verifikat som balanserat när exakta
+debet- och kreditvärden skiljer sig.
+
+Momsavstämningens förväntade utgående moms räknas nu på det aggregerade
+beskattningsunderlaget per momssats och avrundas en gång. Flera små rader kan
+därför inte längre skapa en falsk differens genom att avrundas var för sig.
+
+Regressionstestet `rejectsVatFilingProofWhenVoucherShadowContainsOre` täcker
+detta fall. Backendtestet kunde inte köras i den aktuella miljön eftersom varken
+lokalt Maven eller Docker-motorn var tillgänglig; release gate och statiska
+kontroller körs separat.
+
+## Stripe- och bankimportkontroller verifierade 2026-09-21
+
+Den lokala backendsviten passerade efter de nya fail-closed-kontrollerna med
+**477 tester, 0 fel och 0 errors**. Testerna täcker både exakt Stripe-moms och
+att bankimportens kostnadsförslag inte kan skapa en avrundad bokföringsrad.
+
+## Frontend stoppar inkonsekvent moms före fakturaskapande 2026-09-21
+
+Fakturaförhandsvisningen använder nu samma exakta hela-kronorsregel som
+backend. Om valt pris och antal ger ören i moms visas ett tydligt stopp,
+förhandsvisningen visar inget avrundat totalbelopp och knappen för att skapa
+fakturan är avstängd. Offertskapande och servicejobbsfakturering använder samma
+förkontroll. Det förhindrar att användaren först ser ett avrundat belopp och
+sedan möter ett oväntat backendfel.
+
+Frontendbygget, bundle-kontrollen och release gate passerade efter ändringen.
+
+## Bankimport stoppar osäker momsuppdelning 2026-09-21
+
+Kostnadsförslag från bankimport räknar nu baklänges från totalbeloppet med
+exakt heltalsaritmetik. Om netto och moms inte kan representeras som hela
+kronor stoppas bokföringen, knappen visar att underlaget måste kontrolleras
+manuellt och ingen avrundad uppdelning skickas till backend.
+
+## Stripe-försäljning stoppar osäker momsuppdelning 2026-09-21
+
+Stripe-försäljning använder nu exakt heltalsaritmetik när ett totalbelopp
+delas i netto och utgående moms. Om uppdelningen skulle kräva ören svarar
+frontend och backend med ett tydligt stopp; frontend skickar inte ens
+begäran och backend svarar dessutom med HTTP 400 innan verifikationsnummer
+eller journalrader skapas.
+Det skyddar 1580, försäljning och momskonto från en tyst avrundningsdifferens.
+
+## Stripe-referens skyddar manuell försäljning 2026-09-21
+
+Manuell Stripe-försäljning kräver nu en referens från Stripe. Backend låser
+referensen i transaktionen och jämför den mot exakt verifikationsbeskrivning,
+så närliggande referenser inte kan kollidera och samtidiga anrop inte kan
+dubbelbokas. API-svaret filtrerar dessutom på exakt referens, så en äldre
+liknande referens inte kan visas som den nya bokningen. Backendtesterna omfattar
+detta skydd.
+
+## Exakt momsberäkning före fakturautskick 2026-09-21
+
+Den centrala kundfakturaberäkningen använder nu minor-unit-aritmetik för moms
+innan beloppet konverteras till den äldre heltalsmodellen. Om exakt moms
+innehåller ören som den nuvarande fakturamodellen inte kan lagra stoppas
+fakturaskapandet med ett tydligt fel i stället för att beloppet tyst avrundas.
+Detta är en säkerhetsgräns tills hela faktura-, journal-, rapport- och
+exportmodellen är migrerad till ören; det är inte ett påstående om fullständigt
+örestöd ännu.
+
+Backendtesterna passerade med **473 tester, 0 fel och 0 errors**. Den
+fullständiga integrationssviten passerade med **215 tester, 0 fel och 0 errors**.
+
+## Beloppskontroller i fakturor, leverantör, kortköp och kostnader 2026-09-21
+
+Fakturautskickets obligatoriska fältkontroll läser nu moms och total från
+minor-unit-skuggorna och stoppar ören med HTTP 422 innan en faktura kan
+utfärdas. Samma fail-closed-kontroll används innan en leverantörsfaktura
+makuleras, så ett avvikande betalt belopp inte kan passera genom ett gammalt
+kronfält.
+
+Fakturaexporten validerar varje minor-unit-belopp innan någon kompatibilitetsrad
+skrivs och exporterar endast hela kronor i de äldre kolumnerna. Därmed kan en
+delvis byggd CSV inte innehålla avrundade belopp om exporten stoppas.
+
+Kortköp som bokförs som kostnad validerar total, netto och moms innan någon
+kostnad eller journalpost sparas. Kostnadens skapande, kvittoaudit och reparation
+av kvittohash använder också minor-unit-totalen för auditspåret.
+
+Backendtesterna passerade med **473 tester, 0 fel och 0 errors**. Den tidigare
+fullständiga integrationssviten passerade med **215 tester, 0 fel och 0 errors**
+och dokumentkontrollen passerade.
+
+## Bankavstamning och matchning med minor units 2026-09-21
+
+Bankavstamningen validerar nu varje bankrad innan summering. Oren eller for stora
+belopp stoppas med HTTP 422 i stallet for att ett gammalt heltalsfalt anvands i
+felrader, differenser eller avstamningsrapporten. Det hindrar ocksa tva felaktiga
+oresbelopp fran att ta ut varandra.
+
+Manuell matchning mot verifikationer anvander samma minor-unit-jamforelse och
+stoppar fore kandidatlista eller auditpost om radens belopp inte kan uttryckas
+exakt i hela kronor.
+
+Bankimportens skapade auditposter och fakturor fran aterkommande avtal anvander
+också den validerade minor-unit-skuggan innan hela kronor skrivs till auditsparet.
+Det stänger ytterligare två vägar där ett legacyfält annars kunde bli det som
+visades i revisionshistoriken.
+
+Backendtesterna passerade med **473 tester, 0 fel och 0 errors**. Den fullstandiga
+integrationssviten passerade med **215 tester, 0 fel och 0 errors**.
+
+## Controllerkontroller för kreditfakturor och leverantörsexport 2026-09-21
+
+Kundcontrollern validerar nu kundfakturans minor-unit-total innan auditspår,
+statusändring och kreditfaktura skapas. Kreditfakturans netto, moms och total
+hämtas från minor-unit-skuggorna och ett öresvärde stoppas med HTTP 422 före
+sparning och bokföring.
+
+Leverantörskontrollern använder samma validering för auditbelopp, betalda
+belopp, makulering och CSV-export. Ett öresvärde stoppas före export eller
+statusändring, så gamla heltalsfält kan inte dölja ett avvikande belopp.
+
+Backendtesterna passerade med **466 tester, 0 fel och 0 errors**. Integrationstesterna
+passerade med **215 tester, 0 fel och 0 errors** och dokumentkontrollen passerade.
+
+## Kontantmetodens moms vid betalning och återbetalning med minor units 2026-09-21
+
+Kontantmetodens moms vid kunddelbetalning, kundåterbetalning och
+leverantörsdelbetalning läser nu fakturans total, moms och tidigare betalt från
+minor-unit-skuggorna innan beloppet fördelas. Ett öresvärde stoppas med HTTP
+422 före någon betalnings- eller momsverifikation sparas, så ett gammalt
+kronfält kan inte dölja ett annat faktiskt belopp.
+
+Backendtesterna passerade med **462 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Faktura- och leverantörsverifikat med minor units 2026-09-21
+
+Skapandet av kundfakturans, leverantörsfakturans och kreditfakturans
+journalrader validerar nu total, netto och moms från minor-unit-skuggorna före
+verifikationsnummer reserveras. Ett öresvärde stoppas med HTTP 422 utan att
+någon journalrad sparas.
+
+Backendtesterna passerade med **464 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Kontoteckenkontroll med minor units 2026-09-21
+
+Kontoteckenkontrollen räknar nu varje regel via journalradernas minor-unit-
+skuggor. Ett öresbelopp på exempelvis bank-, moms- eller skuldkonto stoppas
+med HTTP 422 innan kontot kan klassificeras som godkänt eller felaktigt.
+
+Backendtesterna passerade med **457 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Verifikationskontroll med minor units 2026-09-21
+
+Verifikationskontrollens journalrader och verifikatbalanser räknar nu via
+journalradernas minor-unit-skuggor. Varje rad valideras före gruppsummering,
+så öresposter inte kan ta ut varandra och döljas i ett helt kronbelopp. Ett
+öresbelopp stoppas med HTTP 422 innan kontrollresultatet skapas.
+
+Backendtesterna passerade med **458 tester, 0 fel och 0 errors**.
+
+## Korrigeringar och auditbelopp med minor units 2026-09-21
+
+Korrigeringsverifikat och leverantörsbetalningars idempotenskontroll läser nu
+journalradernas minor-unit-skuggor. Ett verifikat med ören stoppas med HTTP
+422 innan ett korrigeringsnummer reserveras eller en avrundad journalrad
+skapas. Auditbelopp från fleradiga verifikat valideras på samma sätt innan
+ändringsspåret skrivs.
+
+Backendtesterna passerade med **459 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Resultat- och balansrapporter med minor units 2026-09-21
+
+Resultatrapportens intäkter och kostnader samt balansrapportens tillgångar,
+skulder och eget kapital räknar nu via journalradernas minor-unit-skuggor.
+Varje relevant journalrad valideras innan summering, så öresposter inte kan
+ta ut varandra och döljas i ett helt kronbelopp. Ett öresbelopp stoppas med
+HTTP 422 innan rapporten visas.
+
+Backendtesterna passerade med **456 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Momsavstämning med minor units 2026-09-21
+
+Momsavstämningen räknar nu försäljning, inköp, utgående och ingående moms
+från journalradernas minor-unit-skuggor. Ett öresbelopp stoppas med HTTP 422
+innan avstämningen kan användas som underlag för momsbetalning.
+
+Backendtesterna passerade med **454 tester, 0 fel och 0 errors**.
+
+## Journal-CSV med minor units 2026-09-21
+
+Journalexporten läser nu verifikatens minor-unit-skuggor och exporterar både
+`Debet`/`Kredit` för kompatibilitet och `DebetMinor`/`KreditMinor` som exakt
+kontrollvärde. Ett öresbelopp stoppas med HTTP 422 innan CSV-filen skapas i
+stället för att den gamla kronrepresentationen får visa ett annat belopp.
+
+Backendtesterna passerade med **454 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Momsarkivets CSV med radvis minor-unit-kontroll 2026-09-21
+
+Momsarkivets export validerar nu varje deklarationsrad från minor-unit-värdet
+innan de kompatibla kronfälten skrivs. Ett öresbelopp stoppas därför även när
+flera rader tillsammans skulle ge en hel krona; exporten kan inte längre dölja
+en avvikelse genom att bara kontrollera totalsumman.
+
+Backendtesterna passerade med **454 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Stripe Checkout med minor units 2026-09-21
+
+Stripe Checkout använder nu fakturans minor-unit-saldo direkt när priset skickas
+till Stripe. Ett saldo med ören stoppas med HTTP 422 innan någon Stripe-session
+skapas, i stället för att ett heltalsbelopp skulle kunna skickas eller avrundas
+tyst. Utkast, krediterade fakturor och fakturor utan saldo fortsätter att stoppas
+med sina ordinarie affärsregler.
+
+Backendtesterna passerade med **451 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Revisionsspar och SIE-export med minor units 2026-09-21
+
+Revisionsspårets kedjehash, journalintegritet och SIE-export läser nu
+verifikatens minor-unit-skuggor. Kedjan binder de exakta minor-värdena och
+SIE-exporten jämför verifikat i minor units innan den konverterar till den
+äldre tvådecimaliga SIE-representationen. Ett öresbelopp stoppas med HTTP
+422 i stället för att exporteras som ett felaktigt heltalsbelopp.
+
+Backendtesterna passerade med **450 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Huvudbok och saldobalans med minor units 2026-09-21
+
+Huvudbok och saldobalans räknar nu ingående saldo, periodrörelser, löpande
+saldo och utgående saldo via huvudbokens minor-unit-skuggor. Ett öresbelopp
+stoppas med HTTP 422 innan det kan visas som ett felaktigt heltalsbelopp.
+
+Backendtesterna passerade med **449 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Periodstangning och reskontrakontroll med minor units 2026-09-21
+
+Periodstangningens senbokforingskontroll och kund/leverantorsreskontrans
+huvudbokskontroll laser nu huvudbokens debet och kredit via minor-unit-skuggor.
+Om ett orebelopp inte kan representeras i de aldre kronbaserade rapporterna
+stoppas kontrollen med HTTP 422 i stallet for att perioden eller avstamningen
+felaktigt markeras som godkand.
+
+Backendtesterna passerade med **448 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Momsrapportens minor-unit-kontroll 2026-09-21
+
+Momsrapporten summerar nu huvudbokens debet/kredit via minor-unit-skuggorna.
+Momsarkivet exporterar dessutom `UtgaendeMomsMinor`, `IngaendeMomsMinor` och
+`MomsAttBetalaMinor`. Om ett öresbelopp inte kan visas korrekt i den äldre
+kronrapporten stoppas rapporten eller exporten med HTTP 422.
+
+Backendtesterna passerade med **446 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Kund- och leverantörsreskontrans minor-unit-kontroll 2026-09-21
+
+Kund- och leverantörsreskontran räknar nu betalningshistorik, kvarvarande
+saldo, netto, moms och total internt i minor units. De äldre rapportfälten får
+bara användas när beloppen kan representeras exakt i hela kronor. Öresaldon
+stoppas med HTTP 422 i stället för att avrundas tyst.
+
+Backendtesterna passerade med **445 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Kundreskontrans minor-unit-kontroll 2026-09-21
+
+Kundreskontrans saldokontroll och betalningshistorik räknar nu internt i
+minor units. Betalningar summeras med overflow-skydd och rapportens äldre
+heltalsfält får bara användas när saldot kan representeras exakt i hela
+kronor. Ett saldo med ören stoppas med HTTP 422 i stället för att avrundas
+tyst. Den vanliga kundreskontran är fortsatt verifierad mot PostgreSQL.
+
+Backendtesterna passerade med **444 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Fakturadokument och exportens minor-unit-kontroll 2026-09-21
+
+Fakturans PDF läser nu minor-unit-skuggvärden med fallback för äldre poster och
+visar ören med två decimaler när de finns. CSV-exporten behåller de befintliga
+heltalskolumnerna och kompletterar dem med `NettoMinor`, `MomsMinor` och
+`TotaltMinor`. Exportens audit-summa stoppas om den innehåller ören som den
+nuvarande hela-kronorsrapporten inte kan representera.
+
+Backendtesterna passerade med **443 tester, 0 fel och 0 errors** och
+integrationstesterna med **215 tester, 0 fel och 0 errors**.
+
+## Huvudbokens debet/kredit och integritet 2026-09-20
+
+Journalrader har nu versionssatta `bigint`-skuggfält för debet och kredit.
+Nya rader fyller skuggvärdena, äldre rader backfillas idempotent och
+verifikationens integritetshash binder minor-unit-värdena. Legacy-fälten i hela
+kronor är fortsatt auktoritativa under migreringen; detta är ett precision- och
+spårbarhetssteg, inte ett godkännande för skarp bokföring.
+
+Backendtesterna passerade med **442 tester, 0 fel och 0 errors** och
+integrationstesterna med **214 tester, 0 fel och 0 errors**.
+
+## Bankavstämningens minor-unit-kontroll 2026-09-20
+
+Bankavstämningen jämför nu konto 1930 mot bankrader via exakta minor-unit-skuggor
+och stoppar rapporten om ören inte kan representeras av dagens heltalsrapport.
+Det skyddar mot att en bank-/huvudboksskillnad avrundas bort under den stegvisa
+beloppsmigreringen. Backendtesten är fortsatt `442` och integrationstesten `214`,
+båda utan fel.
+
+## Kostnader, kvitton och bokforingsspar 2026-09-20
+
+Kostnader har nu separata `bigint`-skuggfält för netto, moms och total. Nya
+kostnader synkroniserar fälten vid sparning och äldre poster synkroniseras vid
+inläsning under den stegvisa migreringen. Bokföringsposterna läser minor-unit-
+värdena och stoppar öresbelopp som den nuvarande hela-kronorsmodellen inte kan
+representera utan förlust. Kvittoflödet behåller samma atomiska databas- och
+auditbeteende.
+
+Backendtesterna passerade med **442 tester, 0 fel och 0 errors** och
+integrationstesterna med **214 tester, 0 fel och 0 errors**.
+
+## Leverantorsreskontrans betalningssaldo 2026-09-20
+
+Leverantorsfakturans kvar-att-betala och betalningsflode raknar nu internt i
+minor units och stoppar betalningar som skulle overskrida fakturans total.
+Legacy-kolumnerna ar fortsatt auktoritativa under den stegvisa migreringen;
+skuggfalten synkroniseras vid lasning och sparning sa aldre importer inte kan
+lamna ett stale minor-unit-saldo.
+
+Backendtesterna passerade med **442 tester, 0 fel och 0 errors** och
+integrationstesterna med **214 tester, 0 fel och 0 errors**.
+
+## Kundfakturans saldo, betalning och aterbetalning 2026-09-20
+
+Kundfakturans kvar-att-betala, betalnings- och aterbetalningsflode raknar nu
+internt i minor units och stoppar overbetalning och overaterbetalning. Legacy-
+kolumnen ar fortfarande auktoritativ under den stegvisa migreringen; fakturans
+minor-unit-skuggfalt synkroniseras darfor vid lasning sa aldre poster och
+avstamningskorrigeringar inte kan anvanda stale skuggdata.
+
+Backendtesterna passerade med **442 tester, 0 fel och 0 errors** och
+integrationstesterna med **214 tester, 0 fel och 0 errors**. Den isolerade
+backup/restore-drillen passerade **16/16** syntetiska kontroller.
+
+## Stripe-utbetalningar och momsunderlag 2026-09-20
+
+Stripe-utbetalningar och sparade momsunderlag har nu versionssatta `bigint`-
+skuggfält i minor units för brutto, avgift, netto och momsens delbelopp. Nya
+poster skriver skuggvärden samtidigt som befintliga hela-kronor och äldre poster
+backfillas idempotent. De gamla heltalsfälten är fortsatt auktoritativa tills
+hela öre-migreringen och historiska avstämningen är verifierade.
+Vid JPA-lasning stoppas en avvikande skuggkopia; vid sparning synkroniseras
+skuggkopian fran legacyvardet. Detta ar ett dataintegritetsskydd, inte ett
+godkannande av hela ore-migreringen.
+
+Backend- och integrationstesterna ligger kvar på **442 respektive 214 tester**.
+Den isolerade backup/restore-drillen passerade **16/16** syntetiska kontroller.
+
+## Kortköp och bankavstämning 2026-09-20
+
+Kortköp och bankrader har nu versionssatta `bigint`-skuggfält i minor units.
+Nya poster skriver skuggvärden samtidigt som befintliga hela-kronor, och äldre
+poster backfillas idempotent. Bankradens tecken bevaras även i skuggvärdet.
+De gamla heltalsfälten är fortfarande auktoritativa tills hela öre-migreringen
+och historiska avstämningen är verifierade. Backend- och integrationstesterna
+ligger kvar på **442 respektive 214 tester**.
+
+## Kostnader och skuggmigrering 2026-09-20
+
+Kostnader har nu separata `bigint`-skuggfält för netto, moms och total. Nya
+kostnader skriver fälten samtidigt som de befintliga hela-kronorna, och äldre
+poster backfillas idempotent. Kvittoflödet behåller samma atomiska databas- och
+auditbeteende. `npm run test:backend` passerade med **442 tester, 0 fel och 0
+errors** och `npm run test:integration` passerade med **214 integrationstester,
+0 fel och 0 errors**.
+
+Skuggfältet är en förberedelse; gamla heltalsfält är fortfarande auktoritativa
+tills hela öre-migreringen, historiska avstämningen och rapportmigreringen är
+verifierade.
+
+## Manuella verifikat kräver bokföringsdatum 2026-09-20
+
+Enkel verifikation, flerradig verifikation, ingående balans, rättelse och
+Stripe-utbetalning avvisas om bokföringsdatum saknas. Inget verifikatnummer
+eller någon journalrad skapas innan datumet är uttryckligt och periodlåset kan
+kontrolleras. `AccountingServiceTest` provar dessa stopp och hela
+`npm run test:backend` passerade med **442 tester, 0 fel och 0 errors**.
+
+Frontendens beloppsformular rundar inte langre decimalinput tyst. `parseWholeSekInput`
+stoppar decimaler och varden over nuvarande heltalsgrans innan de skickas till
+backend; det ar ett skydd for dagens modell och inte ett pastande om fardigt orestod.
+
+Skuggmigreringen `core-invoice-shadow-v1` ar tillagd som en additiv och
+aterstallningsbar databasforberedelse. Den kopierar karnflodets hela kronor till
+separata `bigint`-falt i oren, men applikationen anvander fortfarande de gamla
+falten tills hela migreringen ar verifierad.
+
+## Verifikat och audit är atomiska 2026-09-20
+
+Manuella verifikat, ingående balans, rättelser, Stripe-bokningar och
+webbplatsförsäljning kör nu journaländring och auditregistrering i samma
+transaktion i `AccountingController`. Om auditspåret misslyckas rullas även
+journalraderna tillbaka. Den isolerade PostgreSQL-körningen
+`npm run test:integration` passerade med **214 integrationstester, 0 fel och 0
+errors**.
+
+## Kvittofil och bokföringsspår är atomiska 2026-09-20
+
+Kvitton valideras mot både angiven MIME-typ och filsignatur innan de arkiveras.
+Uppladdningen kör nu databasändring och `receipt_uploaded`-audit i samma
+transaktion. Om sparandet eller auditposten misslyckas tas den nya filen bort,
+så ett kvitto inte blir en lös fil utan databaskoppling. Arkiverade kvitton kan
+inte ersättas; deras SHA-256 kan repareras och kontrolleras separat.
+Regressionstestet för auditfel ingår i `ExpenseControllerTest` och hela
+`npm run test:backend` passerade med **440 tester, 0 fel och 0 errors**.
+
+## Leverantörsfakturans status följer rätt periodlås 2026-09-20
+
+Statusändringar på leverantörsfakturor kontrollerar fakturadatum mot periodlåset
+när statusändringen gäller själva fakturan. En betalning kontrollerar i stället
+det uttryckliga betalningsdatumet, så en gammal leverantörsfaktura kan betalas i
+en senare öppen period. Detta är ett lokalt verifierat kontrollsteg; det
+ersätter inte den kvarvarande öre-migreringen eller produktionsverifiering av
+hela reskontra- och betalningsflödet.
+
+## Bokföringsdatum måste anges uttryckligen 2026-09-20
+
+Kundbetalningar, återbetalningar, kostnader och leverantörshändelser accepterar inte längre ett saknat datum genom att tyst använda dagens datum. Ett uttryckligt datum krävs innan bokföring eller reskontrastatus sparas, så poster inte flyttas till fel period utan synlig varning. Leverantörsfakturans fakturadatum, betalningsdatum och makuleringsdatum har egna tester.
+
+Samma stopp finns nu även i `AccountingService`, så en framtida endpoint eller
+intern anropare kan inte kringgå regeln genom att skicka `null`. Betalning,
+återbetalning, Stripe-försäljning, leverantörsbetalning, makulering och
+momsbetalning kräver explicit datum innan journalrader skapas.
+`AccountingServiceTest` verifierar att saknat datum stoppas före bokföring.
+
+## Fakturamejlens skickad-status 2026-09-20
+
+Fakturans `INVOICE_EMAIL`-historik och `email_sent`-audit sparas nu först efter
+att SMTP-anropet lyckats. Ett misslyckat utskick lämnar inte fakturan som
+skickad i samma transaktion. `OrderControllerTest` provar detta och hela
+`npm run test:backend` passerade med **436 tester, 0 fel och 0 errors**.
+Detta minskar risken för falsk skickad-status men ersätter inte en permanent
+email-outbox eller extern SMTP-verifiering före skarp drift.
+
+## Bankimport bevarar saknat datum 2026-09-20
+
+Bankimporten fyller inte längre i dagens datum när en CSV-rad saknar datum.
+Raden visas i stallet som en kritisk avstamningsavvikelse, sa historik inte
+flyttas till fel period. `BankReconciliationServiceTest` provar detta.
+
+## JSON-beloppsprecision och CI-action 2026-09-18
+
+`npm run test:backend` passerade med **419 tester, 0 fel och 0 errors**.
+Detta inkluderar `JsonNumberConfigTest`: heltals-SEK accepteras och ett JSON-
+decimalbelopp som `10.50` avvisas i stallet for att kapas till `10`. Det
+bekraftar den befintliga helkronemodellen; det innebar inte att ore-stod har
+infors.
+
+GitHub Dependabot PR #6 misslyckades eftersom dess uppgradering av
+`actions/setup-java` till v6 inte matchade projektets statiska kontroll som
+fortfarande kravde v5. Arbetsflodet och kontrollen ar nu bada v6; `check:ci`
+passerade 39/39 och den lokala `check:release` passerade. Fixen ar annu inte
+pushad, sa PR:ens externa status ar inte uppdaterad. Ingen production- eller
+anvandardatabas anvandes.
+
+## Isolerad backup- och restoretest 2026-09-18
+
+`npm run test:backup` passerade med **16/16** syntetiska kontroller. Testet
+skapade och aterstallde en PostgreSQL-dump i en isolerad Docker-container,
+kopierade kvittofiler och verifierade SHA-256, journalbalans, saknade/skadade
+underlag, ogiltig dump, aterstallningsvagar och att befintliga backupmappar inte
+skrivs over. Testdata var syntetiska; containern togs bort efter testet.
+
+Detta godkanner inte anvandarens riktiga backup eller produktionsaterstallning.
+Krypterad separat kopia, fullstandig data- och filinventering samt appflod efter
+restore maste fortfarande provas i en separat aterstallningsmiljo.
+
+Den lokala `npm run doctor` passerade 8/8 mot aktuell utvecklingsmiljo, och
+`npm run smoke:runtime` passerade i en separat headless Chrome-profil. Smoken
+verifierade oversiktens rendering, inloggningskontroller och aterhamtning fran
+en sparad intern vy nar anvandaren ar utloggad. Detta ar inte ett inloggat
+verksamhetsflod eller produktionsbevis.
+
+## Schemalagd avtalsfakturering 2026-09-18
+
+Backend avvisar nu avtalsfakturor innan nasta fakturadatum och nar datum saknas;
+frontend visar avtalet som schemalagt och inaktiverar fakturaknappen innan
+forfallodagen. `RecurringContractControllerTest` passerade med 5 tester och 0
+fel, inklusive att for tidig fakturering inte gor kund-, tjanste-, bokforings-
+eller fakturaskrivningar. Testet kor separat fran full release gate.
+
+## Fakturakontroller och senaste lokala verifiering 2026-09-18
+
+Efter fakturakontrollerna passerade `npm run test:integration` med 413
+enhetstester och 213 PostgreSQL-integrationstestfall, totalt **626**, utan
+failures, errors eller hoppade tester. Detta inkluderar koparadresskrav for
+fakturor over 4 000 SEK inklusive moms, gransfallet pa exakt 4 000 SEK,
+originalets synliga fakturanummer pa kreditfaktura och kreditens snapshot efter
+PostgreSQL-omlasning. Databasen var en isolerad och borttagen testdatabas.
+
+`npm run check:release` passerade separat med frontend-produktionsbuild,
+runtime-smoke, 49 menyer/vyreferenser och releasekontroller. Denna gate kor inte
+backendtesterna eller bygger Docker-images; backendbeviset ovan ar separat.
+Ingen GitHub Actions-korning, publicering, extern e-post/bank/Stripe-koppling,
+produktion eller anvandarens vanliga databas anvandes.
+
+Backendens produktionsstart blockeras nu ocksa direkt av konfigurationsvakten sa
+lange pengamodellen lagrar hela SEK. Satta inte en konfigurationsflagga for att
+runda stoppet; det ska tas bort forst nar versionssatt ore-migrering, historisk
+avstamning och fulla tester faktiskt finns. Det riktade testet for denna
+produktionssparr passerade med 7 tester och 0 fel den 2026-09-18, inklusive
+Spring-kontextkontroll for produktionssparr och lokal miljo; testets
+PostgreSQL-container avvecklades efter korningen.
+
+Fakturavalideringen kravver tjanstebeskrivning, saljarprofil och
+momsregistreringsnummer vid moms. Over 4 000 SEK kravs koparens namn och
+fullstandiga adress. PDF visar enhetspris exklusive moms och beskattningsunderlag;
+kredit-PDF hanvisar till originalets fakturanummer. Detta ar grundkontroller,
+inte en garanti om fullstandig regelefterlevnad for alla fakturatyper.
+Skatteverkets faktureringsregler finns [har](https://www.skatteverket.se/foretagochorganisationer/moms/saljavarorochtjanster/fakturering.4.58d555751259e4d66168000403.html).
+
+## Kontoskydd och tidigare lokal verifiering 2026-09-18
+
+`npm run test:backend` passerade med 413 enhetstester och noll fel. Den isolerade
+Den tidigare korningen fore de senaste fakturaintegrationstesterna passerade med
+413 enhetstester och 209 PostgreSQL-integrationstestfall, totalt **622**, utan
+failures, errors eller hoppade tester.
+Det inkluderar att en registrering skapar agarkontot och att nasta registrering
+nekas. Testcontainrar och testdatabas avvecklades.
+
+`npm run check:release` passerade med frontend-produktionsbuild, API-/vy-
+kontroller, runtime-smoke och releasebevis. `npm run check:env-go-live` passerade
+41/41. `npm run check:prod` visar 45/46 och en forvantad varning eftersom
+`.env.production.example` avsiktligt innehaller en platshallare for
+`APP_AUTH_REGISTRATION_BOOTSTRAP_KEY`; anvand en separat slumpad nyckel i riktig
+miljo. `check:use-today` rapporterar en varning for den avsiktligt andrade
+worktree:n.
+
+Produktionens forsta agarkonto kravs nu skyddas av startnyckel; oppen registrering
+stangs nar kontot skapats. Detta ar en enforetags-/agarmodell, inte
+flerforetagsisolering. Riktiga bokforingsposter ar fortfarande blockerade tills
+ore-stod och migrering, verklig backup/restore, extern CI/deploy och
+redovisningskontroller ar verifierade. Inget har pushats eller provats mot
+anvandarens riktiga databas.
+
+Efter tillagg av radlas for samtidiga rattelseverifikationer kordes hela
+enhetssviten igen: 413 passerade. Det nya isolerade PostgreSQL-testet
+`concurrentCorrectionRequestsCreateOnlyOneCorrectionVoucher` passerade ocksa.
+Detta ar ett riktat integrationstest efter lasandringen, inte en ny full
+integrationstestsvit.
+
 ## Original-PDF-arkiv och integritetskontroll 2026-09-16
 
 Slutlig `npm run test:integration` passerade: 365 enhetstester och 207
@@ -573,8 +1135,8 @@ Detta bevisar lokalt att:
 - `check:evidence`: 94/94
 - `check:bundle`: 9/9
 - `check:data-safety`: 57/57
-- `check:prod`: 44/44
-- `check:env-go-live`: 39/39
+- `check:prod`: 45/46 (example env has one expected warning for the placeholder owner setup key)
+- `check:env-go-live`: 41/41
 - `check:ci`: 39/39
 - `check:ci-handoff`: 34/34
 - `check:post-push`: 31/31
@@ -587,8 +1149,8 @@ Detta bevisar lokalt att:
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
-- `check:use-today`: 34/34
-- `check:first-real-data`: 34/34
+- `check:use-today`: 35/36
+- `check:first-real-data`: 36/36
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46
 - `check:retention`: 23/23
@@ -618,7 +1180,7 @@ Detta bevisar lokalt att:
 - Anvandningsklar lokal MVP kontrolleras med `npm run check:mvp-use`, som samlar 20 praktiska steg fran lokal start till go-live-beslut.
 - Driftberedskap kontrolleras med `npm run check:operations`, sa Driftcenter, incidentlogg, releasejournal, backup/smoke-test och rollback-plan inte tappas bort.
 - Sista lokala anvandningsbeslutet kontrolleras med `npm run check:use-today`, sa AliBooks visar nar lokal MVP kan anvandas och nar arbetet ska stoppas innan viktig data registreras.
-- Forsta riktiga data kontrolleras med `npm run check:first-real-data`, sa backup, restore drill, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export ar synliga innan riktiga kunder, fakturor, kvitton eller bankrader registreras.
+- Forsta-riktiga-data-skydden kontrolleras med `npm run check:first-real-data`; ett godkant statiskt test ar inte go-ahead for verkliga poster. Fullt ore-stod, backup/restore, testdata, foretagsinstallningar, nummerserier, personuppgifter, betalningsrutin och export maste verifieras separat.
 - Berakningsintegritet kontrolleras med `npm run check:calculations`, sa faktura, moms, delbetalning, Stripe, leverantorer, verifikat, rapporter och lon-MVP inte tappar sina skydd.
 - Arkiv och andringsspar kontrolleras med `npm run check:retention`, sa hard delete, kvittoersattning, kundhistorik, leverantorsfakturor, periodlasning och rattelsefloden inte tappar sina skydd.
 - Revisionsspar-integritet kontrolleras med `npm run check:audit-integrity`, sa auditkedja, auditstampel, CSV-export, backupkoppling och tamper-kansligt backendtest inte tappar sina skydd.

@@ -36,6 +36,24 @@ class JournalEntryTraceabilityTest {
   }
 
   @Test
+  void keepsExactMinorUnitShadowsForLedgerAmounts() {
+    JournalEntry entry = new JournalEntry(
+        null,
+        new Account("1930", "Bank"),
+        "M-8",
+        1250,
+        250,
+        "Money precision",
+        LocalDate.of(2026, 7, 4)
+    );
+
+    assertThat(entry.getDebitMinor()).isEqualTo(125000L);
+    assertThat(entry.getCreditMinor()).isEqualTo(25000L);
+    assertThat(entry.getDebitMinorValue()).isEqualTo(125000L);
+    assertThat(entry.getCreditMinorValue()).isEqualTo(25000L);
+  }
+
+  @Test
   void flagsExpenseWithoutReceiptAsMissingEvidence() {
     Expense expense = new Expense(LocalDate.of(2026, 7, 2), "Programvara", 400, 100, "5420", "1930");
 

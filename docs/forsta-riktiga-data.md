@@ -4,14 +4,19 @@ Det har dokumentet anvands precis innan du borjar lagga in riktiga kunder, faktu
 
 Malet ar att undvika fel som blir dyra att reda ut senare: fel foretagsform, fel momsperiod, fel nummerserie, saknad backup, testdata blandad med riktig data eller betalningar som inte kan stammas av.
 
+**Aktuellt stopp:** AliBooks pengamodell bevarar inte kronor och oren genom hela bokforingsflodet. Anvand inte systemet for riktiga bokforingsposter forran en fullstandig beloppsmigrering och avstamning ar genomford och verifierad. Fortsatt endast med avskild testdata under tiden.
+
+`npm run check:first-real-data` kontrollerar att skydd och arbetssteg finns i projektet. Ett godkant resultat ar **inte** ett verksamhetsgodkannande och upphaver inte stoppet ovan.
+
 ## Beslut
 
-AliBooks kan anvandas med riktig lokal MVP-data nar detta ar sant:
+AliBooks kan anvandas med riktig lokal MVP-data forst nar samtliga villkor nedan ar uppfyllda:
 
 - `npm run check:release:full` ar gron.
 - `npm run doctor` visar att frontend, backend och PostgreSQL svarar.
 - `npm run check:use-today` ar gron.
 - `npm run check:first-real-data` ar gron.
+- Backendens pengamodell bekraftar fullt stod for kronor och oren; om detta saknas ska riktiga bokforingsposter stoppas.
 - `npm run check:git -- --strict` ar gron efter senaste commit.
 - En backup ar skapad och sparad utanfor projektmappen.
 - Restore drill ar testad i separat testdatabas innan stor import eller molnflytt.
@@ -82,6 +87,7 @@ Anvand inte AliBooks med viktig data om:
 - backend inte startar.
 - PostgreSQL inte svarar.
 - verifikat inte balanserar.
+- oren inte bevaras genom faktura, moms, betalning, bokforing och export.
 - momsrapporten verkar negativ eller orimlig utan forklaring.
 - fakturanummer hoppar fel.
 - testdata ligger kvar bland riktiga kunder.

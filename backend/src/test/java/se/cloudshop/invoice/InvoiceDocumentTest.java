@@ -28,6 +28,11 @@ class InvoiceDocumentTest {
 
   private Order invoice(boolean snapshot) {
     settings.setCompanyName("Original issuer");
+    settings.setCompanyAddress("Original Street 1");
+    settings.setCompanyPostalCode("111 22");
+    settings.setCompanyCity("Original City");
+    settings.setCompanyOrganizationNumber("556000-0000");
+    settings.setVatRegistrationNumber("SE556000000001");
     settings.setContactEmail("issuer@example.invalid");
     settings.setFTaxApproved(false);
     when(service.getSettings()).thenReturn(settings);
@@ -41,7 +46,7 @@ class InvoiceDocumentTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"customer", "product-name", "product-price", "issuer", "contact", "f-tax", "payment-details"})
+  @ValueSource(strings = {"customer", "product-name", "product-price", "issuer", "issuer-address", "contact", "f-tax", "payment-details"})
   void registerChangesDoNotRewriteInvoicePdf(String field) throws Exception {
     Order invoice = invoice(true);
     String original = text(pdf.createInvoicePdf(invoice));
@@ -50,13 +55,16 @@ class InvoiceDocumentTest {
       case "product-name" -> product.setName("New service");
       case "product-price" -> product.setPrice(999);
       case "issuer" -> settings.setCompanyName("New issuer");
+      case "issuer-address" -> settings.setCompanyAddress("New street");
       case "contact" -> settings.setContactEmail("new@example.invalid");
       case "f-tax" -> settings.setFTaxApproved(true);
       case "payment-details" -> { invoice.setPlusGiro("New account"); invoice.setOcrNumber("New OCR"); invoice.setPaymentRecipient("New recipient"); }
     }
     assertThat(text(pdf.createInvoicePdf(invoice))).isEqualTo(original);
     verify(service, never()).getSettings();
-    assertThat(original).contains("Original customer", "Original service", "Original issuer", "Original account");
+    assertThat(original).contains("Original customer", "Original service", "Original issuer", "Original Street 1",
+        "Original City", "SE556000000001", "556000-0000", "Original account",
+        "Unit price excl. VAT", "Tax base");
     assertThat(original).doesNotContain("Godkand for F-skatt", "Reconstructed copy");
   }
 
@@ -78,6 +86,16 @@ class InvoiceDocumentTest {
   }
 
   @Test
+  void pdfUsesMinorUnitShadowsWhenTheyContainOre() throws Exception {
+    Order invoice = invoice(true);
+    org.springframework.test.util.ReflectionTestUtils.setField(invoice, "netAmountMinor", 10050L);
+    org.springframework.test.util.ReflectionTestUtils.setField(invoice, "vatAmountMinor", 2512L);
+    org.springframework.test.util.ReflectionTestUtils.setField(invoice, "totalAmountMinor", 12562L);
+
+    assertThat(text(pdf.createInvoicePdf(invoice))).contains("100,50 SEK", "25,12 SEK", "125,62 SEK");
+  }
+
+  @Test
   void creditUsesOriginalSnapshotAndIsNotAPaymentRequest() throws Exception {
     Order original = invoice(true);
     product.setName("Changed after original");
@@ -86,9 +104,11 @@ class InvoiceDocumentTest {
     credit.setCreditedInvoiceId(123L);
     credit.setAmounts(-100, -25, -125);
     credit.setStatus("SENT");
+    assertThat(credit.getDocumentSnapshot().creditedInvoiceNumber()).isEqualTo("F-TEST-1");
     String content = text(pdf.createInvoicePdf(credit));
-    assertThat(content).contains("Credit note", "Original service", "Credits invoice ID: 123", "-125 SEK", "Not a payment request");
-    assertThat(content).doesNotContain("Remaining:", "Changed after original");
+    assertThat(content).contains("Credit note", "Original service", "References original invoice: F-TEST-1", "-100 SEK",
+        "-125 SEK", "Not a payment request", "Unit price excl. VAT", "Tax base");
+    assertThat(content).doesNotContain("Remaining:", "Changed after original", "Credits invoice ID");
   }
 
   @Test
@@ -119,12 +139,23 @@ class InvoiceDocumentTest {
         .isEqualTo(invoice.getDocumentSnapshot());
     var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().valueToTree(invoice);
     assertThat(json.has("documentSnapshot")).isFalse();
+    assertThat(json.has("creditedInvoiceNumber")).isFalse();
     assertThat(json.path("documentSnapshotAvailable").asBoolean()).isTrue();
     assertThat(converter.convertToEntityAttribute(null)).isNull();
   }
 
+  @Test
+  void readsLegacyVersionOneSnapshotWithoutInventingSellerDetails() {
+    InvoiceDocumentSnapshot snapshot = new InvoiceDocumentSnapshotConverter()
+        .convertToEntityAttribute("{\"version\":1,\"customerName\":\"Legacy customer\",\"issuerName\":\"Legacy issuer\"}");
+
+    assertThat(snapshot.version()).isEqualTo(1);
+    assertThat(snapshot.customerName()).isEqualTo("Legacy customer");
+    assertThat(snapshot.issuerAddress()).isNull();
+  }
+
   @ParameterizedTest
-  @ValueSource(strings = {"", "invalid-private-data", "null", "{}", "{\"version\":2}"})
+  @ValueSource(strings = {"", "invalid-private-data", "null", "{}", "{\"version\":4}"})
   void corruptSnapshotsFailWithoutLeakingOrFallback(String value) {
     assertThatThrownBy(() -> new InvoiceDocumentSnapshotConverter().convertToEntityAttribute(value))
         .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("private-data");

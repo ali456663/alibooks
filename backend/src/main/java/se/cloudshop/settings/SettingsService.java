@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.JournalEntryRepository;
+import se.cloudshop.invoice.InvoiceVatPolicy;
 
 @Service
 public class SettingsService {
@@ -42,12 +43,19 @@ public class SettingsService {
     if (updatedSettings == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Settings payload is required.");
     }
-
     AppSettings settings = lockSettingsForAccounting();
+    if (updatedSettings.getVatPercent() != settings.getVatPercent()) {
+      InvoiceVatPolicy.requireSupportedRate(updatedSettings.getVatPercent());
+    }
     LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
     validateAccountingLockChange(currentLockedThroughDate, updatedSettings.getAccountingLockedThroughDate());
     validateAccountingPolicyChange(settings, updatedSettings);
     settings.setCompanyName(updatedSettings.getCompanyName());
+    settings.setCompanyAddress(updatedSettings.getCompanyAddress());
+    settings.setCompanyPostalCode(updatedSettings.getCompanyPostalCode());
+    settings.setCompanyCity(updatedSettings.getCompanyCity());
+    settings.setCompanyOrganizationNumber(updatedSettings.getCompanyOrganizationNumber());
+    settings.setVatRegistrationNumber(updatedSettings.getVatRegistrationNumber());
     settings.setContactEmail(updatedSettings.getContactEmail());
     settings.setPlusGiro(updatedSettings.getPlusGiro());
     settings.setDefaultOcr(updatedSettings.getDefaultOcr());

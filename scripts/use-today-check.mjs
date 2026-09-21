@@ -67,6 +67,7 @@ check("Decision separates local MVP and production", includesAll(doc, ["Gront fo
 check("Decision covers blank-page stop", includesAll(doc, ["vit sida", "render recovery"]), "White-page recovery should stop real work until fixed.");
 check("Decision covers database stop", includesAll(doc, ["Connection to localhost:5432 refused", "schema drift"]), "Database startup and schema drift should be visible stop signs.");
 check("Decision covers bookkeeping stop", includesAll(doc, ["debet", "kredit", "Fakturanummer", "verifikationsnummer"]), "Accounting numbering and balance errors should stop use.");
+check("Decision separates isolated MVP testing from real bookkeeping", includesAll(doc.toLowerCase(), ["avskild testdata", "kronor och oren", "riktiga bokforingsposter"]), "Local testing must not be confused with permission to enter real accounting data.");
 check("Decision covers period lock", doc.includes("Periodlasning"), "Period locking should be part of the safety decision.");
 check("Decision covers backup and restore", includesAll(doc, ["Backup", "restore drill"]), "Backup and restore proof should be required.");
 check("Decision covers secrets", includesAll(doc, ["API-nycklar", "GitHub"]), "Secrets should not be committed or exposed.");
@@ -97,6 +98,7 @@ check("Frontend exposes overview quick shortcuts", includesAll(mainSource, ["cor
 check("Frontend exposes Driftcenter", mainSource.includes("operationsCenter") && mainSource.includes("Driftcenter"), "The app should expose Driftcenter.");
 check("Frontend exposes safety views", includesAll(mainSource, ["Sakerhet", "Regelkontroll", "Redovisningskontroll", "Momsrapport"]), "The app should expose the views named in the use-today routine.");
 check("Frontend exposes use-today gate", includesAll(mainSource, ["useTodayGateRows", "Kan jag jobba i AliBooks idag?", "use-today-panel", "use-today-card", "Dagens beslut"]), "Startklar should show the daily local MVP decision inside the app.");
+check("Frontend warns daily users while minor-unit support is missing", includesAll(mainSource, ["key: \"money-support\"", "minorUnitSupport ? \"ok\" : \"warning\"", "avskild testdata", "riktiga bokforingsposter"]), "Daily readiness must allow isolated testing but warn against real bookkeeping without minor-unit support.");
 check("Frontend exposes use-today script", frontendPackage.scripts?.["check:use-today"] === "node ../scripts/use-today-check.mjs", "frontend/package.json should expose npm run check:use-today.");
 check("Root exposes use-today script", rootPackage.scripts?.["check:use-today"] === "npm --prefix frontend run check:use-today --", "package.json should expose npm run check:use-today.");
 check("Release gate runs use-today check", releaseGate.includes('"check:use-today"'), "Release gate should fail if the use-today decision disappears.");
@@ -132,5 +134,5 @@ if (failed.length > 0) {
 }
 
 console.log("");
-console.log("Lokal MVP: ja, om release gate, backend/databas, backup och manuell klickkontroll ar grona.");
+console.log("Lokal MVP: endast isolerad testdata tills ore-stod och migrering ar verifierade.");
 console.log("Skarp produktion: nej, vanta pa GitHub/Dockerhub/EC2/RDS/Stripe/SMTP/restore-bevis.");

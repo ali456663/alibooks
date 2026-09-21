@@ -15,13 +15,16 @@ public final class CsvEscaper {
   }
 
   private static String neutralizeFormula(String value) {
-    if (value.isBlank()) {
-      return value;
-    }
+    for (int index = 0; index < value.length(); index++) {
+      char current = value.charAt(index);
+      if (Character.isWhitespace(current) || Character.isISOControl(current) || current == '\uFEFF') {
+        continue;
+      }
 
-    char first = value.charAt(0);
-    if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t') {
-      return "'" + value;
+      if (current == '=' || current == '+' || current == '-' || current == '@') {
+        return "'" + value;
+      }
+      break;
     }
 
     return value;

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
+import se.cloudshop.accounting.ReportAmounts;
 import se.cloudshop.export.CsvEscaper;
 
 @RestController
@@ -31,10 +32,10 @@ public class InvoiceExportController {
     authHeader.requireValidToken(authorizationHeader);
 
     StringBuilder csv = new StringBuilder();
-    csv.append("Id,Fakturanummer,Fakturadatum,Forfallodatum,Kund,Status,Antal,Netto,Moms,Totalt,OCR,PlusGiro,Kreditfaktura,Krediterar faktura\n");
+    csv.append("Id,Fakturanummer,Fakturadatum,Forfallodatum,Kund,Status,Antal,Netto,Moms,Totalt,NettoMinor,MomsMinor,TotaltMinor,OCR,PlusGiro,Kreditfaktura,Krediterar faktura\n");
 
     int exportedCount = 0;
-    long totalAmount = 0;
+    long totalAmountMinor = 0;
     for (Order invoice : orderRepository.findAll()) {
       csv.append(invoice.getId()).append(",");
       csv.append(escape(invoice.getInvoiceNumber())).append(",");
@@ -43,16 +44,24 @@ public class InvoiceExportController {
       csv.append(escape(invoice.getCustomerName())).append(",");
       csv.append(escape(invoice.getStatus())).append(",");
       csv.append(invoice.getQuantity()).append(",");
-      csv.append(invoice.getNetAmount()).append(",");
-      csv.append(invoice.getVatAmount()).append(",");
-      csv.append(invoice.getTotalAmount()).append(",");
+      long netAmountMinor = minorOrWholeKrona(invoice.getNetAmountMinor(), invoice.getNetAmount());
+      long vatAmountMinor = minorOrWholeKrona(invoice.getVatAmountMinor(), invoice.getVatAmount());
+      long invoiceTotalAmountMinor = minorOrWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount());
+      csv.append(reportWholeKrona(netAmountMinor)).append(",");
+      csv.append(reportWholeKrona(vatAmountMinor)).append(",");
+      csv.append(reportWholeKrona(invoiceTotalAmountMinor)).append(",");
+      csv.append(netAmountMinor).append(",");
+      csv.append(vatAmountMinor).append(",");
+      csv.append(invoiceTotalAmountMinor).append(",");
       csv.append(escape(invoice.getOcrNumber())).append(",");
       csv.append(escape(invoice.getPlusGiro())).append(",");
       csv.append(invoice.isCreditInvoice()).append(",");
       csv.append(invoice.getCreditedInvoiceId() == null ? "" : invoice.getCreditedInvoiceId()).append("\n");
       exportedCount++;
-      totalAmount += invoice.getTotalAmount();
+      totalAmountMinor = Math.addExact(totalAmountMinor, invoiceTotalAmountMinor);
     }
+
+    int totalAmount = reportWholeKrona(totalAmountMinor);
 
     auditService.record(
         "export",
@@ -61,7 +70,7 @@ public class InvoiceExportController {
         "invoices_exported",
         "invoices",
         "Invoices exported. Rows: " + exportedCount + ".",
-        se.cloudshop.accounting.ReportAmounts.reportAmount(totalAmount),
+        ReportAmounts.reportAmount(totalAmount),
         authorizationHeader
     );
 
@@ -73,5 +82,18 @@ public class InvoiceExportController {
 
   private String escape(String value) {
     return CsvEscaper.escape(value);
+  }
+
+  private long minorOrWholeKrona(Long minor, int wholeKrona) {
+    return minor == null ? Math.multiplyExact((long) wholeKrona, 100L) : minor;
+  }
+
+  private int reportWholeKrona(long amountMinor) {
+    if (amountMinor % 100L != 0L) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+          "Fakturaexporten innehaller oren som den nuvarande rapportrevisionen inte kan representera.");
+    }
+    return ReportAmounts.reportAmount(amountMinor / 100L);
   }
 }

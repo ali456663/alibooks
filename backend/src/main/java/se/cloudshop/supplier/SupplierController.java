@@ -97,6 +97,10 @@ public class SupplierController {
   ) {
     authHeader.requireValidToken(authorizationHeader);
 
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier invoice request is required.");
+    }
+
     if (request.supplierId() == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier is required.");
     }
@@ -112,7 +116,10 @@ public class SupplierController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check total amount and VAT.");
     }
 
-    LocalDate invoiceDate = request.invoiceDate() == null ? LocalDate.now() : request.invoiceDate();
+    if (request.invoiceDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier invoice date is required.");
+    }
+    LocalDate invoiceDate = request.invoiceDate();
     LocalDate dueDate = request.dueDate() == null ? invoiceDate.plusDays(30) : request.dueDate();
     if (dueDate.isBefore(invoiceDate)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Due date cannot be before supplier invoice date.");
@@ -154,7 +161,8 @@ public class SupplierController {
     ));
 
     accountingService.createSupplierInvoiceEntries(invoice);
-    auditService.record("supplier_invoice", "supplier_invoice", invoice.getId(), "created", invoice.getReference(), selfBilling ? "Self-billing supplier invoice created" : "Supplier invoice created", invoice.getTotalAmount(), authorizationHeader);
+    auditService.record("supplier_invoice", "supplier_invoice", invoice.getId(), "created", invoice.getReference(), selfBilling ? "Self-billing supplier invoice created" : "Supplier invoice created",
+        accountingWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "leverantörsfakturans totalbelopp"), authorizationHeader);
     return invoice;
   }
 
@@ -166,6 +174,9 @@ public class SupplierController {
       @RequestBody UpdateSupplierInvoiceStatusRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier invoice status request is required.");
+    }
     supplierInvoiceRepository.lockById(id);
     SupplierInvoice invoice = supplierInvoiceRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Supplier invoice not found."));
@@ -173,10 +184,21 @@ public class SupplierController {
     String status = normalizeStatus(request == null ? "" : request.status());
     requireSupplierInvoiceStatusChangeAllowed(invoice, status);
     if ("paid".equals(status)) {
-      if (request.paymentReference() != null && java.util.regex.Pattern.compile("\\R").matcher(request.paymentReference()).find()) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference must be a single line.");
+      if (request.paidAt() == null) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier payment date is required.");
       }
-      LocalDate paymentDate = request.paidAt() == null ? LocalDate.now() : request.paidAt();
+      String paymentReference = request.paymentReference() == null ? "" : request.paymentReference().trim();
+      if (paymentReference.isBlank()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference is required for manual supplier payments.");
+      }
+      if (paymentReference.length() > 255 || java.util.regex.Pattern.compile("\\R").matcher(paymentReference).find()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference must be a single line of max 255 characters.");
+      }
+      LocalDate paymentDate = request.paidAt();
+      // The payable is booked on its invoice date, but the cash movement is
+      // booked on the payment date. A closed invoice period must not prevent
+      // a valid payment in a later open period.
+      accountingService.requireUnlockedAccountingDate(paymentDate);
       int paidAmount = request.paidAmount() == null ? invoice.getRemainingAmount() : request.paidAmount();
       if (paidAmount <= 0) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount must be greater than zero.");
@@ -184,20 +206,23 @@ public class SupplierController {
       if (paidAmount > invoice.getRemainingAmount()) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount cannot be greater than remaining amount.");
       }
-      if (invoice.hasPayment(paymentDate, paidAmount, request.paymentReference())) {
+      if (invoice.hasPayment(paymentDate, paidAmount, paymentReference)) {
         throw new ResponseStatusException(HttpStatus.CONFLICT, "This supplier payment is already registered on the invoice.");
       }
       accountingService.createSupplierInvoiceEntries(invoice);
-      accountingService.createSupplierInvoicePaymentEntries(invoice, paymentDate, paidAmount, request.paymentReference());
-      invoice.registerPayment(paymentDate, paidAmount, request.paymentReference());
+      accountingService.createSupplierInvoicePaymentEntries(invoice, paymentDate, paidAmount, paymentReference);
+      invoice.registerPayment(paymentDate, paidAmount, paymentReference);
     } else {
+      // Non-payment status changes affect the invoice lifecycle on its invoice date.
+      accountingService.requireUnlockedAccountingDate(invoice.getInvoiceDate());
       invoice.updateStatus(status, request.paidAt());
     }
     if ("booked".equals(status)) {
       accountingService.createSupplierInvoiceEntries(invoice);
     }
     SupplierInvoice savedInvoice = supplierInvoiceRepository.save(invoice);
-    auditService.record("supplier_invoice", "supplier_invoice", savedInvoice.getId(), "status_updated", status, "Supplier invoice status updated", savedInvoice.getTotalAmount(), authorizationHeader);
+    auditService.record("supplier_invoice", "supplier_invoice", savedInvoice.getId(), "status_updated", status, "Supplier invoice status updated",
+        accountingWholeKrona(savedInvoice.getTotalAmountMinor(), savedInvoice.getTotalAmount(), "leverantörsfakturans totalbelopp"), authorizationHeader);
     return savedInvoice;
   }
 
@@ -208,14 +233,15 @@ public class SupplierController {
     if ("cancelled".equals(invoice.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled supplier invoices cannot be reactivated or paid.");
     }
-    if ("booked".equals(nextStatus) && invoice.getPaidAmount() > 0) {
+    if ("booked".equals(nextStatus) && accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "leverantörsfakturans betalda belopp") > 0) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice has payments. Keep its payment status.");
     }
     if ("paid".equals(nextStatus) || "booked".equals(nextStatus)) {
       return;
     }
 
-    boolean hasPayments = invoice.getPaidAmount() > 0 || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus());
+    boolean hasPayments = accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "leverantörsfakturans betalda belopp") > 0
+        || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus());
     if (hasPayments) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT,
@@ -248,13 +274,15 @@ public class SupplierController {
       return invoice;
     }
 
-    if (invoice.getPaidAmount() > 0 || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus())) {
+    if (accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "leverantörsfakturans betalda belopp") > 0
+        || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Paid supplier invoices cannot be cancelled without a payment correction.");
     }
 
-    LocalDate cancellationDate = request == null || request.cancellationDate() == null
-        ? LocalDate.now()
-        : request.cancellationDate();
+    if (request == null || request.cancellationDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier cancellation date is required.");
+    }
+    LocalDate cancellationDate = request.cancellationDate();
     if (invoice.getInvoiceDate() != null && cancellationDate.isBefore(invoice.getInvoiceDate())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation date cannot be before supplier invoice date.");
     }
@@ -268,7 +296,8 @@ public class SupplierController {
     String correctionVoucherNumber = correctionEntries.isEmpty() ? "" : correctionEntries.get(0).getVoucherNumber();
     invoice.markCancelled(cancellationDate, correctionVoucherNumber);
     SupplierInvoice savedInvoice = supplierInvoiceRepository.save(invoice);
-    auditService.record("supplier_invoice", "supplier_invoice", savedInvoice.getId(), "cancelled", correctionVoucherNumber, "Supplier invoice cancelled with correction voucher", savedInvoice.getTotalAmount(), authorizationHeader);
+    auditService.record("supplier_invoice", "supplier_invoice", savedInvoice.getId(), "cancelled", correctionVoucherNumber, "Supplier invoice cancelled with correction voucher",
+        accountingWholeKrona(savedInvoice.getTotalAmountMinor(), savedInvoice.getTotalAmount(), "leverantörsfakturans totalbelopp"), authorizationHeader);
     return savedInvoice;
   }
 
@@ -295,10 +324,10 @@ public class SupplierController {
         cell(invoice.getReference()),
         cell(invoice.getDescription()),
         cell(invoice.getCategory()),
-        cell(invoice.getNetAmount()),
-        cell(invoice.getVatAmount()),
-        cell(invoice.getTotalAmount()),
-        cell(invoice.getPaidAmount()),
+        cell(accountingWholeKrona(invoice.getNetAmountMinor(), invoice.getNetAmount(), "leverantörsfakturans nettobelopp")),
+        cell(accountingWholeKrona(invoice.getVatAmountMinor(), invoice.getVatAmount(), "leverantörsfakturans momsbelopp")),
+        cell(accountingWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "leverantörsfakturans totalbelopp")),
+        cell(accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "leverantörsfakturans betalda belopp")),
         cell(invoice.getRemainingAmount()),
         cell(invoice.getPaidAt()),
         cell(invoice.getPaymentReference()),
@@ -306,7 +335,9 @@ public class SupplierController {
         cell(invoice.getCancelledAt()),
         cell(invoice.getCancellationVoucherNumber())
     )).append("\r\n"));
-    int totalAmount = se.cloudshop.accounting.ReportAmounts.reportAmount(invoices.stream().mapToLong(SupplierInvoice::getTotalAmount).sum());
+    int totalAmount = se.cloudshop.accounting.ReportAmounts.reportAmount(invoices.stream()
+        .mapToLong(invoice -> accountingWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "leverantörsfakturans totalbelopp"))
+        .sum());
 
     auditService.record(
         "export",
@@ -336,7 +367,9 @@ public class SupplierController {
     SupplierInvoice invoice = supplierInvoiceRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Supplier invoice not found."));
 
-    if (accountingService.hasSupplierInvoiceEntries(invoice) || invoice.getPaidAmount() > 0 || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus())) {
+    if (accountingService.hasSupplierInvoiceEntries(invoice)
+        || accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "leverantörsfakturans betalda belopp") > 0
+        || "paid".equals(invoice.getStatus()) || "partial".equals(invoice.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice has bookkeeping or payments. Create a correction or cancellation instead of deleting it.");
     }
 
@@ -359,5 +392,25 @@ public class SupplierController {
 
   private String cell(Object value) {
     return CsvEscaper.escape(String.valueOf(value == null ? "" : value));
+  }
+
+  private int accountingWholeKrona(Long amountMinor, int legacyAmount, String field) {
+    long valueMinor;
+    try {
+      valueMinor = amountMinor == null ? Math.multiplyExact((long) legacyAmount, 100L) : amountMinor;
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bokföringsspåret innehåller ett belopp utanför stödd gräns i " + field + ". Åtgärden har stoppats.", exception);
+    }
+    if (valueMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bokföringsspåret innehåller ören i " + field + " som den nuvarande kronrepresentationen inte kan representera. Åtgärden har stoppats.");
+    }
+    try {
+      return Math.toIntExact(valueMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bokföringsspåret innehåller ett belopp utanför stödd gräns i " + field + ". Åtgärden har stoppats.", exception);
+    }
   }
 }

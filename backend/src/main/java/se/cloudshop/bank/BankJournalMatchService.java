@@ -32,12 +32,13 @@ public class BankJournalMatchService {
   @Transactional(readOnly = true)
   public List<Candidate> candidates(long rowId) {
     BankReconciliationEntry row = requireUnlinkedRow(rowId);
+    int rowAmount = wholeKrona(row, "bankrad");
     Set<Long> used = rows.findAll().stream().map(BankReconciliationEntry::getJournalEntryId)
         .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
     return journal.findAll().stream()
         .filter(entry -> "1930".equals(entry.getAccountNumber()) && row.getBankDate().equals(entry.getVoucherDate())
-            && (long) entry.getDebit() - entry.getCredit() == row.getAmount() && !used.contains(entry.getId()))
-        .map(entry -> new Candidate(entry.getId(), entry.getVoucherNumber(), entry.getVoucherDate(), row.getAmount(), entry.getDescription()))
+            && signedMinorMovement(entry) == bankAmountMinor(row) && !used.contains(entry.getId()))
+        .map(entry -> new Candidate(entry.getId(), entry.getVoucherNumber(), entry.getVoucherDate(), rowAmount, entry.getDescription()))
         .toList();
   }
 
@@ -48,6 +49,7 @@ public class BankJournalMatchService {
     rows.lockBankRow("match-row:" + rowId);
     rows.lockBankRow("match-journal:" + journalId);
     BankReconciliationEntry row = requireUnlinkedRow(rowId);
+    int auditAmount = wholeKrona(row, "bankrad");
     accounting.requireUnlockedAccountingDate(row.getBankDate());
     if (rows.findAll().stream().anyMatch(existing -> journalId.equals(existing.getJournalEntryId()))) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Journal entry is already linked to a bank row.");
@@ -57,16 +59,39 @@ public class BankJournalMatchService {
     row.linkJournalEntry(entry);
     rows.saveAndFlush(row);
     audit.record("bank", "bank_reconciliation_entry", row.getId(), "bank_journal_linked", row.getBankRowId(),
-        "Bank row explicitly linked to journal row " + journalId + ", voucher " + entry.getVoucherNumber() + ".", row.getAmount(), authorization);
+        "Bank row explicitly linked to journal row " + journalId + ", voucher " + entry.getVoucherNumber() + ".", auditAmount, authorization);
     return row;
   }
 
   private BankReconciliationEntry requireUnlinkedRow(long id) {
     var row = rows.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bank row not found."));
-    if (!"booked".equals(row.getStatus()) || row.getJournalEntryId() != null || row.getBankDate() == null || row.getAmount() == 0
+    if (!"booked".equals(row.getStatus()) || row.getJournalEntryId() != null || row.getBankDate() == null || bankAmountMinor(row) == 0
         || row.getBankRowId() == null || row.getBankRowId().isBlank() || rows.findAllByBankRowId(row.getBankRowId()).size() != 1) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a unique, dated, booked and unlinked bank row can be matched.");
     }
     return row;
+  }
+
+  private long bankAmountMinor(BankReconciliationEntry row) {
+    Long shadow = row.getAmountMinor();
+    return shadow == null ? Math.multiplyExact((long) row.getAmount(), 100L) : shadow;
+  }
+
+  private int wholeKrona(BankReconciliationEntry row, String field) {
+    long amountMinor = bankAmountMinor(row);
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankavstamningen innehaller oren i " + field + ". Matchningen har stoppats tills beloppsmigreringen ar verifierad.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankavstamningen innehaller ett belopp utanfor rapportens stod i " + field + ".", exception);
+    }
+  }
+
+  private long signedMinorMovement(se.cloudshop.accounting.JournalEntry entry) {
+    return Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue());
   }
 }

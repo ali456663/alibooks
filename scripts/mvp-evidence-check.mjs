@@ -54,8 +54,10 @@ function countFromOutput(output, label) {
 }
 
 function countFromEvidence(pattern) {
-  const match = evidence.match(pattern);
-  return match ? Number(match[2]) : 0;
+  const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+  const matches = [...evidence.matchAll(globalPattern)];
+  const latestMatch = matches.at(-1);
+  return latestMatch ? Number(latestMatch[2]) : 0;
 }
 
 const countedEvidenceChecks = [

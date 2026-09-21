@@ -53,6 +53,9 @@ class VatFilingServiceTest {
     assertThat(filing.getOutputVat()).isEqualTo(2500);
     assertThat(filing.getInputVat()).isEqualTo(600);
     assertThat(filing.getVatToPay()).isEqualTo(1900);
+    assertThat(filing.getOutputVatMinor()).isEqualTo(250000L);
+    assertThat(filing.getInputVatMinor()).isEqualTo(60000L);
+    assertThat(filing.getVatToPayMinor()).isEqualTo(190000L);
     assertThat(filing.getStatus()).isEqualTo("SUBMITTED");
     assertThat(filing.getSubmissionReference()).isEqualTo("SKV-2026-07");
     assertThat(filing.getSubmittedAt()).isNotNull();
@@ -288,6 +291,46 @@ class VatFilingServiceTest {
     assertThat(filing.getPaymentReference()).isEqualTo("BANK-1");
     assertThat(filing.getPaidAt()).isNotNull();
     verify(accountingService).createVatFilingPaymentEntry(submittedFiling, LocalDate.of(2026, 8, 12), "BANK-1");
+  }
+
+  @Test
+  void rejectsPaidVatFilingWithoutPaymentReference() {
+    LocalDate periodFrom = LocalDate.of(2026, 7, 1);
+    LocalDate periodTo = LocalDate.of(2026, 7, 31);
+    VatFiling submittedFiling = new VatFiling(
+        new VatReport(periodFrom, periodTo, 2500, 600, 1900, false),
+        new CreateVatFilingRequest(periodFrom, periodTo, "SUBMITTED", "SKV-2026-07", "", null, ""),
+        "SUBMITTED"
+    );
+    when(vatFilingRepository.findById(10L)).thenReturn(Optional.of(submittedFiling));
+    when(accountingService.createVatReport(periodFrom, periodTo)).thenReturn(new VatReport(
+        periodFrom,
+        periodTo,
+        2500,
+        600,
+        1900,
+        true
+    ));
+    when(accountingService.createVatControlReport(periodFrom, periodTo)).thenReturn(cleanVatControlReport(periodFrom, periodTo));
+    when(accountingService.createVoucherControlReport(periodFrom, periodTo)).thenReturn(cleanVoucherControlReport(periodFrom, periodTo));
+    when(accountingService.hasVatSettlementForPeriod(periodFrom, periodTo)).thenReturn(true);
+
+    assertThatThrownBy(() -> vatFilingService.updateStatus(10L, new UpdateVatFilingStatusRequest(
+        "PAID",
+        "",
+        " ",
+        LocalDate.of(2026, 8, 12),
+        ""
+    )))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Payment reference is required");
+
+    verify(accountingService, never()).createVatFilingPaymentEntry(
+        submittedFiling,
+        LocalDate.of(2026, 8, 12),
+        " "
+    );
+    verify(vatFilingRepository, never()).save(org.mockito.ArgumentMatchers.any(VatFiling.class));
   }
 
   private VatControlReport cleanVatControlReport(LocalDate periodFrom, LocalDate periodTo) {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSekMinor, wholeSekFromMinor, bankRowAmount, verifiedSieLines } from "../frontend/src/lib/import-money.js";
+import { parseWholeSekInput, parseSekMinor, wholeSekFromMinor, bankRowAmount, verifiedSieLines } from "../frontend/src/lib/import-money.js";
 import { parseBankCsv } from "../frontend/src/lib/bank-csv.js";
 import { analyzeSieText } from "../frontend/src/lib/sie-analysis.js";
 
@@ -10,6 +10,13 @@ for (const [input, expected] of [["0,01", 1n], ["-0.01", -1n], ["1 234,56 SEK", 
 for (const input of ["", "abc", "12foo34", "1e3", "1,234", "1.234,56", "1 23", "12.345", "Infinity", "2147483647.01", "--1", null]) {
   test(`reject ambiguous money: ${input}`, () => assert.throws(() => parseSekMinor(input)));
 }
+test("whole SEK form input never rounds decimals", () => {
+  assert.equal(parseWholeSekInput("1250"), 1250);
+  assert.equal(parseWholeSekInput(""), 0);
+  assert.equal(parseWholeSekInput("1250,50"), null);
+  assert.equal(parseWholeSekInput("1250.50"), null);
+  assert.equal(parseWholeSekInput("2147483648"), null);
+});
 test("whole-SEK boundary refuses positive and negative ore", () => {
   assert.equal(wholeSekFromMinor(-10000n), -100);
   for (const amount of [1n, -1n, 123456n, -123456n]) assert.throws(() => wholeSekFromMinor(amount), /oren/);

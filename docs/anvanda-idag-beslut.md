@@ -2,6 +2,8 @@
 
 Det har dokumentet ar den korta beslutspunkten innan AliBooks anvands med riktig arbetsdata i lokal MVP. Det ersatter inte extern produktionsverifiering, men det hjalper dig att veta nar du kan jobba vidare i appen och nar du ska stoppa.
 
+**Nuvarande grans:** lokal utveckling och isolerad testdata ar okej nar lokala kontroller ar grona. Riktiga bokforingsposter ar stoppade tills systemet bevarar kronor och oren och beloppsmigreringen ar verifierad.
+
 ## Gront for lokal MVP
 
 AliBooks kan anvandas lokalt for MVP-arbete nar detta ar sant:
@@ -11,7 +13,7 @@ AliBooks kan anvandas lokalt for MVP-arbete nar detta ar sant:
 - Frontend visar appen pa `http://localhost:5157` utan vit sida.
 - `npm run check:release` ar gron.
 - `npm run check:calculations` ar gron.
-- `npm run check:first-real-data` ar gron innan riktiga kunder, fakturor, kvitton eller bankrader registreras.
+- `npm run check:first-real-data` visar att skydd finns; ett gront statiskt test ar inte tillstand for riktiga poster.
 - `npm run check:pilot` ar gron innan du startar begransad pilotdrift med riktiga kunder.
 - `npm run check:git -- --strict` ar gron efter senaste commit.
 - `npm run doctor`, `npm run check:views` och `npm run smoke:runtime` ar grona.
@@ -21,6 +23,8 @@ AliBooks kan anvandas lokalt for MVP-arbete nar detta ar sant:
 
 Anvand inte AliBooks med viktig data om nagot av detta hander:
 
+- Backendens status visar att fullt stod for kronor och oren saknas. Anvand da bara avskild testdata; for inte in verkliga bokforingsposter.
+- AliBooks pengamodell saknar fullt ore-stod: anvand endast isolerad testdata tills migrering och avstamning ar verifierade.
 - Frontend visar vit sida eller render recovery.
 - Backend far `Connection to localhost:5432 refused`.
 - Databasen saknar kolumner eller visar schema drift.

@@ -4,6 +4,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.JoinColumn;
@@ -26,6 +30,8 @@ public class BankReconciliationEntry {
   private String description;
   private String reference;
   private int amount;
+  @Column(name = "amount_minor")
+  private Long amountMinor;
   private String entryType;
   private String status;
   private String matchLabel;
@@ -44,8 +50,8 @@ public class BankReconciliationEntry {
   public void linkJournalEntry(JournalEntry entry) {
     if (journalEntry != null || !"booked".equals(status) || entry == null || entry.getId() == null
         || !"1930".equals(entry.getAccountNumber()) || bankDate == null
-        || !bankDate.equals(entry.getVoucherDate()) || amount == 0
-        || (long) entry.getDebit() - entry.getCredit() != amount) {
+        || !bankDate.equals(entry.getVoucherDate()) || getAmountMinorValue() == 0
+        || signedMinorMovement(entry) != getAmountMinorValue()) {
       throw new org.springframework.web.server.ResponseStatusException(
           org.springframework.http.HttpStatus.CONFLICT, "Bank row must match one unlinked journal entry on 1930 with the same date and signed amount.");
     }
@@ -56,11 +62,17 @@ public class BankReconciliationEntry {
   }
 
   public BankReconciliationEntry(CreateBankReconciliationEntryRequest request) {
+    if (request == null) {
+      throw new IllegalArgumentException("Bank reconciliation entry request is required.");
+    }
     this.bankRowId = clean(request.bankRowId());
-    this.bankDate = request.date() == null ? LocalDate.now() : request.date();
+    // Never invent today's date for an imported bank row. An undated row must remain
+    // visible as an exception so it cannot silently enter the wrong closing period.
+    this.bankDate = request.date();
     this.description = clean(request.description());
     this.reference = clean(request.reference());
     this.amount = request.amount();
+    this.amountMinor = toMinorUnits(this.amount);
     this.entryType = clean(request.type());
     this.status = clean(request.status()).isBlank() ? "booked" : clean(request.status());
     this.matchLabel = clean(request.matchLabel());
@@ -95,6 +107,16 @@ public class BankReconciliationEntry {
     return amount;
   }
 
+  @JsonIgnore
+  public Long getAmountMinor() {
+    return amountMinor;
+  }
+
+  @JsonIgnore
+  public long getAmountMinorValue() {
+    return amountMinor == null ? toMinorUnits(amount) : amountMinor;
+  }
+
   public String getType() {
     return entryType;
   }
@@ -115,7 +137,31 @@ public class BankReconciliationEntry {
     return bookedAt;
   }
 
+  /** Existing whole-krona values remain authoritative during the staged migration. */
+  @PostLoad
+  void synchronizeMinorUnitShadowFromLegacy() {
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  void synchronizeMinorUnits() {
+    amountMinor = toMinorUnits(amount);
+  }
+
   private String clean(String value) {
     return value == null ? "" : value.trim();
+  }
+
+  private long toMinorUnits(int amount) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Bank amount is outside the supported minor-unit range.", exception);
+    }
+  }
+
+  private long signedMinorMovement(JournalEntry entry) {
+    return Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue());
   }
 }

@@ -209,6 +209,7 @@ const prodEnvExample = read(".env.production.example");
 const requiredEnvVars = [
   "JWT_SECRET",
   "JWT_EXPIRATION_MINUTES",
+  "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY",
   "SPRING_DATASOURCE_URL",
   "APP_FRONTEND_URL",
   "APP_CORS_ALLOWED_ORIGINS",

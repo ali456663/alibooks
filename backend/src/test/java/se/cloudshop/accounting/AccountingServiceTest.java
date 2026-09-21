@@ -3,6 +3,7 @@ package se.cloudshop.accounting;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,8 +17,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.test.util.ReflectionTestUtils;
 import se.cloudshop.bank.BankReconciliationReport;
 import se.cloudshop.bank.BankReconciliationService;
 import se.cloudshop.expense.Expense;
@@ -131,7 +135,7 @@ class AccountingServiceTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {100_000, 100_000_003, 1_000_000_000})
+  @ValueSource(ints = {100_000, 100_000_004, 1_000_000_000})
   void largeCashPaymentsAndRefundsPreserveExactInvoiceVat(int net) {
     when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
     Order invoice = testInvoice(net);
@@ -264,9 +268,13 @@ class AccountingServiceTest {
     mockAccount("2440", "Leverantorsskulder");
     mockAccount("1630", "Skattekonto");
     mockAccount("2611", "Utgaende moms");
+    mockAccount("2621", "Utgaende moms 12 procent");
+    mockAccount("2631", "Utgaende moms 6 procent");
     mockAccount("2641", "Ingaende moms");
     mockAccount("2650", "Redovisningskonto for moms");
     mockAccount("3041", "Forsaljning tjanster 25 procent");
+    mockAccount("3042", "Forsaljning tjanster 12 procent");
+    mockAccount("3043", "Forsaljning tjanster 6 procent");
     mockAccount("5420", "Programvaror");
     mockAccount("6570", "Bankkostnader");
     mockAccount("8999", "Arets resultat");
@@ -365,6 +373,156 @@ class AccountingServiceTest {
   }
 
   @Test
+  void invoiceBookingStopsWhenInvoiceMinorShadowContainsOre() {
+    Order invoice = testInvoice(1000);
+    ReflectionTestUtils.setField(invoice, "totalAmountMinor", 125_050L);
+
+    assertThatThrownBy(() -> accountingService.createInvoiceEntries(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("F");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"6,3043,2631,60,1060", "12,3042,2621,120,1120"})
+  void invoiceMethodBooksConfiguredVatRateToMatchingAccounts(
+      int rate, String salesAccount, String vatAccount, int vatAmount, int totalAmount) {
+    mockAccount(salesAccount, "Service sales " + rate + "%");
+    mockAccount(vatAccount, "Output VAT " + rate + "%");
+    when(voucherNumberService.nextVoucherNumber("F")).thenReturn("F-" + rate);
+    Product service = new Product("Test service", "Test", 1000);
+    service.setVatPercent(rate);
+    Order invoice = new Order("Test Customer", service, Instant.now());
+
+    accountingService.createInvoiceEntries(invoice);
+
+    assertThat(invoice.getVatAmount()).isEqualTo(vatAmount);
+    assertThat(invoice.getTotalAmount()).isEqualTo(totalAmount);
+    assertThat(savedJournalEntries()).extracting(JournalEntry::getAccountNumber)
+        .contains("1510", salesAccount, vatAccount);
+  }
+
+  @Test
+  void vatReportSeparatesTaxBasesAndOutputVatBySupportedRate() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, 1000), reportEntry("2611", 0, 250),
+        reportEntry("3042", 0, 1000), reportEntry("2621", 0, 120),
+        reportEntry("3043", 0, 1000), reportEntry("2631", 0, 60)
+    ));
+
+    VatReport report = accountingService.createVatReport(null, null);
+
+    assertThat(report.salesBase25()).isEqualTo(1000);
+    assertThat(report.outputVat25()).isEqualTo(250);
+    assertThat(report.salesBase12()).isEqualTo(1000);
+    assertThat(report.outputVat12()).isEqualTo(120);
+    assertThat(report.salesBase6()).isEqualTo(1000);
+    assertThat(report.outputVat6()).isEqualTo(60);
+    assertThat(report.outputVat()).isEqualTo(430);
+  }
+
+  @Test
+  void vatReportStopsWhenJournalMinorShadowContainsOre() {
+    JournalEntry outputVat = reportEntry("2611", 0, 250);
+    org.springframework.test.util.ReflectionTestUtils.setField(outputVat, "creditMinor", 25050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(outputVat));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> accountingService.createVatReport(null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
+  void vatControlChecksEachSupportedRateWithoutAllowingDifferencesToOffset() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, 1000), reportEntry("2611", 0, 100),
+        reportEntry("3042", 0, 1000), reportEntry("2621", 0, 370)
+    ));
+
+    VatControlReport report = accountingService.createVatControlReport(null, null);
+
+    assertThat(report.expectedOutputVat()).isEqualTo(370);
+    assertThat(report.totalOutputVat()).isEqualTo(470);
+    assertThat(report.criticalIssueCount()).isEqualTo(2);
+    assertThat(report.issues()).extracting(VatControlIssue::issueType)
+        .containsOnly("output_vat_difference");
+  }
+
+  @Test
+  void vatControlStopsWhenJournalMinorShadowContainsOre() {
+    JournalEntry outputVat = reportEntry("2611", 0, 250);
+    org.springframework.test.util.ReflectionTestUtils.setField(outputVat, "creditMinor", 25050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(outputVat));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> accountingService.createVatControlReport(null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
+  void vatControlRequiresReviewInsteadOfAssumingTwentyFivePercentForUnknownSalesAccount() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3001", 0, 1000)
+    ));
+
+    VatControlReport report = accountingService.createVatControlReport(null, null);
+
+    assertThat(report.expectedOutputVat()).isZero();
+    assertThat(report.criticalIssueCount()).isEqualTo(1);
+    assertThat(report.issues()).singleElement()
+        .satisfies(issue -> {
+          assertThat(issue.issueType()).isEqualTo("unclassified_sales_vat");
+          assertThat(issue.salesNet()).isEqualTo(1000);
+          assertThat(issue.message()).contains("without a configured VAT rate");
+        });
+  }
+
+  @Test
+  void vatControlKeepsUnknownSalesVisibleWhenVoucherLinesNetToZero() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3001", 1000, 0),
+        reportEntry("3001", 0, 1000)
+    ));
+
+    VatControlReport report = accountingService.createVatControlReport(null, null);
+
+    assertThat(report.totalSalesNet()).isZero();
+    assertThat(report.criticalIssueCount()).isEqualTo(1);
+    assertThat(report.issues()).singleElement()
+        .extracting(VatControlIssue::issueType)
+        .isEqualTo("unclassified_sales_vat");
+  }
+
+  @Test
+  void vatControlDoesNotFlagRoundedToZeroVatForSmallSupportedSale() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3043", 0, 1)
+    ));
+
+    VatControlReport report = accountingService.createVatControlReport(null, null);
+
+    assertThat(report.expectedOutputVat()).isZero();
+    assertThat(report.criticalIssueCount()).isZero();
+  }
+
+  @Test
+  void vatControlRoundsAggregatedTaxBaseOncePerRate() {
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        reportEntry("3041", 0, 1),
+        reportEntry("3041", 0, 1),
+        reportEntry("2611", 0, 1)
+    ));
+
+    VatControlReport report = accountingService.createVatControlReport(null, null);
+
+    assertThat(report.expectedOutputVat()).isEqualTo(1);
+    assertThat(report.totalOutputVat()).isEqualTo(1);
+    assertThat(report.criticalIssueCount()).isZero();
+  }
+
+  @Test
   void invoiceMethodDoesNotDuplicateExistingInvoiceBooking() {
     Order invoice = testInvoice(1000);
     when(journalEntryRepository.findByInvoice(invoice)).thenReturn(List.of(
@@ -420,10 +578,24 @@ class AccountingServiceTest {
   }
 
   @Test
+  void cashMethodPaymentStopsWhenInvoiceVatShadowContainsOre() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    Order invoice = testInvoice(1000);
+    invoice.setStatus("SENT");
+    ReflectionTestUtils.setField(invoice, "vatAmountMinor", 25_001L);
+
+    assertThatThrownBy(() -> accountingService.createPaymentEntries(invoice, invoice.getInvoiceDate(), 625))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
   void cashMethodFinalPartialPaymentBooksRemainingVatRoundingDifference() {
     when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
     when(voucherNumberService.nextVoucherNumber("B")).thenReturn("B-2");
-    Order invoice = testInvoice(799);
+    Order invoice = testInvoice(800);
     invoice.setStatus("SENT");
     invoice.registerPayment(invoice.getInvoiceDate(), 666, "Bank first payments");
 
@@ -431,7 +603,7 @@ class AccountingServiceTest {
 
     List<JournalEntry> entries = savedJournalEntries();
 
-    assertThat(invoice.getTotalAmount()).isEqualTo(999);
+    assertThat(invoice.getTotalAmount()).isEqualTo(1000);
     assertThat(invoice.getVatAmount()).isEqualTo(200);
     assertThat(entries).hasSize(3);
     assertThat(entries).anySatisfy(entry -> {
@@ -511,6 +683,21 @@ class AccountingServiceTest {
       assertThat(entry.getVoucherNumber()).isEqualTo("AR-1");
       assertThat(entry.getVoucherDate()).isEqualTo(invoice.getInvoiceDate());
     });
+  }
+
+  @Test
+  void cashMethodRefundStopsWhenInvoiceVatShadowContainsOre() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    Order invoice = testInvoice(1000);
+    invoice.registerPayment(invoice.getInvoiceDate(), 1250, "Bank");
+    invoice.setStatus("CREDITED");
+    ReflectionTestUtils.setField(invoice, "vatAmountMinor", 25_001L);
+
+    assertThatThrownBy(() -> accountingService.createRefundEntries(invoice, invoice.getInvoiceDate(), 1250))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
   }
 
   @Test
@@ -596,7 +783,9 @@ class AccountingServiceTest {
         LocalDate.of(2026, 7, 31)
     );
 
-    assertThat(report.accountCount()).isEqualTo(12);
+    assertThat(report.accountCount()).isEqualTo(14);
+    assertThat(report.lines()).extracting(AccountSignControlLine::accountNumber)
+        .contains("2611", "2621", "2631");
     assertThat(report.criticalIssueCount()).isEqualTo(2);
     assertThat(report.warningIssueCount()).isEqualTo(1);
     assertThat(report.lines())
@@ -668,6 +857,17 @@ class AccountingServiceTest {
           assertThat(line.blocking()).isTrue();
           assertThat(line.balance()).isEqualTo(-900);
         });
+  }
+
+  @Test
+  void accountSignControlStopsWhenMinorShadowContainsOre() {
+    JournalEntry bank = reportEntry("1930", 500, 0);
+    ReflectionTestUtils.setField(bank, "debitMinor", 50_050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(bank));
+
+    assertThatThrownBy(() -> accountingService.createAccountSignControlReport(null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
   }
 
   @Test
@@ -1019,6 +1219,35 @@ class AccountingServiceTest {
   }
 
   @Test
+  void rejectsVatFilingProofWhenVoucherShadowContainsOre() {
+    LocalDate periodFrom = LocalDate.of(2026, 7, 1);
+    LocalDate periodTo = LocalDate.of(2026, 7, 31);
+    VatFiling paidFiling = new VatFiling(
+        new VatReport(periodFrom, periodTo, 250, 100, 150, true),
+        new CreateVatFilingRequest(periodFrom, periodTo, "PAID", "SKV-1", "BANK-1", null, ""),
+        "PAID"
+    );
+    when(vatFilingRepository.findByPeriodFromAndPeriodTo(periodFrom, periodTo))
+        .thenReturn(Optional.of(paidFiling));
+
+    JournalEntry paymentVoucher = new JournalEntry(
+        null,
+        new Account("2650", "Redovisningskonto for moms"),
+        "MOMS-2",
+        150,
+        0,
+        "VAT payment 2026-07-01 - 2026-07-31 BANK-1",
+        LocalDate.of(2026, 8, 12)
+    );
+    ReflectionTestUtils.setField(paymentVoucher, "debitMinor", 15_050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(paymentVoucher));
+
+    assertThatThrownBy(() -> accountingService.createVatFilingProofReport(periodFrom, periodTo))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("innehåller ören");
+  }
+
+  @Test
   void rejectsVatSettlementWhenCriticalVatControlIssuesRemain() {
     Account bank = new Account("1930", "Foretagskonto");
     Account sales = new Account("3041", "Forsaljning tjanster 25 procent");
@@ -1120,6 +1349,28 @@ class AccountingServiceTest {
   }
 
   @Test
+  void profitAndLossStopsWhenMinorShadowContainsOre() {
+    JournalEntry sale = reportEntry("3041", 0, 1000);
+    ReflectionTestUtils.setField(sale, "creditMinor", 100050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(sale));
+
+    assertThatThrownBy(accountingService::createProfitAndLossReport)
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
+  void balanceReportStopsWhenMinorShadowContainsOre() {
+    JournalEntry bank = reportEntry("1930", 1000, 0);
+    ReflectionTestUtils.setField(bank, "debitMinor", 100050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(bank));
+
+    assertThatThrownBy(() -> accountingService.createBalanceReport(null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
   void createsBalanceReportAsOfSelectedDate() {
     Account bank = new Account("1930", "Foretagskonto");
     Account sales = new Account("3041", "Forsaljning tjanster 25 procent");
@@ -1178,6 +1429,40 @@ class AccountingServiceTest {
       assertThat(account.closingBalance()).isEqualTo(1450);
       assertThat(account.entries()).extracting(GeneralLedgerEntry::balance).containsExactly(1750, 1450);
     });
+  }
+
+  @Test
+  void ledgerAndTrialBalanceStopWhenMinorShadowContainsOre() {
+    Account bank = new Account("1930", "Foretagskonto");
+    JournalEntry entry = new JournalEntry(null, bank, "B-ORE", 125, 0, "Payment", LocalDate.of(2026, 7, 10));
+    ReflectionTestUtils.setField(entry, "debitMinor", 12_550L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(entry));
+
+    assertThatThrownBy(() -> accountingService.createGeneralLedgerReport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), "1930"))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+    assertThatThrownBy(() -> accountingService.createTrialBalanceReport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
+  void integrityAndSieExportsStopWhenMinorShadowContainsOre() {
+    Account bank = new Account("1930", "Foretagskonto");
+    JournalEntry entry = new JournalEntry(null, bank, "B-ORE", 125, 0, "Payment", LocalDate.of(2026, 7, 10));
+    ReflectionTestUtils.setField(entry, "debitMinor", 12_550L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(entry));
+
+    assertThatThrownBy(() -> accountingService.createJournalIntegrityReport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+    assertThatThrownBy(() -> accountingService.createSieExport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
   }
 
   @Test
@@ -1490,6 +1775,17 @@ class AccountingServiceTest {
   }
 
   @Test
+  void voucherControlStopsWhenMinorShadowContainsOre() {
+    JournalEntry bank = reportEntry("1930", 1000, 0);
+    ReflectionTestUtils.setField(bank, "debitMinor", 100050L);
+    when(journalEntryRepository.findAll()).thenReturn(List.of(bank));
+
+    assertThatThrownBy(() -> accountingService.createVoucherControlReport(null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
   void createsOpeningBalanceVoucherWithIbSeries() {
     when(voucherNumberService.nextVoucherNumber("IB")).thenReturn("IB-1");
 
@@ -1518,6 +1814,93 @@ class AccountingServiceTest {
       assertThat(entry.getDebit()).isZero();
       assertThat(entry.getCredit()).isEqualTo(1000);
     });
+  }
+
+  @Test
+  void manualVoucherRequiresExplicitVoucherDate() {
+    assertThatThrownBy(() -> accountingService.createManualEntry(new CreateManualJournalEntryRequest(
+        null, "Manual expense", "5420", "1930", 100
+    )))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Voucher date is required");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("M");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void manualMultiLineVoucherRequiresExplicitVoucherDate() {
+    assertThatThrownBy(() -> accountingService.createManualMultiLineEntry(new CreateManualMultiLineJournalEntryRequest(
+        null,
+        "Manual expense",
+        List.of(
+            new CreateManualJournalEntryLineRequest("5420", 100, 0),
+            new CreateManualJournalEntryLineRequest("1930", 0, 100)
+        )
+    )))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Voucher date is required");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("M");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void openingBalanceRequiresExplicitOpeningBalanceDate() {
+    assertThatThrownBy(() -> accountingService.createOpeningBalanceEntry(new CreateOpeningBalanceRequest(
+        null,
+        "Opening balance",
+        List.of(
+            new CreateManualJournalEntryLineRequest("1930", 100, 0),
+            new CreateManualJournalEntryLineRequest("2018", 0, 100)
+        )
+    )))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Opening balance date is required");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("IB");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void correctionRequiresExplicitCorrectionDate() {
+    assertThatThrownBy(() -> accountingService.createCorrectionEntry(
+        "M-1",
+        new CreateCorrectionJournalEntryRequest(null)
+    ))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Correction date is required");
+
+    verify(journalEntryRepository, never()).findByVoucherNumberForCorrection("M-1");
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+  }
+
+  @Test
+  void correctionStopsWhenMinorShadowContainsOre() {
+    JournalEntry original = reportEntry("1930", 1000, 0);
+    ReflectionTestUtils.setField(original, "debitMinor", 100050L);
+    when(journalEntryRepository.findByVoucherNumberForCorrection("M-1")).thenReturn(List.of(original));
+
+    assertThatThrownBy(() -> accountingService.createCorrectionEntry(
+        "M-1",
+        new CreateCorrectionJournalEntryRequest(LocalDate.of(2026, 7, 1))
+    )).isInstanceOfSatisfying(ResponseStatusException.class,
+        exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void stripePayoutRequiresExplicitPayoutDate() {
+    assertThatThrownBy(() -> accountingService.createStripePayoutEntry(new CreateStripePayoutRequest(
+        null, 1000, 20, "payout-date"
+    )))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Stripe payout date is required");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("SU");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
   }
 
   @Test
@@ -1586,6 +1969,77 @@ class AccountingServiceTest {
     });
   }
 
+  @ParameterizedTest
+  @CsvSource({"6,3043,2631,1000,60,1060", "12,3042,2621,1000,120,1120"})
+  void booksStripeWebsiteSaleAtSelectedVatRate(
+      int rate, String salesAccount, String vatAccount, int netAmount, int vatAmount, int totalAmount) {
+    mockAccount(salesAccount, "Service sales " + rate + "%");
+    mockAccount(vatAccount, "Output VAT " + rate + "%");
+    when(voucherNumberService.nextVoucherNumber("S")).thenReturn("S-" + rate);
+
+    accountingService.createStripeExternalSaleEntries(totalAmount, "pi_rate_" + rate, LocalDate.of(2026, 6, 29), rate);
+
+    List<JournalEntry> entries = savedJournalEntries();
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo(salesAccount);
+      assertThat(entry.getCredit()).isEqualTo(netAmount);
+    });
+    assertThat(entries).anySatisfy(entry -> {
+      assertThat(entry.getAccountNumber()).isEqualTo(vatAccount);
+      assertThat(entry.getCredit()).isEqualTo(vatAmount);
+    });
+    assertThat(entries.stream().mapToInt(JournalEntry::getDebit).sum())
+        .isEqualTo(entries.stream().mapToInt(JournalEntry::getCredit).sum());
+  }
+
+  @Test
+  void rejectsUnsupportedVatRateForStripeSaleBeforeBooking() {
+    assertThatThrownBy(() -> accountingService.createStripeExternalSaleEntries(
+        1000, "pi_invalid_rate", LocalDate.of(2026, 6, 29), 17))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("6, 12 or 25 percent");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void rejectsStripeWebsiteSaleWithoutReferenceBeforeBooking() {
+    assertThatThrownBy(() -> accountingService.createStripeExternalSaleEntries(
+        1250, " ", LocalDate.of(2026, 6, 29), 25))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("reference is required");
+    verify(journalEntryRepository, never()).lockStripeSaleReference(anyString());
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void stripeWebsiteSaleResponseUsesExactReferenceInsteadOfContains() {
+    mockAccount("1580", "Stripe receivable");
+    mockAccount("3041", "Sales 25%");
+    mockAccount("2611", "Output VAT 25%");
+    when(voucherNumberService.nextVoucherNumber("S")).thenReturn("S-12");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, new Account("1580", "Stripe receivable"), "S-11", 1000, 0, "Stripe website sale pi_123", LocalDate.of(2026, 6, 29)),
+        new JournalEntry(null, new Account("1580", "Stripe receivable"), "S-12", 1000, 0, "Stripe website sale pi_12", LocalDate.of(2026, 6, 29))
+    ));
+
+    List<JournalEntry> entries = accountingService.createStripeWebsiteSaleEntry(
+        new CreateStripeWebsiteSaleRequest(LocalDate.of(2026, 6, 29), 1250, "pi_12", 25));
+
+    assertThat(entries).hasSize(1);
+    assertThat(entries.get(0).getDescription()).isEqualTo("Stripe website sale pi_12");
+  }
+
+  @Test
+  void rejectsStripeWebsiteSaleWhenVatSplitContainsOreBeforeBooking() {
+    assertThatThrownBy(() -> accountingService.createStripeExternalSaleEntries(
+        1001, "pi_fractional_vat", LocalDate.of(2026, 6, 29), 25))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("exact whole-krona net and VAT");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("S");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
   @Test
   void rejectsInvoicePaymentBeforeInvoiceDate() {
     Order invoice = testInvoice(1000);
@@ -1600,6 +2054,23 @@ class AccountingServiceTest {
   }
 
   @Test
+  void rejectsMissingDatesInAccountingServiceBeforeBooking() {
+    Order invoice = testInvoice(1000);
+
+    assertThatThrownBy(() -> accountingService.createPaymentEntries(invoice, null, 1250))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Payment date is required");
+    assertThatThrownBy(() -> accountingService.createRefundEntries(invoice, null, 1250))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Refund date is required");
+    assertThatThrownBy(() -> accountingService.createStripeExternalSaleEntries(1250, "pi_missing_date", null))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Stripe sale date is required");
+
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
   void createsJournalEntriesForStripePayout() {
     when(voucherNumberService.nextVoucherNumber("SU")).thenReturn("SU-1");
 
@@ -1609,6 +2080,12 @@ class AccountingServiceTest {
         39,
         "po_test_123"
     ));
+
+    ArgumentCaptor<StripePayout> payoutCaptor = ArgumentCaptor.forClass(StripePayout.class);
+    verify(stripePayoutRepository).save(payoutCaptor.capture());
+    assertThat(payoutCaptor.getValue().getGrossAmountMinor()).isEqualTo(125000L);
+    assertThat(payoutCaptor.getValue().getFeeAmountMinor()).isEqualTo(3900L);
+    assertThat(payoutCaptor.getValue().getNetAmountMinor()).isEqualTo(121100L);
 
     assertThat(entries).hasSize(3);
     assertThat(entries).anySatisfy(entry -> {
@@ -1751,6 +2228,53 @@ class AccountingServiceTest {
   }
 
   @Test
+  void supplierInvoiceBookingStopsWhenInvoiceMinorShadowContainsOre() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 22),
+        LocalDate.of(2026, 8, 21),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        1250,
+        250,
+        "5420"
+    );
+    ReflectionTestUtils.setField(invoice, "totalAmountMinor", 125_050L);
+
+    assertThatThrownBy(() -> accountingService.createSupplierInvoiceEntries(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(voucherNumberService, never()).nextVoucherNumber("L");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void supplierInvoiceCancellationStopsWhenPaidMinorShadowContainsOre() {
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 22),
+        LocalDate.of(2026, 8, 21),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        1250,
+        250,
+        "5420"
+    );
+    ReflectionTestUtils.setField(invoice, "paidAmountMinor", 1L);
+
+    assertThatThrownBy(() -> accountingService.createSupplierInvoiceCancellationEntries(
+        invoice, LocalDate.of(2026, 8, 21)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(journalEntryRepository, never()).findBySupplierInvoice(invoice);
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+  }
+
+  @Test
   void cashMethodDoesNotBookSupplierInvoiceWhenCreated() {
     when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
     Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
@@ -1850,6 +2374,30 @@ class AccountingServiceTest {
       assertThat(entry.getVoucherDate()).isEqualTo(LocalDate.of(2026, 8, 1));
       assertThat(entry.getDescription()).contains("cash method");
     });
+  }
+
+  @Test
+  void cashMethodSupplierPaymentStopsWhenInvoiceVatShadowContainsOre() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    Supplier supplier = new Supplier("Adobe", "invoice@example.com", "556000-0000", "", "Bankgiro 123-4567");
+    SupplierInvoice invoice = new SupplierInvoice(
+        supplier,
+        LocalDate.of(2026, 7, 22),
+        LocalDate.of(2026, 8, 21),
+        "Adobe Creative Cloud",
+        "OCR-123",
+        1250,
+        250,
+        "5420"
+    );
+    ReflectionTestUtils.setField(invoice, "vatAmountMinor", 25_001L);
+
+    assertThatThrownBy(() -> accountingService.createSupplierInvoicePaymentEntries(
+        invoice, LocalDate.of(2026, 8, 1), 625, "BANK-1"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Rapporten innehåller ören");
+
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
   }
 
   @Test

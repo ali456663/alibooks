@@ -136,6 +136,17 @@ class SubledgerControlServiceTest {
   }
 
   @Test
+  void minorUnitOreStopsSubledgerComparisonBeforeLegacyReport() {
+    JournalEntry entry = customerEntry(1, 125, 0, date);
+    ReflectionTestUtils.setField(entry, "debitMinor", 12_550L);
+    when(journal.findAll()).thenReturn(List.of(entry));
+
+    assertThatThrownBy(() -> service.createReport(date))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
   void incompleteSourceReportCannotBecomeAMatchedZeroBalance() {
     when(receivables.createAgingReport(any())).thenThrow(SettlementSnapshot.incomplete());
     assertThatThrownBy(() -> service.createReport(date)).isInstanceOf(SettlementSnapshot.HistoryIncomplete.class);

@@ -2,7 +2,7 @@
 
 Det har ar den sista gransen mellan Lokal MVP och Skarp drift.
 
-AliBooks kan vara starkt lokalt utan att vara klar for riktig kunddata. Skillnaden ar externa bevis: GitHub Actions, Dockerhub, EC2, RDS, backup, restore drill, Stripe, SMTP och release-sparbarhet.
+AliBooks kan vara starkt lokalt utan att vara klar for riktig kunddata. Skarp start ar dessutom blockerad i backend sa lange bokforingsbeloppen lagras i hela SEK i stallet for exakt ore. Efter beloppsmigrering aterstar externa bevis: GitHub Actions, Dockerhub, EC2, RDS, backup, restore drill, Stripe, SMTP och release-sparbarhet.
 
 ## Beslut
 

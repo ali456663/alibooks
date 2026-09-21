@@ -106,4 +106,55 @@ class SettingsServiceTest {
     assertThat(updated.getCompanyType()).isEqualTo("LIMITED_COMPANY");
     assertThat(updated.getAccountingMethod()).isEqualTo("CASH_METHOD");
   }
+
+  @Test
+  void savesSellerInvoiceIdentityFields() {
+    AppSettings current = AppSettings.defaults();
+    AppSettings requested = AppSettings.defaults();
+    requested.setCompanyName("Updated seller");
+    requested.setCompanyAddress("Street 1");
+    requested.setCompanyPostalCode("111 22");
+    requested.setCompanyCity("Stockholm");
+    requested.setCompanyOrganizationNumber("556000-0000");
+    requested.setVatRegistrationNumber("SE556000000001");
+    when(appSettingsRepository.findById(1L)).thenReturn(Optional.of(current));
+    when(appSettingsRepository.save(current)).thenReturn(current);
+    when(journalEntryRepository.count()).thenReturn(0L);
+
+    AppSettings updated = settingsService.updateSettings(requested);
+
+    assertThat(updated.getCompanyAddress()).isEqualTo("Street 1");
+    assertThat(updated.getCompanyPostalCode()).isEqualTo("111 22");
+    assertThat(updated.getCompanyCity()).isEqualTo("Stockholm");
+    assertThat(updated.getCompanyOrganizationNumber()).isEqualTo("556000-0000");
+    assertThat(updated.getVatRegistrationNumber()).isEqualTo("SE556000000001");
+  }
+
+  @Test
+  void rejectsVatRatesNotSupportedByTheCurrentAccountingEngine() {
+    AppSettings current = AppSettings.defaults();
+    AppSettings requested = AppSettings.defaults();
+    requested.setVatPercent(12);
+    when(appSettingsRepository.findById(1L)).thenReturn(Optional.of(current));
+
+    assertThatThrownBy(() -> settingsService.updateSettings(requested))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("supports 25% VAT only");
+
+    org.mockito.Mockito.verify(appSettingsRepository, org.mockito.Mockito.never())
+        .save(org.mockito.ArgumentMatchers.any(AppSettings.class));
+  }
+
+  @Test
+  void allowsCorrectingLegacyUnsupportedVatSettingToTwentyFivePercent() {
+    AppSettings current = AppSettings.defaults();
+    current.setVatPercent(12);
+    AppSettings requested = AppSettings.defaults();
+    when(appSettingsRepository.findById(1L)).thenReturn(Optional.of(current));
+    when(appSettingsRepository.save(current)).thenReturn(current);
+
+    AppSettings updated = settingsService.updateSettings(requested);
+
+    assertThat(updated.getVatPercent()).isEqualTo(25);
+  }
 }

@@ -6,10 +6,14 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -40,9 +44,13 @@ public class Order {
   private String paymentRecipient;
   private LocalDate paidDate;
   private int paidAmount;
+  @Column(name = "paid_amount_minor")
+  private Long paidAmountMinor;
   private String paymentReference;
   private LocalDate refundDate;
   private int refundedAmount;
+  @Column(name = "refunded_amount_minor")
+  private Long refundedAmountMinor;
   private String refundReference;
   private LocalDate reminderSentDate;
 
@@ -55,16 +63,30 @@ public class Order {
   private Instant createdAt;
   private String status;
   private int netAmount;
+  @Column(name = "net_amount_minor")
+  private Long netAmountMinor;
   private int vatAmount;
+  @Column(name = "vat_amount_minor")
+  private Long vatAmountMinor;
   private int totalAmount;
+  @Column(name = "total_amount_minor")
+  private Long totalAmountMinor;
+  @jakarta.persistence.Column(nullable = false, columnDefinition = "integer default 25")
+  private int vatPercent = 25;
   private int quantity = 1;
   private int ordinaryPrice;
+  @Column(name = "ordinary_price_minor")
+  private Long ordinaryPriceMinor;
   private int discountAmount;
+  @Column(name = "discount_amount_minor")
+  private Long discountAmountMinor;
   private String discountLabel;
   private String stripeCheckoutSessionId;
   @Column(nullable = false, columnDefinition = "boolean default false")
   private boolean creditInvoice = false;
   private Long creditedInvoiceId;
+  @Transient
+  private String creditedInvoiceNumber;
 
   @jakarta.persistence.Convert(converter = se.cloudshop.invoice.InvoiceDocumentSnapshotConverter.class)
   @Column(name = "document_snapshot", columnDefinition = "text")
@@ -84,6 +106,15 @@ public class Order {
       throw new IllegalStateException("Only a new draft may capture invoice document data once.");
     }
     documentSnapshot = se.cloudshop.invoice.InvoiceDocumentSnapshot.capture(this, settings);
+    fTaxApproved = documentSnapshot.fTaxApproved();
+  }
+
+  public void refreshDraftIssuerSnapshot(se.cloudshop.settings.AppSettings settings) {
+    if (!"DRAFT".equals(status)) {
+      throw new IllegalStateException("Issuer details can only be refreshed before invoice issuance.");
+    }
+    se.cloudshop.invoice.InvoiceDocumentSnapshot current = se.cloudshop.invoice.InvoiceDocumentSnapshot.capture(this, settings);
+    documentSnapshot = documentSnapshot == null ? current : documentSnapshot.withIssuerDetails(current);
     fTaxApproved = documentSnapshot.fTaxApproved();
   }
 
@@ -111,6 +142,8 @@ public class Order {
     this.fTaxApproved = true;
     this.quantity = normalizeQuantity(quantity);
     calculateAmounts(product);
+    this.paidAmountMinor = 0L;
+    this.refundedAmountMinor = 0L;
   }
 
   public Order(Customer customer, Product product, Instant createdAt) {
@@ -129,6 +162,8 @@ public class Order {
     this.fTaxApproved = true;
     this.quantity = normalizeQuantity(quantity);
     calculateAmounts(product);
+    this.paidAmountMinor = 0L;
+    this.refundedAmountMinor = 0L;
   }
 
   public Long getId() {
@@ -151,8 +186,13 @@ public class Order {
     copy.ordinaryPrice = original.ordinaryPrice;
     copy.discountAmount = original.discountAmount;
     copy.discountLabel = original.discountLabel;
-    copy.documentSnapshot = original.documentSnapshot;
+    copy.vatPercent = original.vatPercent;
+    copy.creditedInvoiceNumber = original.invoiceNumber;
+    copy.documentSnapshot = original.documentSnapshot == null ? null
+        : original.documentSnapshot.withCreditedInvoiceNumber(original.invoiceNumber);
     copy.setAmounts(original.netAmount, original.vatAmount, original.totalAmount);
+    copy.paidAmountMinor = 0L;
+    copy.refundedAmountMinor = 0L;
     return copy;
   }
 
@@ -267,11 +307,14 @@ public class Order {
       return 0;
     }
 
-    return Math.max(totalAmount - paidAmount, 0);
+    return wholeKrona(getRemainingAmountMinor(), "remainingAmount");
   }
 
   public boolean hasRemainingAmount() {
-    return getRemainingAmount() > 0;
+    if ("DRAFT".equals(status) || "CREDITED".equals(status) || creditInvoice) {
+      return false;
+    }
+    return getRemainingAmountMinor() > 0;
   }
 
   public int getRefundableAmount() {
@@ -279,14 +322,27 @@ public class Order {
       return 0;
     }
 
-    return Math.max(paidAmount - refundedAmount, 0);
+    return wholeKrona(Math.max(paidAmountMinorValue() - refundedAmountMinorValue(), 0L), "refundableAmount");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getRemainingAmountMinor() {
+    return Math.max(totalAmountMinorValue() - paidAmountMinorValue(), 0L);
   }
 
   public void registerPayment(LocalDate paidDate, int paymentAmount, String paymentReference) {
+    if (paymentAmount <= 0) {
+      throw new IllegalArgumentException("Payment amount must be greater than zero.");
+    }
+    long newPaidAmountMinor = Math.addExact(paidAmountMinorValue(), toMinorUnits(paymentAmount, "paymentAmount"));
+    if (newPaidAmountMinor > totalAmountMinorValue()) {
+      throw new IllegalArgumentException("Payment amount cannot be greater than the remaining invoice amount.");
+    }
     this.paidDate = paidDate;
-    this.paidAmount += paymentAmount;
+    this.paidAmountMinor = newPaidAmountMinor;
+    this.paidAmount = wholeKrona(newPaidAmountMinor, "paidAmount");
     this.paymentReference = paymentReference;
-    this.status = this.paidAmount >= this.totalAmount ? "PAID" : "PARTIALLY_PAID";
+    this.status = newPaidAmountMinor >= totalAmountMinorValue() ? "PAID" : "PARTIALLY_PAID";
     this.payments.add(new InvoicePayment(this, paidDate, paymentAmount, paymentReference));
   }
 
@@ -299,13 +355,21 @@ public class Order {
     return this.payments.stream()
         .anyMatch(payment -> payment.getPaymentDate() != null
             && payment.getPaymentDate().equals(paymentDate)
-            && payment.getAmount() == paymentAmount
+            && payment.getAmountMinorValue() == toMinorUnits(paymentAmount, "paymentAmount")
             && normalizePaymentReference(payment.getReference()).equals(normalizedReference));
   }
 
   public void registerRefund(LocalDate refundDate, int refundAmount, String refundReference) {
+    if (refundAmount <= 0) {
+      throw new IllegalArgumentException("Refund amount must be greater than zero.");
+    }
+    long newRefundedAmountMinor = Math.addExact(refundedAmountMinorValue(), toMinorUnits(refundAmount, "refundAmount"));
+    if (newRefundedAmountMinor > paidAmountMinorValue()) {
+      throw new IllegalArgumentException("Refund amount cannot be greater than the refundable invoice amount.");
+    }
     this.refundDate = refundDate;
-    this.refundedAmount += refundAmount;
+    this.refundedAmountMinor = newRefundedAmountMinor;
+    this.refundedAmount = wholeKrona(newRefundedAmountMinor, "refundedAmount");
     this.refundReference = refundReference;
   }
 
@@ -345,6 +409,10 @@ public class Order {
     return vatAmount;
   }
 
+  public int getVatPercent() {
+    return vatPercent;
+  }
+
   public int getTotalAmount() {
     return totalAmount;
   }
@@ -359,6 +427,41 @@ public class Order {
 
   public int getDiscountAmount() {
     return discountAmount;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getNetAmountMinor() {
+    return netAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getVatAmountMinor() {
+    return vatAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getTotalAmountMinor() {
+    return totalAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getPaidAmountMinor() {
+    return paidAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getRefundedAmountMinor() {
+    return refundedAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getOrdinaryPriceMinor() {
+    return ordinaryPriceMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getDiscountAmountMinor() {
+    return discountAmountMinor;
   }
 
   public String getDiscountLabel() {
@@ -381,6 +484,15 @@ public class Order {
     this.creditedInvoiceId = creditedInvoiceId;
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public String getCreditedInvoiceNumber() {
+    return creditedInvoiceNumber;
+  }
+
+  public void setCreditedInvoiceNumber(String creditedInvoiceNumber) {
+    this.creditedInvoiceNumber = creditedInvoiceNumber;
+  }
+
   public void setAmounts(int netAmount, int vatAmount, int totalAmount) {
     if ((long) netAmount + vatAmount != totalAmount) {
       throw new IllegalArgumentException("Invoice total must equal net amount plus VAT amount.");
@@ -395,6 +507,9 @@ public class Order {
     this.netAmount = netAmount;
     this.vatAmount = vatAmount;
     this.totalAmount = totalAmount;
+    this.netAmountMinor = toMinorUnits(netAmount, "netAmount");
+    this.vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
+    this.totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
   }
 
   public String getStripeCheckoutSessionId() {
@@ -413,9 +528,78 @@ public class Order {
     this.ordinaryPrice = Math.multiplyExact(product.getPrice(), invoiceQuantity);
     this.netAmount = Math.multiplyExact(product.getEffectivePrice(), invoiceQuantity);
     this.discountAmount = Math.max(ordinaryPrice - netAmount, 0);
+    this.ordinaryPriceMinor = toMinorUnits(this.ordinaryPrice, "ordinaryPrice");
+    this.discountAmountMinor = toMinorUnits(this.discountAmount, "discountAmount");
     this.discountLabel = product.getDiscountLabel();
-    this.vatAmount = WholeKronaMath.roundedRatio(netAmount, 1, 4);
+    if (!se.cloudshop.product.VatRate.isSupported(product.getVatPercent())) {
+      throw new IllegalArgumentException("Unsupported invoice VAT rate.");
+    }
+    this.vatPercent = product.getVatPercent();
+    long calculatedVatAmountMinor = Math.multiplyExact((long) netAmount, vatPercent);
+    if (calculatedVatAmountMinor % 100L != 0L) {
+      throw new IllegalArgumentException(
+          "Invoice VAT contains ore that the current whole-krona invoice model cannot represent. Complete the minor-unit migration before issuing this invoice.");
+    }
+    this.vatAmount = Math.toIntExact(calculatedVatAmountMinor / 100L);
     this.totalAmount = Math.addExact(netAmount, vatAmount);
+    this.netAmountMinor = toMinorUnits(this.netAmount, "netAmount");
+    this.vatAmountMinor = calculatedVatAmountMinor;
+    this.totalAmountMinor = Math.addExact(this.netAmountMinor, this.vatAmountMinor);
+  }
+
+  private static long toMinorUnits(int amount, String field) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Invoice " + field + " is outside the supported money range.", exception);
+    }
+  }
+
+  private static int wholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0) {
+      throw new IllegalStateException("Invoice " + field + " contains ore that the legacy API cannot represent.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalStateException("Invoice " + field + " is outside the supported whole-krona API range.", exception);
+    }
+  }
+
+  private long totalAmountMinorValue() {
+    return minorValue(totalAmountMinor, totalAmount, "totalAmount");
+  }
+
+  private long paidAmountMinorValue() {
+    return minorValue(paidAmountMinor, paidAmount, "paidAmount");
+  }
+
+  private long refundedAmountMinorValue() {
+    return minorValue(refundedAmountMinor, refundedAmount, "refundedAmount");
+  }
+
+  private static long minorValue(Long shadow, int legacy, String field) {
+    return shadow == null ? toMinorUnits(legacy, field) : shadow;
+  }
+
+  @PostLoad
+  private void validateMinorUnitShadow() {
+    // The legacy whole-krona columns remain authoritative during the staged migration.
+    // Rebuild shadows on read so older imports and controlled reconciliation updates
+    // cannot leave reports using stale shadow values.
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeMinorUnits() {
+    netAmountMinor = toMinorUnits(netAmount, "netAmount");
+    vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
+    totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
+    paidAmountMinor = toMinorUnits(paidAmount, "paidAmount");
+    refundedAmountMinor = toMinorUnits(refundedAmount, "refundedAmount");
+    ordinaryPriceMinor = toMinorUnits(ordinaryPrice, "ordinaryPrice");
+    discountAmountMinor = toMinorUnits(discountAmount, "discountAmount");
   }
 
   private int normalizeQuantity(int quantity) {

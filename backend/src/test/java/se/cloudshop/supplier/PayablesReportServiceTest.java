@@ -64,6 +64,18 @@ class PayablesReportServiceTest {
   }
 
   @Test
+  void stopsWhenSupplierReceivableContainsOreLegacyReportCannotRepresent() {
+    SupplierInvoice invoice = invoice(1L, supplier("Test"), LocalDate.of(2026, 7, 10), 1250, 250, "unpaid");
+    setField(invoice, "totalAmountMinor", 125050L);
+    when(supplierInvoiceRepository.findAll()).thenReturn(List.of(invoice));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> payablesReportService.createAgingReport(LocalDate.of(2026, 7, 10)))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
   void createsAgingReportForOpenSupplierInvoicesOnly() {
     Supplier supplier = supplier("Adobe");
     SupplierInvoice notDue = invoice(1L, supplier, LocalDate.of(2026, 7, 30), 1250, 250, "unpaid");

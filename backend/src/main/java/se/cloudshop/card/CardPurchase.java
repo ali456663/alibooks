@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,6 +25,12 @@ public class CardPurchase {
   private int netAmount;
   private int vatAmount;
   private int totalAmount;
+  @Column(name = "net_amount_minor")
+  private Long netAmountMinor;
+  @Column(name = "vat_amount_minor")
+  private Long vatAmountMinor;
+  @Column(name = "total_amount_minor")
+  private Long totalAmountMinor;
   private String category;
   private String clearingAccount;
   private String status;
@@ -53,6 +60,9 @@ public class CardPurchase {
     this.totalAmount = totalAmount;
     this.vatAmount = vatAmount;
     this.netAmount = Math.max(totalAmount - vatAmount, 0);
+    this.totalAmountMinor = toMinorUnits(totalAmount);
+    this.vatAmountMinor = toMinorUnits(vatAmount);
+    this.netAmountMinor = toMinorUnits(this.netAmount);
     this.category = category;
     this.clearingAccount = clearingAccount;
     this.status = "review";
@@ -96,6 +106,21 @@ public class CardPurchase {
     return totalAmount;
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getNetAmountMinor() {
+    return netAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getVatAmountMinor() {
+    return vatAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getTotalAmountMinor() {
+    return totalAmountMinor;
+  }
+
   public String getCategory() {
     return category;
   }
@@ -124,5 +149,13 @@ public class CardPurchase {
     this.status = "booked";
     this.bookedExpenseId = bookedExpenseId;
     this.updatedAt = Instant.now();
+  }
+
+  private long toMinorUnits(int amount) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Card purchase amount is outside the supported minor-unit range.", exception);
+    }
   }
 }

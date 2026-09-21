@@ -1,5 +1,15 @@
 const LIMIT = 2147483647n;
 
+// The current backend stores these inputs as whole SEK. Never round a user's
+// decimal input into a different accounting amount at the UI boundary.
+export function parseWholeSekInput(value) {
+  const text = String(value ?? "").trim();
+  if (text === "") return 0;
+  if (!/^\d+$/.test(text)) return null;
+  const amount = Number(text);
+  return Number.isSafeInteger(amount) && BigInt(amount) <= LIMIT ? amount : null;
+}
+
 export function parseSekMinor(value) {
   if (typeof value !== "string") throw new Error("Belopp maste vara text fran originalfilen.");
   const text = value.trim().replace(/\s*(?:SEK|kr)$/i, "").trim();

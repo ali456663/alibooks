@@ -39,11 +39,25 @@ class BankAmountSafetyTest {
   @Test
   void negativeMovementIsNotClampedToZero() {
     when(journal.findAll()).thenReturn(List.of(entry(-300)));
-    when(bank.findAll()).thenReturn(List.of(row(-300)));
+    BankReconciliationEntry bankRow = row(-300);
+    when(bank.findAll()).thenReturn(List.of(bankRow));
     var report = service.createReport(null, null);
     assertThat(report.ledgerMovement()).isEqualTo(-300);
     assertThat(report.reconciledMovement()).isEqualTo(-300);
     assertThat(report.difference()).isZero();
+    assertThat(bankRow.getAmountMinor()).isEqualTo(-30000L);
+  }
+
+  @Test
+  void stopsWhenBankShadowContainsOreThatLegacyReportCannotRepresent() {
+    when(journal.findAll()).thenReturn(List.of(entry(100)));
+    BankReconciliationEntry bankRow = row(100);
+    org.springframework.test.util.ReflectionTestUtils.setField(bankRow, "amountMinor", 10050L);
+    when(bank.findAll()).thenReturn(List.of(bankRow));
+
+    assertThatThrownBy(() -> service.createReport(null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
   }
 
   @Test

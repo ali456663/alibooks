@@ -31,11 +31,19 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
 
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS active boolean DEFAULT true");
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS vat_percent integer DEFAULT 25");
     jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_label varchar(255)");
     jdbcTemplate.execute("UPDATE products SET active = true WHERE active IS NULL");
     jdbcTemplate.execute("UPDATE products SET discount_price = 0 WHERE discount_price IS NULL");
+    // Shadow columns for the versioned minor-unit migration. Legacy whole-SEK
+    // columns remain authoritative until every read/write path is migrated.
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS price_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price_minor bigint");
+    jdbcTemplate.execute("UPDATE products SET price_minor = CAST(price AS bigint) * 100 WHERE price_minor IS NULL AND price IS NOT NULL");
+    jdbcTemplate.execute("UPDATE products SET discount_price_minor = CAST(discount_price AS bigint) * 100 WHERE discount_price_minor IS NULL AND discount_price IS NOT NULL");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS vat_percent integer DEFAULT 25");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS ordinary_price integer DEFAULT 0");
@@ -60,6 +68,20 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS reminder_sent_date date");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS credit_invoice boolean DEFAULT false");
     jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS credited_invoice_id bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS ordinary_price_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS discount_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS net_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS vat_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS total_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS paid_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS refunded_amount_minor bigint");
+    jdbcTemplate.execute("UPDATE customer_orders SET ordinary_price_minor = CAST(ordinary_price AS bigint) * 100 WHERE ordinary_price_minor IS NULL AND ordinary_price IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET discount_amount_minor = CAST(discount_amount AS bigint) * 100 WHERE discount_amount_minor IS NULL AND discount_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET net_amount_minor = CAST(net_amount AS bigint) * 100 WHERE net_amount_minor IS NULL AND net_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET vat_amount_minor = CAST(vat_amount AS bigint) * 100 WHERE vat_amount_minor IS NULL AND vat_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET total_amount_minor = CAST(total_amount AS bigint) * 100 WHERE total_amount_minor IS NULL AND total_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET paid_amount_minor = CAST(paid_amount AS bigint) * 100 WHERE paid_amount_minor IS NULL AND paid_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE customer_orders SET refunded_amount_minor = CAST(refunded_amount AS bigint) * 100 WHERE refunded_amount_minor IS NULL AND refunded_amount IS NOT NULL");
     jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS customer_orders_invoice_number_idx ON customer_orders(invoice_number) WHERE invoice_number IS NOT NULL AND invoice_number <> ''");
     jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS customer_orders_ocr_number_idx ON customer_orders(ocr_number) WHERE ocr_number IS NOT NULL AND ocr_number <> ''");
     jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS invoice_payments (id bigserial PRIMARY KEY)");
@@ -68,6 +90,10 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS created_at timestamp");
+    jdbcTemplate.execute("ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS amount_minor bigint");
+    jdbcTemplate.execute("UPDATE invoice_payments SET amount_minor = CAST(amount AS bigint) * 100 WHERE amount_minor IS NULL AND amount IS NOT NULL");
+    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS money_migration_ledger (migration_key varchar(128) PRIMARY KEY, source_unit varchar(32) NOT NULL, target_unit varchar(32) NOT NULL, applied_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('core-invoice-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
     jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS invoice_reminders (id bigserial PRIMARY KEY)");
     jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS invoice_id bigint");
     jdbcTemplate.execute("ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS created_at timestamp");
@@ -82,6 +108,9 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS gross_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS fee_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS gross_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS fee_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS net_amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS voucher_number varchar(255)");
     jdbcTemplate.execute("ALTER TABLE stripe_payouts ADD COLUMN IF NOT EXISTS created_at timestamp");
@@ -92,6 +121,7 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS description varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS entry_type varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS status varchar(255)");
     jdbcTemplate.execute("ALTER TABLE bank_reconciliation_entries ADD COLUMN IF NOT EXISTS match_label varchar(255)");
@@ -102,6 +132,9 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS output_vat integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS input_vat integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS vat_to_pay integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS output_vat_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS input_vat_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS vat_to_pay_minor bigint");
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS status varchar(255)");
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS submission_reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE vat_filings ADD COLUMN IF NOT EXISTS payment_reference varchar(255)");
@@ -141,6 +174,9 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS net_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vat_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total_amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category varchar(255)");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_from varchar(255)");
     jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_file_name varchar(255)");
@@ -158,6 +194,9 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS net_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS vat_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS total_amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS category varchar(255)");
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS clearing_account varchar(255)");
     jdbcTemplate.execute("ALTER TABLE card_purchases ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'review'");
@@ -185,10 +224,14 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS total_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS vat_amount integer DEFAULT 0");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS net_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS total_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS vat_amount_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS net_amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS category varchar(64)");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS status varchar(64) DEFAULT 'unpaid'");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_at date");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_amount integer DEFAULT 0");
+    jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS paid_amount_minor bigint");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_reference varchar(255)");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS payment_history text");
     jdbcTemplate.execute("ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS cancelled_at date");
@@ -247,6 +290,11 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS owner_transactions_date_idx ON owner_transactions(transaction_date)");
     jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS app_settings (id bigint PRIMARY KEY)");
     jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_name varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_address varchar(1000)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_postal_code varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_city varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS company_organization_number varchar(255)");
+    jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS vat_registration_number varchar(255)");
     jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS contact_email varchar(255)");
     jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS plus_giro varchar(255)");
     jdbcTemplate.execute("ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_ocr varchar(255)");
@@ -285,6 +333,11 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("UPDATE supplier_invoices SET net_amount = GREATEST(total_amount - vat_amount, 0) WHERE net_amount IS NULL OR net_amount = 0");
     jdbcTemplate.execute("UPDATE supplier_invoices SET paid_amount = 0 WHERE paid_amount IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET paid_amount = total_amount WHERE (status = 'paid' OR paid_at IS NOT NULL) AND paid_amount = 0");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET total_amount_minor = CAST(total_amount AS bigint) * 100 WHERE total_amount_minor IS NULL AND total_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET vat_amount_minor = CAST(vat_amount AS bigint) * 100 WHERE vat_amount_minor IS NULL AND vat_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET net_amount_minor = CAST(net_amount AS bigint) * 100 WHERE net_amount_minor IS NULL AND net_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE supplier_invoices SET paid_amount_minor = CAST(paid_amount AS bigint) * 100 WHERE paid_amount_minor IS NULL AND paid_amount IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('supplier-invoice-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
     jdbcTemplate.execute("UPDATE supplier_invoices SET payment_reference = '' WHERE payment_reference IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET payment_history = '' WHERE payment_history IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET self_billing = false WHERE self_billing IS NULL");
@@ -292,6 +345,24 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("UPDATE supplier_invoices SET buyer_reference = '' WHERE buyer_reference IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET approval_reference = '' WHERE approval_reference IS NULL");
     jdbcTemplate.execute("UPDATE supplier_invoices SET status = 'cancelled' WHERE cancellation_voucher_number IS NOT NULL AND cancellation_voucher_number <> ''");
+    jdbcTemplate.execute("UPDATE expenses SET net_amount_minor = CAST(net_amount AS bigint) * 100 WHERE net_amount_minor IS NULL AND net_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE expenses SET vat_amount_minor = CAST(vat_amount AS bigint) * 100 WHERE vat_amount_minor IS NULL AND vat_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE expenses SET total_amount_minor = CAST(total_amount AS bigint) * 100 WHERE total_amount_minor IS NULL AND total_amount IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('expense-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
+    jdbcTemplate.execute("UPDATE stripe_payouts SET gross_amount_minor = CAST(gross_amount AS bigint) * 100 WHERE gross_amount_minor IS NULL AND gross_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE stripe_payouts SET fee_amount_minor = CAST(fee_amount AS bigint) * 100 WHERE fee_amount_minor IS NULL AND fee_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE stripe_payouts SET net_amount_minor = CAST(net_amount AS bigint) * 100 WHERE net_amount_minor IS NULL AND net_amount IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('stripe-payout-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
+    jdbcTemplate.execute("UPDATE vat_filings SET output_vat_minor = CAST(output_vat AS bigint) * 100 WHERE output_vat_minor IS NULL AND output_vat IS NOT NULL");
+    jdbcTemplate.execute("UPDATE vat_filings SET input_vat_minor = CAST(input_vat AS bigint) * 100 WHERE input_vat_minor IS NULL AND input_vat IS NOT NULL");
+    jdbcTemplate.execute("UPDATE vat_filings SET vat_to_pay_minor = CAST(vat_to_pay AS bigint) * 100 WHERE vat_to_pay_minor IS NULL AND vat_to_pay IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('vat-filing-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
+    jdbcTemplate.execute("UPDATE card_purchases SET net_amount_minor = CAST(net_amount AS bigint) * 100 WHERE net_amount_minor IS NULL AND net_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE card_purchases SET vat_amount_minor = CAST(vat_amount AS bigint) * 100 WHERE vat_amount_minor IS NULL AND vat_amount IS NOT NULL");
+    jdbcTemplate.execute("UPDATE card_purchases SET total_amount_minor = CAST(total_amount AS bigint) * 100 WHERE total_amount_minor IS NULL AND total_amount IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('card-purchase-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
+    jdbcTemplate.execute("UPDATE bank_reconciliation_entries SET amount_minor = CAST(amount AS bigint) * 100 WHERE amount_minor IS NULL AND amount IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('bank-reconciliation-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
     jdbcTemplate.execute("UPDATE recurring_contracts SET quantity = 1 WHERE quantity IS NULL OR quantity = 0");
     jdbcTemplate.execute("UPDATE recurring_contracts SET contract_interval = 'monthly' WHERE contract_interval IS NULL OR contract_interval = ''");
     jdbcTemplate.execute("UPDATE recurring_contracts SET next_invoice_date = CURRENT_DATE WHERE next_invoice_date IS NULL");
@@ -321,5 +392,10 @@ public class DatabaseSchemaPatch implements CommandLineRunner {
     jdbcTemplate.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_invoice_originals_invoice') THEN ALTER TABLE invoice_originals ADD CONSTRAINT fk_invoice_originals_invoice FOREIGN KEY (invoice_id) REFERENCES customer_orders(id); END IF; END $$");
     jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_bank_reconciliation_journal ON bank_reconciliation_entries (journal_entry_id)");
     jdbcTemplate.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_bank_reconciliation_journal' AND conrelid = 'bank_reconciliation_entries'::regclass) THEN ALTER TABLE bank_reconciliation_entries ADD CONSTRAINT fk_bank_reconciliation_journal FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id); END IF; END $$");
+    jdbcTemplate.execute("ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS debit_minor bigint");
+    jdbcTemplate.execute("ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS credit_minor bigint");
+    jdbcTemplate.execute("UPDATE journal_entries SET debit_minor = CAST(debit AS bigint) * 100 WHERE debit_minor IS NULL AND debit IS NOT NULL");
+    jdbcTemplate.execute("UPDATE journal_entries SET credit_minor = CAST(credit AS bigint) * 100 WHERE credit_minor IS NULL AND credit IS NOT NULL");
+    jdbcTemplate.execute("INSERT INTO money_migration_ledger (migration_key, source_unit, target_unit) VALUES ('journal-entry-shadow-v1', 'whole-krona', 'minor-unit') ON CONFLICT (migration_key) DO NOTHING");
   }
 }

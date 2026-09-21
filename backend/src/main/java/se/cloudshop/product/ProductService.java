@@ -63,10 +63,15 @@ public class ProductService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount price must be lower than ordinary price.");
     }
 
+    if (!VatRate.isSupported(request.getVatPercent())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VAT rate must be 6, 12, or 25 percent.");
+    }
+
     product.setName(name);
     product.setDescription(cleanOptionalText(request.getDescription()));
     product.setPrice(request.getPrice());
     product.setDiscountPrice(request.getDiscountPrice());
+    product.setVatPercent(request.getVatPercent());
     product.setDiscountLabel(cleanOptionalText(request.getDiscountLabel()));
     product.setActive(request.isActive());
   }

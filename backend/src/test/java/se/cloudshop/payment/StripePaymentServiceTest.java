@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.AccountingService;
 import se.cloudshop.order.Order;
@@ -58,5 +59,17 @@ class StripePaymentServiceTest {
     assertThatThrownBy(() -> stripePaymentService.createCheckoutSession(1L))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("Invoice has no remaining amount to pay");
+  }
+
+  @Test
+  void checkoutRejectsOreBalanceBeforeCallingStripe() {
+    Order invoice = new Order("Ali", new Product("PT", "Training", 1000), Instant.now());
+    invoice.setStatus("SENT");
+    ReflectionTestUtils.setField(invoice, "totalAmountMinor", 100050L);
+    when(orderRepository.findById(1L)).thenReturn(Optional.of(invoice));
+
+    assertThatThrownBy(() -> stripePaymentService.createCheckoutSession(1L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("cannot represent an invoice balance with ore");
   }
 }

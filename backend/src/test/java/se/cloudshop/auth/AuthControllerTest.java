@@ -39,7 +39,7 @@ class AuthControllerTest {
   @Test
   void successfulRegistrationReturnsTokenAndAuditsEvent() {
     User user = new User("ali@example.com", "encoded");
-    when(userService.register("ali@example.com", "secret123")).thenReturn(user);
+    when(userService.register("ali@example.com", "secret123", null)).thenReturn(user);
 
     Map<String, String> response = authController.register(new AuthRequest("ali@example.com", "secret123"));
 
@@ -49,8 +49,18 @@ class AuthControllerTest {
   }
 
   @Test
+  void forwardsOwnerSetupKeyForInitialRegistration() {
+    User user = new User("ali@example.com", "encoded");
+    when(userService.register("ali@example.com", "secret123", "one-time-key")).thenReturn(user);
+
+    authController.register(new AuthRequest("ali@example.com", "secret123"), "one-time-key");
+
+    verify(userService).register("ali@example.com", "secret123", "one-time-key");
+  }
+
+  @Test
   void failedRegistrationAuditsEvent() {
-    when(userService.register("bad-email", "short"))
+    when(userService.register("bad-email", "short", null))
         .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid email and password with at least 8 characters are required."));
 
     assertThatThrownBy(() -> authController.register(new AuthRequest("bad-email", "short")))

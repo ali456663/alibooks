@@ -52,6 +52,7 @@ const secretCheck = read("scripts/secret-placeholder-check.mjs");
 
 check("First real data document exists", exists(docPath), docPath);
 check("Document explains purpose", includesAll(doc, ["riktiga kunder", "fakturor", "kvitton", "bankrader", "bokforingsposter"]), "The checklist should cover the first real data boundary.");
+check("Document blocks first real entries until minor-unit migration is verified", includesAll(doc, ["ore", "migrering", "riktiga bokforingsposter"]), "First real bookkeeping entries must stay blocked until exact kronor-and-ore support is verified.");
 check("Document has exact local commands", includesAll(doc, ["npm run check:release:full", "npm run doctor", "npm run check:use-today", "npm run check:first-real-data", "npm run check:git -- --strict"]), "The user should get copy-pasteable local checks.");
 check("Document requires backup and restore", includesAll(doc, ["backup", "Restore drill", "separat testdatabas"]), "Real data should not start before recovery proof.");
 check("Document separates testdata from real data", includesAll(doc, ["Testdata", "riktiga kunder"]), "The user should not mix demo/test rows with real customers.");
@@ -69,6 +70,7 @@ check("Retention docs support first real data boundary", includesAll(retentionDo
 check("Handoff docs support accountant review", includesAll(handoffDoc, ["SIE", "huvudbok", "saldobalans", "redovisningskonsult"]), "Accountant handoff should be ready before serious use.");
 check("Frontend exposes settings and controls", includesAll(mainSource, ["settings", "companyType", "accountingMethod", "vatReportingPeriod", "numberControl", "backup"]), "The app should expose setup and control views.");
 check("Frontend exposes first real data gate", includesAll(mainSource, ["firstRealDataGateRows", "Forsta riktiga data", "first-real-data-panel", "first-real-data-card", "riktiga kunder, fakturor, kvitton, bankrader"]), "Startklar should show the first real data decision inside the app.");
+check("Frontend blocks first real data while minor-unit support is missing", includesAll(mainSource, ["key: \"money-precision\"", "minorUnitSupport ? \"ok\" : \"critical\"", "supportsMinorUnits"]), "The real-data gate must fail closed while the backend reports no verified minor-unit support.");
 check("Backend defaults include real invoice settings", includesAll(appSettings, ["companyType = \"SOLE_TRADER\"", "accountingMethod = \"INVOICE_METHOD\"", "vatReportingPeriod = \"QUARTERLY\"", "paymentTermsDays = 30", "fTaxApproved = true"]), "Default settings should be explicit.");
 check("Backend guards company type after bookkeeping", includesAll(settingsService, ["Company type cannot be changed after bookkeeping has been created", "journalEntryRepository.count() == 0"]), "Changing entity type after bookkeeping should be blocked.");
 check("Backend applies invoice payment settings", includesAll(orderController, ["setPaymentTermsDays", "setOcrNumber", "setPlusGiro", "setPaymentRecipient"]), "Invoices should inherit payment settings.");
@@ -100,4 +102,4 @@ if (failures.length > 0) {
 }
 
 console.log("");
-console.log("Forsta riktiga data: OK lokalt nar release gate, backup, restore drill och manuell klickkontroll ar grona.");
+console.log("Skyddskontrollen ar gron. Detta kommando godkanner inte riktiga bokforingsposter; fullt ore-stod och extern verksamhetskontroll aterstar.");

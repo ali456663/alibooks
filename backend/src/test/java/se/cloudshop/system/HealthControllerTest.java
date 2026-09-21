@@ -61,6 +61,18 @@ class HealthControllerTest {
     assertThat(maintenance.get("safeForProduction")).isEqualTo(false);
   }
 
+  @Test
+  void systemStatusDoesNotOverclaimMinorUnitSupport() {
+    when(jdbcTemplate.queryForObject("select 1", Integer.class)).thenReturn(1);
+
+    Map<String, Object> moneyModel = nested(controller("", true).systemStatus(), "moneyModel");
+
+    assertThat(moneyModel.get("currency")).isEqualTo("SEK");
+    assertThat(moneyModel.get("unit")).isEqualTo("whole-krona");
+    assertThat(moneyModel.get("supportsMinorUnits")).isEqualTo(false);
+    assertThat(moneyModel.get("productionBookkeepingReady")).isEqualTo(false);
+  }
+
   private HealthController controller(String corsAllowedOrigins, boolean corsLocalDevEnabled) {
     return controller(corsAllowedOrigins, corsLocalDevEnabled, false, false);
   }

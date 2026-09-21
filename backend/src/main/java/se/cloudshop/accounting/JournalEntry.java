@@ -6,6 +6,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,6 +43,10 @@ public class JournalEntry {
   private String voucherNumber;
   private int debit;
   private int credit;
+  @jakarta.persistence.Column(name = "debit_minor")
+  private Long debitMinor;
+  @jakarta.persistence.Column(name = "credit_minor")
+  private Long creditMinor;
   private String description;
   private LocalDate voucherDate;
   private String correctionOfVoucherNumber;
@@ -69,6 +76,8 @@ public class JournalEntry {
     this.voucherNumber = voucherNumber;
     this.debit = debit;
     this.credit = credit;
+    this.debitMinor = toMinorUnits(debit, "debit");
+    this.creditMinor = toMinorUnits(credit, "credit");
     this.description = description;
     this.voucherDate = voucherDate == null ? LocalDate.now() : voucherDate;
     this.createdAt = Instant.now();
@@ -138,6 +147,26 @@ public class JournalEntry {
 
   public int getCredit() {
     return credit;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getDebitMinor() {
+    return debitMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getCreditMinor() {
+    return creditMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getDebitMinorValue() {
+    return minorValue(debitMinor, debit, "debit");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getCreditMinorValue() {
+    return minorValue(creditMinor, credit, "credit");
   }
 
   public String getDescription() {
@@ -286,8 +315,8 @@ public class JournalEntry {
         value(voucherDate),
         value(accountNumber),
         value(accountName),
-        String.valueOf(debit),
-        String.valueOf(credit),
+        String.valueOf(getDebitMinorValue()),
+        String.valueOf(getCreditMinorValue()),
         value(description),
         value(correctionOfVoucherNumber),
         getSourceType(),
@@ -306,6 +335,34 @@ public class JournalEntry {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  /**
+   * Legacy whole-krona columns remain authoritative during the staged migration.
+   * The shadow values make the ledger precision explicit without changing old API responses.
+   */
+  @PostLoad
+  void synchronizeMinorUnitShadowsFromLegacy() {
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  void synchronizeMinorUnits() {
+    debitMinor = toMinorUnits(debit, "debit");
+    creditMinor = toMinorUnits(credit, "credit");
+  }
+
+  private static long toMinorUnits(int amount, String field) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Journal entry " + field + " is outside the supported money range.", exception);
+    }
+  }
+
+  private static long minorValue(Long shadow, int legacyAmount, String field) {
+    return shadow == null ? toMinorUnits(legacyAmount, field) : shadow;
   }
 
   private String value(Object value) {

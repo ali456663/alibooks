@@ -23,13 +23,9 @@ public class VoucherNumberService {
     // Keep the series reserved until the caller commits all voucher rows.
     jdbcTemplate.queryForObject("SELECT 1 FROM pg_advisory_xact_lock(?, hashtext(?))",
         Integer.class, 4279369, prefix);
-    int latestVoucherNumber = journalEntryRepository.findAll().stream()
-        .map(JournalEntry::getVoucherNumber)
-        .filter(voucherNumber -> voucherNumber != null && voucherNumber.startsWith(prefix + "-"))
-        .map(voucherNumber -> voucherNumber.substring((prefix + "-").length()))
-        .mapToInt(this::parseVoucherSequence)
-        .max()
-        .orElse(0);
+    int sequenceStart = prefix.length() + 2;
+    int latestVoucherNumber = Math.toIntExact(
+        journalEntryRepository.findLatestVoucherSequence(prefix, sequenceStart));
 
     return prefix + "-" + Math.incrementExact(latestVoucherNumber);
   }
@@ -42,15 +38,4 @@ public class VoucherNumberService {
     return series.trim().toUpperCase(Locale.ROOT);
   }
 
-  private int parseVoucherSequence(String sequence) {
-    if (sequence == null || sequence.isBlank()) {
-      return 0;
-    }
-
-    try {
-      return Integer.parseInt(sequence.trim());
-    } catch (NumberFormatException exception) {
-      return 0;
-    }
-  }
 }

@@ -19,6 +19,12 @@ public class Product {
   private String description;
   private int price;
   private int discountPrice;
+  @Column(name = "price_minor")
+  private Long priceMinor;
+  @Column(name = "discount_price_minor")
+  private Long discountPriceMinor;
+  @Column(nullable = false, columnDefinition = "integer default 25")
+  private int vatPercent = 25;
   private String discountLabel;
   @Column(nullable = false, columnDefinition = "boolean default true")
   private boolean active = true;
@@ -29,7 +35,7 @@ public class Product {
   public Product(String name, String description, int price) {
     this.name = name;
     this.description = description;
-    this.price = price;
+    setPrice(price);
   }
 
   public Long getId() {
@@ -58,6 +64,7 @@ public class Product {
 
   public void setPrice(int price) {
     this.price = price;
+    this.priceMinor = toMinorUnits(price, "price");
   }
 
   public int getDiscountPrice() {
@@ -66,6 +73,25 @@ public class Product {
 
   public void setDiscountPrice(int discountPrice) {
     this.discountPrice = discountPrice;
+    this.discountPriceMinor = toMinorUnits(discountPrice, "discountPrice");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getPriceMinor() {
+    return priceMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getDiscountPriceMinor() {
+    return discountPriceMinor;
+  }
+
+  public int getVatPercent() {
+    return vatPercent;
+  }
+
+  public void setVatPercent(int vatPercent) {
+    this.vatPercent = vatPercent;
   }
 
   public String getDiscountLabel() {
@@ -87,4 +113,13 @@ public class Product {
   public void setActive(boolean active) {
     this.active = active;
   }
+
+  private static long toMinorUnits(int amount, String field) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Product " + field + " is outside the supported money range.", exception);
+    }
+  }
+
 }

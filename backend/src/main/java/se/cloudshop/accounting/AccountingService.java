@@ -28,6 +28,7 @@ import se.cloudshop.bank.BankReconciliationReport;
 import se.cloudshop.bank.BankReconciliationService;
 import se.cloudshop.expense.Expense;
 import se.cloudshop.order.Order;
+import se.cloudshop.product.VatRate;
 import se.cloudshop.order.ReceivablesAgingReport;
 import se.cloudshop.order.ReceivablesReportService;
 import se.cloudshop.settings.SettingsService;
@@ -85,16 +86,19 @@ public class AccountingService {
       return;
     }
 
+    int totalAmount = wholeKronaFromMinor(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "fakturans totalbelopp");
+    int netAmount = wholeKronaFromMinor(invoice.getNetAmountMinor(), invoice.getNetAmount(), "fakturans nettobelopp");
+    int vatAmount = wholeKronaFromMinor(invoice.getVatAmountMinor(), invoice.getVatAmount(), "fakturans momsbelopp");
     String voucherNumber = voucherNumberService.nextVoucherNumber("F");
     Account receivables = account("1510");
-    Account sales = account("3041");
-    Account outputVat = account("2611");
+    Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
+    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
 
     journalEntryRepository.save(new JournalEntry(
         invoice,
         receivables,
         voucherNumber,
-        invoice.getTotalAmount(),
+        totalAmount,
         0,
         "Invoice created",
         invoice.getInvoiceDate()
@@ -104,7 +108,7 @@ public class AccountingService {
         sales,
         voucherNumber,
         0,
-        invoice.getNetAmount(),
+        netAmount,
         "Invoice created",
         invoice.getInvoiceDate()
     ));
@@ -113,7 +117,7 @@ public class AccountingService {
         outputVat,
         voucherNumber,
         0,
-        invoice.getVatAmount(),
+        vatAmount,
         "Invoice created",
         invoice.getInvoiceDate()
     ));
@@ -126,7 +130,7 @@ public class AccountingService {
   }
 
   public void createPaymentEntries(Order invoice) {
-    createPaymentEntries(invoice, LocalDate.now(), invoice.getRemainingAmount());
+    createPaymentEntries(invoice, null, invoice.getRemainingAmount());
   }
 
   public JournalEntry createPaymentEntries(Order invoice, LocalDate paymentDate, int paidAmount) {
@@ -142,7 +146,7 @@ public class AccountingService {
       return null;
     }
 
-    LocalDate voucherDate = paymentDate == null ? LocalDate.now() : paymentDate;
+    LocalDate voucherDate = requireExplicitAccountingDate(paymentDate, "Payment date is required.");
     if (invoice.getInvoiceDate() != null && voucherDate.isBefore(invoice.getInvoiceDate())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be before invoice date.");
     }
@@ -189,7 +193,7 @@ public class AccountingService {
   }
 
   public void createRefundEntries(Order invoice, LocalDate refundDate, int refundAmount) {
-    LocalDate voucherDate = refundDate == null ? LocalDate.now() : refundDate;
+    LocalDate voucherDate = requireExplicitAccountingDate(refundDate, "Refund date is required.");
     if (invoice.getInvoiceDate() != null && voucherDate.isBefore(invoice.getInvoiceDate())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund date cannot be before invoice date.");
     }
@@ -235,29 +239,49 @@ public class AccountingService {
 
   @Transactional
   public void createStripeExternalSaleEntries(int totalAmount, String stripeReference, LocalDate paymentDate) {
+    createStripeExternalSaleEntries(totalAmount, stripeReference, paymentDate, 25);
+  }
+
+  @Transactional
+  public void createStripeExternalSaleEntries(int totalAmount, String stripeReference, LocalDate paymentDate, int vatPercent) {
     String reference = stripeReference == null ? "" : stripeReference.trim();
-    if (!reference.isBlank() && stripeWebsiteSaleReferenceExists(reference)) {
+    if (reference.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe website sale reference is required.");
+    }
+    if (reference.length() > 240 || reference.contains("\n") || reference.contains("\r")) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe website sale reference is invalid.");
+    }
+    String description = "Stripe website sale " + reference;
+    journalEntryRepository.lockStripeSaleReference(reference);
+    if (stripeWebsiteSaleReferenceExists(description)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe website sale reference is already booked.");
     }
 
     if (totalAmount <= 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe amount must be greater than zero.");
     }
-
-    LocalDate voucherDate = paymentDate == null ? LocalDate.now() : paymentDate;
-    requireUnlockedAccountingDate(voucherDate);
-
-    int netAmount = WholeKronaMath.roundedRatio(totalAmount, 4, 5);
-    int vatAmount = totalAmount - netAmount;
-    String description = "Stripe website sale";
-    if (!reference.isBlank()) {
-      description += " " + reference;
+    if (!VatRate.isSupported(vatPercent)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe sale VAT rate must be 6, 12 or 25 percent.");
     }
 
+    LocalDate voucherDate = requireExplicitAccountingDate(paymentDate, "Stripe sale date is required.");
+    requireUnlockedAccountingDate(voucherDate);
+
+    int netAmount;
+    try {
+      netAmount = WholeKronaMath.exactRatio(totalAmount, 100, 100 + vatPercent);
+    } catch (IllegalArgumentException exception) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Stripe sale total cannot be split into exact whole-krona net and VAT amounts.",
+          exception
+      );
+    }
+    int vatAmount = totalAmount - netAmount;
     String voucherNumber = voucherNumberService.nextVoucherNumber("S");
     Account stripeReceivable = account("1580");
-    Account sales = account("3041");
-    Account outputVat = account("2611");
+    Account sales = account(VatRate.salesAccount(vatPercent));
+    Account outputVat = account(VatRate.outputVatAccount(vatPercent));
 
     journalEntryRepository.save(new JournalEntry(
         null,
@@ -289,16 +313,22 @@ public class AccountingService {
   }
 
   public List<JournalEntry> createStripeWebsiteSaleEntry(CreateStripeWebsiteSaleRequest request) {
-    createStripeExternalSaleEntries(request.totalAmount(), request.reference(), request.saleDate());
+    createStripeExternalSaleEntries(request.totalAmount(), request.reference(), request.saleDate(), request.effectiveVatPercent());
     String reference = request.reference() == null ? "" : request.reference().trim();
+    String expectedDescription = "Stripe website sale " + reference;
     return journalEntryRepository.findAll().stream()
-        .filter(entry -> entry.getDescription() != null && entry.getDescription().startsWith("Stripe website sale"))
-        .filter(entry -> reference.isBlank() || entry.getDescription().contains(reference))
+        .filter(entry -> expectedDescription.equals(entry.getDescription()))
         .toList();
   }
 
   @Transactional
   public List<JournalEntry> createStripePayoutEntry(CreateStripePayoutRequest request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe payout request is required.");
+    }
+    if (request.payoutDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe payout date is required.");
+    }
     String reference = request.reference() == null ? "" : request.reference().trim();
     if (!reference.isBlank() && stripePayoutRepository.findByReference(reference).isPresent()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe payout reference is already booked.");
@@ -316,7 +346,7 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe fee must be less than gross amount.");
     }
 
-    LocalDate voucherDate = request.payoutDate() == null ? LocalDate.now() : request.payoutDate();
+    LocalDate voucherDate = request.payoutDate();
     requireUnlockedAccountingDate(voucherDate);
 
     int netPayout = request.grossAmount() - request.feeAmount();
@@ -383,6 +413,10 @@ public class AccountingService {
   public JournalEntry createExpenseEntries(Expense expense) {
     requireUnlockedAccountingDate(expense.getExpenseDate());
 
+    int netAmount = wholeKrona(expense.getNetAmountMinorValue(), "expense net amount");
+    int vatAmount = wholeKrona(expense.getVatAmountMinorValue(), "expense VAT amount");
+    int totalAmount = wholeKrona(expense.getTotalAmountMinorValue(), "expense total amount");
+
     String voucherNumber = voucherNumberService.nextVoucherNumber("K");
     Account expenseAccount = account(expense.getCategory());
     Account inputVat = account("2641");
@@ -393,7 +427,7 @@ public class AccountingService {
         expense,
         expenseAccount,
         voucherNumber,
-        expense.getNetAmount(),
+        netAmount,
         0,
         "Expense: " + expense.getDescription(),
         expense.getExpenseDate()
@@ -403,7 +437,7 @@ public class AccountingService {
         expense,
         inputVat,
         voucherNumber,
-        expense.getVatAmount(),
+        vatAmount,
         0,
         "Expense VAT: " + expense.getDescription(),
         expense.getExpenseDate()
@@ -414,10 +448,21 @@ public class AccountingService {
         paidFrom,
         voucherNumber,
         0,
-        expense.getTotalAmount(),
+        totalAmount,
         "Expense paid: " + expense.getDescription(),
         expense.getExpenseDate()
     ));
+  }
+
+  private static int wholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new IllegalArgumentException(field + " contains ore that the current accounting API cannot represent safely.");
+    }
+    long amount = amountMinor / 100L;
+    if (amount < Integer.MIN_VALUE || amount > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException(field + " is outside the supported accounting range.");
+    }
+    return (int) amount;
   }
 
   public void createSupplierInvoiceEntries(SupplierInvoice supplierInvoice) {
@@ -429,6 +474,9 @@ public class AccountingService {
       return;
     }
 
+    int netAmount = wholeKronaFromMinor(supplierInvoice.getNetAmountMinor(), supplierInvoice.getNetAmount(), "leverantörsfakturans nettobelopp");
+    int vatAmount = wholeKronaFromMinor(supplierInvoice.getVatAmountMinor(), supplierInvoice.getVatAmount(), "leverantörsfakturans momsbelopp");
+    int totalAmount = wholeKronaFromMinor(supplierInvoice.getTotalAmountMinor(), supplierInvoice.getTotalAmount(), "leverantörsfakturans totalbelopp");
     requireUnlockedAccountingDate(supplierInvoice.getInvoiceDate());
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("L");
@@ -446,20 +494,20 @@ public class AccountingService {
         supplierInvoice,
         expenseAccount,
         voucherNumber,
-        supplierInvoice.getNetAmount(),
+        netAmount,
         0,
         description,
         supplierInvoice.getInvoiceDate()
     ));
 
-    if (supplierInvoice.getVatAmount() > 0) {
+    if (vatAmount > 0) {
       journalEntryRepository.save(new JournalEntry(
           null,
           null,
           supplierInvoice,
           inputVat,
           voucherNumber,
-          supplierInvoice.getVatAmount(),
+          vatAmount,
           0,
           (supplierInvoice.isSelfBilling() ? "Self-billing supplier invoice VAT: " : "Supplier invoice VAT: ") + supplierInvoice.getDescription(),
           supplierInvoice.getInvoiceDate()
@@ -473,7 +521,7 @@ public class AccountingService {
         payables,
         voucherNumber,
         0,
-        supplierInvoice.getTotalAmount(),
+        totalAmount,
         description,
         supplierInvoice.getInvoiceDate()
     ));
@@ -484,7 +532,7 @@ public class AccountingService {
   }
 
   public void createSupplierInvoicePaymentEntries(SupplierInvoice supplierInvoice, LocalDate paymentDate, int paidAmount, String paymentReference) {
-    LocalDate voucherDate = paymentDate == null ? LocalDate.now() : paymentDate;
+    LocalDate voucherDate = requireExplicitAccountingDate(paymentDate, "Supplier invoice payment date is required.");
     String reference = paymentReference == null ? "" : paymentReference.trim();
     if (hasSupplierInvoicePaymentEntry(supplierInvoice, voucherDate, paidAmount, reference)) {
       return;
@@ -551,10 +599,11 @@ public class AccountingService {
       return false;
     }
 
+    long paidAmountMinor = Math.multiplyExact((long) paidAmount, 100L);
     return journalEntryRepository.findBySupplierInvoice(supplierInvoice).stream()
         .anyMatch(entry -> "supplier_invoice_payment".equals(entry.getSourceType())
             && voucherDate.equals(entry.getVoucherDate())
-            && (entry.getDebit() == paidAmount || entry.getCredit() == paidAmount)
+            && (entry.getDebitMinorValue() == paidAmountMinor || entry.getCreditMinorValue() == paidAmountMinor)
             && entry.getDescription() != null
             && entry.getDescription().contains(reference));
   }
@@ -569,11 +618,13 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supplier invoice is required.");
     }
 
-    if (supplierInvoice.getPaidAmount() > 0 || "paid".equals(supplierInvoice.getStatus()) || "partial".equals(supplierInvoice.getStatus())) {
+    if (wholeKronaFromMinor(supplierInvoice.getPaidAmountMinor(), supplierInvoice.getPaidAmount(),
+        "leverantörsfakturans tidigare betalt") > 0
+        || "paid".equals(supplierInvoice.getStatus()) || "partial".equals(supplierInvoice.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Paid supplier invoices cannot be cancelled without a payment correction.");
     }
 
-    LocalDate voucherDate = cancellationDate == null ? LocalDate.now() : cancellationDate;
+    LocalDate voucherDate = requireExplicitAccountingDate(cancellationDate, "Supplier invoice cancellation date is required.");
     if (supplierInvoice.getInvoiceDate() != null && voucherDate.isBefore(supplierInvoice.getInvoiceDate())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation date cannot be before supplier invoice date.");
     }
@@ -585,6 +636,8 @@ public class AccountingService {
     if (originalEntries.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Supplier invoice has no bookkeeping entries to reverse.");
     }
+
+    validateCorrectionAmounts(originalEntries, "leverantörsfakturans korrigeringspost");
 
     String originalVoucherNumber = originalEntries.get(0).getVoucherNumber();
     boolean alreadyCancelled = journalEntryRepository.findBySupplierInvoice(supplierInvoice).stream()
@@ -606,8 +659,8 @@ public class AccountingService {
               supplierInvoice,
               account(entry.getAccountNumber()),
               correctionVoucherNumber,
-              entry.getCredit(),
-              entry.getDebit(),
+              reportAccountingWholeKrona(entry.getCreditMinorValue(), "leverantörsfakturans korrigeringsdebet"),
+              reportAccountingWholeKrona(entry.getDebitMinorValue(), "leverantörsfakturans korrigeringskredit"),
               "Cancellation of supplier invoice " + reference + ": " + entry.getDescription(),
               voucherDate
           );
@@ -624,16 +677,19 @@ public class AccountingService {
       return;
     }
 
+    int netAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getNetAmountMinor(), creditInvoice.getNetAmount(), "kreditfakturans nettobelopp"));
+    int vatAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getVatAmountMinor(), creditInvoice.getVatAmount(), "kreditfakturans momsbelopp"));
+    int totalAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getTotalAmountMinor(), creditInvoice.getTotalAmount(), "kreditfakturans totalbelopp"));
     String voucherNumber = voucherNumberService.nextVoucherNumber("KR");
     Account receivables = account("1510");
-    Account sales = account("3041");
-    Account outputVat = account("2611");
+    Account sales = account(VatRate.salesAccount(creditInvoice.getVatPercent()));
+    Account outputVat = account(VatRate.outputVatAccount(creditInvoice.getVatPercent()));
 
     journalEntryRepository.save(new JournalEntry(
         creditInvoice,
         sales,
         voucherNumber,
-        Math.abs(creditInvoice.getNetAmount()),
+        netAmount,
         0,
         "Credit invoice",
         creditInvoice.getInvoiceDate()
@@ -642,7 +698,7 @@ public class AccountingService {
         creditInvoice,
         outputVat,
         voucherNumber,
-        Math.abs(creditInvoice.getVatAmount()),
+        vatAmount,
         0,
         "Credit invoice",
         creditInvoice.getInvoiceDate()
@@ -652,7 +708,7 @@ public class AccountingService {
         receivables,
         voucherNumber,
         0,
-        Math.abs(creditInvoice.getTotalAmount()),
+        totalAmount,
         "Credit invoice",
         creditInvoice.getInvoiceDate()
     ));
@@ -663,6 +719,12 @@ public class AccountingService {
   }
 
   public List<JournalEntry> createManualEntry(CreateManualJournalEntryRequest request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Manual voucher request is required.");
+    }
+    if (request.voucherDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher date is required.");
+    }
     if (request.description() == null || request.description().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Description is required.");
     }
@@ -683,7 +745,7 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debit and credit account must be different.");
     }
 
-    LocalDate voucherDate = request.voucherDate() == null ? LocalDate.now() : request.voucherDate();
+    LocalDate voucherDate = request.voucherDate();
     requireUnlockedAccountingDate(voucherDate);
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("M");
@@ -772,6 +834,12 @@ public class AccountingService {
 
   @Transactional
   public List<JournalEntry> createManualMultiLineEntry(CreateManualMultiLineJournalEntryRequest request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Manual voucher request is required.");
+    }
+    if (request.voucherDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher date is required.");
+    }
     if (request.description() == null || request.description().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Description is required.");
     }
@@ -796,7 +864,7 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher total exceeds the supported limit.");
     }
 
-    LocalDate voucherDate = request.voucherDate() == null ? LocalDate.now() : request.voucherDate();
+    LocalDate voucherDate = request.voucherDate();
     requireUnlockedAccountingDate(voucherDate);
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("M");
@@ -819,6 +887,9 @@ public class AccountingService {
   public List<JournalEntry> createOpeningBalanceEntry(CreateOpeningBalanceRequest request) {
     if (request == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Opening balance request is required.");
+    }
+    if (request.voucherDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Opening balance date is required.");
     }
 
     String description = request.description() == null || request.description().isBlank()
@@ -845,7 +916,7 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Opening balance total exceeds the supported limit.");
     }
 
-    LocalDate voucherDate = request.voucherDate() == null ? LocalDate.now() : request.voucherDate();
+    LocalDate voucherDate = request.voucherDate();
     requireUnlockedAccountingDate(voucherDate);
     String voucherNumber = voucherNumberService.nextVoucherNumber("IB");
 
@@ -869,8 +940,11 @@ public class AccountingService {
     if (voucherNumber == null || voucherNumber.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voucher number is required.");
     }
+    if (request == null || request.voucherDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Correction date is required.");
+    }
 
-    List<JournalEntry> originalEntries = journalEntryRepository.findByVoucherNumber(voucherNumber);
+    List<JournalEntry> originalEntries = journalEntryRepository.findByVoucherNumberForCorrection(voucherNumber);
     if (originalEntries.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Voucher not found.");
     }
@@ -892,8 +966,10 @@ public class AccountingService {
       );
     }
 
-    LocalDate voucherDate = request == null || request.voucherDate() == null ? LocalDate.now() : request.voucherDate();
+    LocalDate voucherDate = request.voucherDate();
     requireUnlockedAccountingDate(voucherDate);
+
+    validateCorrectionAmounts(originalEntries, "verifikatets korrigeringspost");
 
     String correctionVoucherNumber = voucherNumberService.nextVoucherNumber("R");
     List<JournalEntry> correctionEntries = originalEntries.stream()
@@ -902,8 +978,8 @@ public class AccountingService {
               null,
               account(entry.getAccountNumber()),
               correctionVoucherNumber,
-              entry.getCredit(),
-              entry.getDebit(),
+              reportAccountingWholeKrona(entry.getCreditMinorValue(), "verifikatets korrigeringsdebet"),
+              reportAccountingWholeKrona(entry.getDebitMinorValue(), "verifikatets korrigeringskredit"),
               "Correction of " + voucherNumber + ": " + entry.getDescription(),
               voucherDate
           );
@@ -946,17 +1022,24 @@ public class AccountingService {
     List<JournalEntry> entries = entriesInPeriod.stream()
         .filter(entry -> !vatSettlementVoucherKeys.contains(entry.getVoucherNumber() == null ? "" : entry.getVoucherNumber()))
         .toList();
-    int outputVat = reportAmount(entries.stream()
-        .filter(entry -> entry.getAccountNumber().equals("2611"))
-        .mapToLong(entry -> (long) entry.getCredit() - entry.getDebit())
+    int outputVat = reportVatWholeKrona(entries.stream()
+        .filter(entry -> VatRate.isOutputVatAccount(entry.getAccountNumber()))
+        .mapToLong(this::journalMovementMinor)
         .sum());
-    int inputVat = reportAmount(entries.stream()
+    int salesBase25 = salesBase(entries, "3041");
+    int salesBase12 = salesBase(entries, "3042");
+    int salesBase6 = salesBase(entries, "3043");
+    int outputVat25 = outputVat(entries, "2611");
+    int outputVat12 = outputVat(entries, "2621");
+    int outputVat6 = outputVat(entries, "2631");
+    int inputVat = reportVatWholeKrona(entries.stream()
         .filter(entry -> entry.getAccountNumber().equals("2641"))
-        .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
+        .mapToLong(entry -> Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue()))
         .sum());
 
     boolean settled = hasVatSettlementForPeriod(periodFrom, periodTo) || !vatSettlementVoucherKeys.isEmpty();
-    return new VatReport(periodFrom, periodTo, outputVat, inputVat, reportAmount((long) outputVat - inputVat), settled);
+    return new VatReport(periodFrom, periodTo, outputVat, inputVat, reportAmount((long) outputVat - inputVat), settled,
+        salesBase25, outputVat25, salesBase12, outputVat12, salesBase6, outputVat6);
   }
 
   public VatControlReport createVatControlReport(LocalDate periodFrom, LocalDate periodTo) {
@@ -971,6 +1054,7 @@ public class AccountingService {
     List<VatControlIssue> issues = new ArrayList<>();
     long totalSalesNet = 0;
     long totalOutputVat = 0;
+    long totalExpectedOutputVat = 0;
     long totalPurchaseNet = 0;
     long totalInputVat = 0;
 
@@ -986,60 +1070,87 @@ public class AccountingService {
           .filter(date -> date != null)
           .min(LocalDate::compareTo)
           .orElse(null);
-      int salesNet = reportAmount(voucherEntries.stream()
+      int salesNet = reportAccountingWholeKrona(voucherEntries.stream()
           .filter(entry -> isSalesAccount(entry.getAccountNumber()))
-          .mapToLong(entry -> (long) entry.getCredit() - entry.getDebit())
-          .sum());
-      int outputVat = reportAmount(voucherEntries.stream()
-          .filter(entry -> "2611".equals(entry.getAccountNumber()))
-          .mapToLong(entry -> (long) entry.getCredit() - entry.getDebit())
-          .sum());
-      int purchaseNet = reportAmount(voucherEntries.stream()
+          .mapToLong(this::journalMovementMinor)
+          .sum(), "momsavstämningens försäljning");
+      int unclassifiedSalesNet = reportAccountingWholeKrona(voucherEntries.stream()
+          .filter(entry -> isSalesAccount(entry.getAccountNumber()))
+          .filter(entry -> VatRate.salesRate(entry.getAccountNumber()).isEmpty())
+          .mapToLong(this::journalMovementMinor)
+          .sum(), "momsavstämningens oklassificerade försäljning");
+      boolean hasUnclassifiedSales = voucherEntries.stream()
+          .anyMatch(entry -> isSalesAccount(entry.getAccountNumber())
+              && entry.getCreditMinorValue() != entry.getDebitMinorValue()
+              && VatRate.salesRate(entry.getAccountNumber()).isEmpty());
+      int outputVat = reportAccountingWholeKrona(voucherEntries.stream()
+          .filter(entry -> VatRate.isOutputVatAccount(entry.getAccountNumber()))
+          .mapToLong(this::journalMovementMinor)
+          .sum(), "momsavstämningens utgående moms");
+      int purchaseNet = reportAccountingWholeKrona(voucherEntries.stream()
           .filter(entry -> isPurchaseOrExpenseAccount(entry.getAccountNumber()))
-          .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
-          .sum());
-      int inputVat = reportAmount(voucherEntries.stream()
+          .mapToLong(entry -> Math.negateExact(journalMovementMinor(entry)))
+          .sum(), "momsavstämningens inköp");
+      int inputVat = reportAccountingWholeKrona(voucherEntries.stream()
           .filter(entry -> "2641".equals(entry.getAccountNumber()))
-          .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
-          .sum());
-      int expectedOutputVat = vatAt25Percent(salesNet);
+          .mapToLong(entry -> Math.negateExact(journalMovementMinor(entry)))
+          .sum(), "momsavstämningens ingående moms");
+      long expectedOutputVatTotal = 0;
+      for (int rate : List.of(6, 12, 25)) {
+        String salesAccount = VatRate.salesAccount(rate);
+        String outputVatAccount = VatRate.outputVatAccount(rate);
+        int rateSalesNet = accountMovement(voucherEntries, salesAccount);
+        int rateOutputVat = accountMovement(voucherEntries, outputVatAccount);
+        // Round once on the aggregated tax base. Rounding each journal line
+        // separately can understate VAT when several small lines share a rate.
+        int rateExpectedOutputVat = WholeKronaMath.roundedRatio(rateSalesNet, rate, 100);
+        expectedOutputVatTotal += rateExpectedOutputVat;
+
+        if (rateSalesNet != 0 && rateOutputVat == 0 && rateExpectedOutputVat != 0) {
+          issues.add(new VatControlIssue(
+              "critical", "sales_without_output_vat", voucherNumber, voucherDate,
+              rateSalesNet, rateOutputVat, rateExpectedOutputVat, purchaseNet, inputVat,
+              vatAt25Percent(purchaseNet), rateExpectedOutputVat,
+              "Sales on account " + salesAccount + " have no output VAT on account " + outputVatAccount + "."
+          ));
+        } else if (rateSalesNet != 0 && Math.abs((long) rateOutputVat - rateExpectedOutputVat) > 1) {
+          issues.add(new VatControlIssue(
+              "critical", "output_vat_difference", voucherNumber, voucherDate,
+              rateSalesNet, rateOutputVat, rateExpectedOutputVat, purchaseNet, inputVat,
+              vatAt25Percent(purchaseNet), reportAmount((long) rateOutputVat - rateExpectedOutputVat),
+              "Output VAT on account " + outputVatAccount + " differs from the expected amount for " + rate + "% sales."
+          ));
+        } else if (rateSalesNet == 0 && rateOutputVat != 0 && salesNet != 0) {
+          issues.add(new VatControlIssue(
+              "critical", "output_vat_difference", voucherNumber, voucherDate,
+              salesNet, rateOutputVat, 0, purchaseNet, inputVat, vatAt25Percent(purchaseNet), rateOutputVat,
+              "Output VAT is posted to account " + outputVatAccount + " without sales on its matching " + salesAccount + " account."
+          ));
+        }
+      }
+      int expectedOutputVat = reportAmount(expectedOutputVatTotal);
       int expectedMaxInputVat = vatAt25Percent(purchaseNet);
 
       totalSalesNet += salesNet;
       totalOutputVat += outputVat;
+      totalExpectedOutputVat += expectedOutputVat;
       totalPurchaseNet += purchaseNet;
       totalInputVat += inputVat;
 
-      int outputDifference = reportAmount((long) outputVat - expectedOutputVat);
-      if (salesNet != 0 && outputVat == 0) {
+      if (hasUnclassifiedSales) {
         issues.add(new VatControlIssue(
             "critical",
-            "sales_without_output_vat",
+            "unclassified_sales_vat",
             voucherNumber,
             voucherDate,
-            salesNet,
+            unclassifiedSalesNet,
             outputVat,
             expectedOutputVat,
             purchaseNet,
             inputVat,
             expectedMaxInputVat,
-            expectedOutputVat,
-            "Sales are booked but no output VAT on 2611 exists for the voucher."
-        ));
-      } else if (salesNet != 0 && Math.abs(outputDifference) > 1) {
-        issues.add(new VatControlIssue(
-            "critical",
-            "output_vat_difference",
-            voucherNumber,
-            voucherDate,
-            salesNet,
-            outputVat,
-            expectedOutputVat,
-            purchaseNet,
-            inputVat,
-            expectedMaxInputVat,
-            outputDifference,
-            "Output VAT differs from 25 percent of booked sales."
+            unclassifiedSalesNet,
+            "Sales use an account without a configured VAT rate. Confirm the treatment and map the account before filing."
         ));
       } else if (salesNet == 0 && outputVat != 0) {
         issues.add(new VatControlIssue(
@@ -1121,7 +1232,7 @@ public class AccountingService {
       }
     }
 
-    int expectedOutputVat = vatAt25Percent(reportAmount(totalSalesNet));
+    int expectedOutputVat = reportAmount(totalExpectedOutputVat);
     int expectedMaxInputVat = vatAt25Percent(reportAmount(totalPurchaseNet));
     int criticalIssueCount = (int) issues.stream().filter(issue -> "critical".equals(issue.severity())).count();
     int warningIssueCount = (int) issues.stream().filter(issue -> "warning".equals(issue.severity())).count();
@@ -1189,13 +1300,17 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VAT period already has a settlement voucher.");
     }
 
-    Account outputVat = account("2611");
+    Account outputVat25 = account("2611");
+    Account outputVat12 = account("2621");
+    Account outputVat6 = account("2631");
     Account inputVat = account("2641");
     Account vatPayable = account("2650");
     Account vatReceivable = account("1650");
     List<JournalEntry> entries = new ArrayList<>();
 
-    addVatClearingEntry(entries, outputVat, voucherNumber, report.outputVat(), true, description, settlementDate);
+    addVatClearingEntry(entries, outputVat25, voucherNumber, report.outputVat25(), true, description, settlementDate);
+    addVatClearingEntry(entries, outputVat12, voucherNumber, report.outputVat12(), true, description, settlementDate);
+    addVatClearingEntry(entries, outputVat6, voucherNumber, report.outputVat6(), true, description, settlementDate);
     addVatClearingEntry(entries, inputVat, voucherNumber, report.inputVat(), false, description, settlementDate);
 
     if (report.vatToPay() > 0) {
@@ -1296,7 +1411,7 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VAT settlement voucher must be booked before VAT payment is booked.");
     }
 
-    LocalDate voucherDate = paymentDate == null ? LocalDate.now() : paymentDate;
+    LocalDate voucherDate = requireExplicitAccountingDate(paymentDate, "VAT payment date is required.");
     requireUnlockedAccountingDate(voucherDate);
 
     String baseDescription = vatAmount > 0
@@ -1359,8 +1474,12 @@ public class AccountingService {
                 .filter(description -> description != null && !description.isBlank())
                 .findFirst()
                 .orElse(""),
-            reportAmount(entry.getValue().stream().mapToLong(JournalEntry::getDebit).sum()),
-            reportAmount(entry.getValue().stream().mapToLong(JournalEntry::getCredit).sum())
+            reportAccountingWholeKrona(
+                entry.getValue().stream().mapToLong(JournalEntry::getDebitMinorValue).reduce(0L, Math::addExact),
+                "momsbevisets debetsumma"),
+            reportAccountingWholeKrona(
+                entry.getValue().stream().mapToLong(JournalEntry::getCreditMinorValue).reduce(0L, Math::addExact),
+                "momsbevisets kreditsumma")
         ))
         .toList();
   }
@@ -1380,7 +1499,10 @@ public class AccountingService {
         .filter(entry -> isProfitAndLossExpenseAccount(entry.getAccountNumber()))
         .collect(Collectors.groupingBy(
             entry -> entry.getAccountNumber() + "|" + entry.getAccountName(),
-            Collectors.summingLong(entry -> (long) entry.getDebit() - entry.getCredit())
+            Collectors.summingLong(entry -> accountingReportMovementMinor(
+                entry,
+                false,
+                "resultatrapportens kostnadspost"))
         ))
         .entrySet()
         .stream()
@@ -1567,15 +1689,14 @@ public class AccountingService {
   }
 
   private AccountSignControlLine toAccountSignControlLine(List<JournalEntry> entries, AccountSignRule rule) {
-    int debit = reportAmount(entries.stream()
+    long balanceMinor = entries.stream()
         .filter(entry -> rule.accountNumber().equals(entry.getAccountNumber()))
-        .mapToLong(JournalEntry::getDebit)
-        .sum());
-    int credit = reportAmount(entries.stream()
-        .filter(entry -> rule.accountNumber().equals(entry.getAccountNumber()))
-        .mapToLong(JournalEntry::getCredit)
-        .sum());
-    int balance = reportAmount(rule.creditNature() ? (long) credit - debit : (long) debit - credit);
+        .mapToLong(entry -> accountingReportMovementMinor(
+            entry,
+            rule.creditNature(),
+            "kontoteckenkontrollens kontopost"))
+        .reduce(0L, Math::addExact);
+    int balance = reportAccountingWholeKrona(balanceMinor, "kontoteckenkontrollens saldo");
     boolean hasIssue = balance < -1;
     String status = hasIssue ? rule.severity() : "ok";
     String expectedNature = rule.creditNature() ? "credit" : "debit";
@@ -1616,6 +1737,8 @@ public class AccountingService {
         new AccountSignRule("2731", "Arbetsgivaravgift", true, true, "critical"),
         new AccountSignRule("1580", "Stripe-fordran", false, false, "warning"),
         new AccountSignRule("2611", "Utgaende moms", true, false, "warning"),
+        new AccountSignRule("2621", "Utgaende moms 12 procent", true, false, "warning"),
+        new AccountSignRule("2631", "Utgaende moms 6 procent", true, false, "warning"),
         new AccountSignRule("2641", "Ingaende moms", false, false, "warning")
     );
   }
@@ -1677,6 +1800,8 @@ public class AccountingService {
     for (int index = 0; index < entries.size(); index++) {
       JournalEntry entry = entries.get(index);
       String rowHash = entry.getIntegrityHash();
+      int debit = reportAccountingWholeKrona(entry.getDebitMinorValue(), "revisionsspårets debetpost");
+      int credit = reportAccountingWholeKrona(entry.getCreditMinorValue(), "revisionsspårets kreditpost");
       String chainHash = sha256(String.join("|",
           previousChainHash,
           rowHash,
@@ -1684,8 +1809,8 @@ public class AccountingService {
           value(entry.getVoucherDate()),
           value(entry.getVoucherNumber()),
           value(entry.getAccountNumber()),
-          String.valueOf(entry.getDebit()),
-          String.valueOf(entry.getCredit())
+          String.valueOf(entry.getDebitMinorValue()),
+          String.valueOf(entry.getCreditMinorValue())
       ));
 
       lines.add(new JournalIntegrityLine(
@@ -1696,8 +1821,8 @@ public class AccountingService {
           entry.getAccountNumber(),
           entry.getAccountName(),
           entry.getDescription(),
-          entry.getDebit(),
-          entry.getCredit(),
+          debit,
+          credit,
           entry.getSourceType(),
           entry.getSourceReference(),
           entry.getEvidenceStatus(),
@@ -1709,8 +1834,10 @@ public class AccountingService {
       previousChainHash = chainHash;
     }
 
-    int totalDebit = reportAmount(entries.stream().mapToLong(JournalEntry::getDebit).sum());
-    int totalCredit = reportAmount(entries.stream().mapToLong(JournalEntry::getCredit).sum());
+    long totalDebitMinor = entries.stream().mapToLong(JournalEntry::getDebitMinorValue).reduce(0L, Math::addExact);
+    long totalCreditMinor = entries.stream().mapToLong(JournalEntry::getCreditMinorValue).reduce(0L, Math::addExact);
+    int totalDebit = reportAccountingWholeKrona(totalDebitMinor, "revisionsspårets totaldebet");
+    int totalCredit = reportAccountingWholeKrona(totalCreditMinor, "revisionsspårets totalkredit");
     int missingEvidenceCount = (int) entries.stream()
         .filter(entry -> !"traceable".equals(entry.getEvidenceStatus()))
         .count();
@@ -1726,9 +1853,9 @@ public class AccountingService {
         value(periodTo),
         String.valueOf(entries.size()),
         String.valueOf(voucherCount),
-        String.valueOf(totalDebit),
-        String.valueOf(totalCredit),
-        String.valueOf(totalDebit - totalCredit),
+        String.valueOf(totalDebitMinor),
+        String.valueOf(totalCreditMinor),
+        String.valueOf(totalDebitMinor - totalCreditMinor),
         String.valueOf(missingEvidenceCount),
         firstChainHash,
         finalChainHash
@@ -1767,6 +1894,11 @@ public class AccountingService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "There are no journal entries to export.");
     }
 
+    entries.forEach(entry -> {
+      reportAccountingWholeKrona(entry.getDebitMinorValue(), "SIE-exportens debetpost");
+      reportAccountingWholeKrona(entry.getCreditMinorValue(), "SIE-exportens kreditpost");
+    });
+
     Map<String, List<JournalEntry>> voucherGroups = entries.stream()
         .collect(Collectors.groupingBy(
             entry -> entry.getVoucherNumber() == null || entry.getVoucherNumber().isBlank()
@@ -1778,8 +1910,8 @@ public class AccountingService {
 
     List<String> unbalancedVouchers = voucherGroups.entrySet()
         .stream()
-        .filter(entry -> entry.getValue().stream().mapToLong(JournalEntry::getDebit).sum()
-            != entry.getValue().stream().mapToLong(JournalEntry::getCredit).sum())
+        .filter(entry -> entry.getValue().stream().mapToLong(JournalEntry::getDebitMinorValue).sum()
+            != entry.getValue().stream().mapToLong(JournalEntry::getCreditMinorValue).sum())
         .map(Map.Entry::getKey)
         .toList();
 
@@ -1836,7 +1968,10 @@ public class AccountingService {
       lines.add("#VER " + sieString("A") + " " + sieString(voucherNumber) + " " + sieDate(voucherDate) + " " + sieString(voucherText));
       lines.add("{");
       voucherEntries.forEach(entry -> {
-        int amount = entry.getDebit() - entry.getCredit();
+        int amount = reportAccountingWholeKrona(
+            entry.getDebitMinorValue() - entry.getCreditMinorValue(),
+            "SIE-exportens verifikatbelopp"
+        );
         lines.add("  #TRANS "
             + (entry.getAccountNumber() == null || entry.getAccountNumber().isBlank() ? "0000" : entry.getAccountNumber())
             + " {} "
@@ -1871,8 +2006,10 @@ public class AccountingService {
         .filter(accountNumber -> accountNumber != null && !accountNumber.isBlank())
         .distinct()
         .count();
-    int totalDebit = reportAmount(entries.stream().mapToLong(JournalEntry::getDebit).sum());
-    int totalCredit = reportAmount(entries.stream().mapToLong(JournalEntry::getCredit).sum());
+    long totalDebitMinor = entries.stream().mapToLong(JournalEntry::getDebitMinorValue).reduce(0L, Math::addExact);
+    long totalCreditMinor = entries.stream().mapToLong(JournalEntry::getCreditMinorValue).reduce(0L, Math::addExact);
+    int totalDebit = reportAccountingWholeKrona(totalDebitMinor, "SIE-kvittots totaldebet");
+    int totalCredit = reportAccountingWholeKrona(totalCreditMinor, "SIE-kvittots totalkredit");
     boolean exportReady = !entries.isEmpty()
         && totalDebit == totalCredit
         && voucherControlReport.criticalIssueCount() == 0
@@ -2483,8 +2620,12 @@ public class AccountingService {
     for (Map.Entry<String, List<JournalEntry>> voucherGroup : voucherGroups.entrySet()) {
       String voucherNumber = voucherGroup.getKey();
       List<JournalEntry> voucherEntries = voucherGroup.getValue();
-      int debit = reportAmount(voucherEntries.stream().mapToLong(JournalEntry::getDebit).sum());
-      int credit = reportAmount(voucherEntries.stream().mapToLong(JournalEntry::getCredit).sum());
+      int debit = reportAccountingWholeKrona(
+          voucherEntries.stream().mapToLong(JournalEntry::getDebitMinorValue).reduce(0L, Math::addExact),
+          "verifikationskontrollens debetsumma");
+      int credit = reportAccountingWholeKrona(
+          voucherEntries.stream().mapToLong(JournalEntry::getCreditMinorValue).reduce(0L, Math::addExact),
+          "verifikationskontrollens kreditsumma");
       LocalDate voucherDate = voucherEntries.stream()
           .map(JournalEntry::getVoucherDate)
           .filter(date -> date != null)
@@ -2681,7 +2822,10 @@ public class AccountingService {
         .filter(entry -> entry.getAccountNumber().startsWith(accountPrefix))
         .collect(Collectors.groupingBy(
             entry -> entry.getAccountNumber() + "|" + entry.getAccountName(),
-            Collectors.summingLong(entry -> creditPositive ? (long) entry.getCredit() - entry.getDebit() : (long) entry.getDebit() - entry.getCredit())
+            Collectors.summingLong(entry -> accountingReportMovementMinor(
+                entry,
+                creditPositive,
+                "resultat- och balansrapportens kontopost"))
         ))
         .entrySet()
         .stream()
@@ -2768,22 +2912,33 @@ public class AccountingService {
         .filter(name -> name != null && !name.isBlank())
         .findFirst()
         .orElse("");
-    int openingBalance = reportAmount(accountEntries.stream()
+    long openingBalanceMinor = accountEntries.stream()
         .filter(entry -> periodFrom != null
             && entry.getVoucherDate() != null
             && entry.getVoucherDate().isBefore(periodFrom))
-        .mapToLong(entry -> (long) entry.getDebit() - entry.getCredit())
-        .sum());
+        .mapToLong(entry -> Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue()))
+        .reduce(0L, Math::addExact);
+    int openingBalance = reportAccountingWholeKrona(openingBalanceMinor, "huvudbokens ingående saldo");
     List<JournalEntry> periodEntries = accountEntries.stream()
         .filter(entry -> isWithinPeriod(entry.getVoucherDate(), periodFrom, periodTo))
         .toList();
-    int periodDebit = reportAmount(periodEntries.stream().mapToLong(JournalEntry::getDebit).sum());
-    int periodCredit = reportAmount(periodEntries.stream().mapToLong(JournalEntry::getCredit).sum());
+    long periodDebitMinor = periodEntries.stream()
+        .mapToLong(JournalEntry::getDebitMinorValue)
+        .reduce(0L, Math::addExact);
+    long periodCreditMinor = periodEntries.stream()
+        .mapToLong(JournalEntry::getCreditMinorValue)
+        .reduce(0L, Math::addExact);
+    int periodDebit = reportAccountingWholeKrona(periodDebitMinor, "huvudbokens perioddebet");
+    int periodCredit = reportAccountingWholeKrona(periodCreditMinor, "huvudbokens periodkredit");
 
     List<GeneralLedgerEntry> ledgerEntries = new ArrayList<>();
-    int runningBalance = openingBalance;
+    long runningBalanceMinor = openingBalanceMinor;
     for (JournalEntry entry : periodEntries) {
-      runningBalance = reportAmount((long) runningBalance + entry.getDebit() - entry.getCredit());
+      runningBalanceMinor = Math.addExact(runningBalanceMinor,
+          Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue()));
+      int runningBalance = reportAccountingWholeKrona(runningBalanceMinor, "huvudbokens löpande saldo");
+      int debit = reportAccountingWholeKrona(entry.getDebitMinorValue(), "huvudbokens debetpost");
+      int credit = reportAccountingWholeKrona(entry.getCreditMinorValue(), "huvudbokens kreditpost");
       ledgerEntries.add(new GeneralLedgerEntry(
           entry.getId(),
           entry.getVoucherDate(),
@@ -2796,12 +2951,13 @@ public class AccountingService {
           entry.getEvidenceStatus(),
           entry.getEvidenceHash(),
           entry.getCorrectionOfVoucherNumber(),
-          entry.getDebit(),
-          entry.getCredit(),
+          debit,
+          credit,
           runningBalance,
           entry.getIntegrityHash()
       ));
     }
+    int closingBalance = reportAccountingWholeKrona(runningBalanceMinor, "huvudbokens utgående saldo");
 
     return new GeneralLedgerAccount(
         accountNumber,
@@ -2809,7 +2965,7 @@ public class AccountingService {
         openingBalance,
         periodDebit,
         periodCredit,
-        runningBalance,
+        closingBalance,
         ledgerEntries
     );
   }
@@ -2818,21 +2974,26 @@ public class AccountingService {
     String[] parts = entry.getKey().split("\\|", 2);
     List<JournalEntry> entries = entry.getValue();
 
-    int openingBalance = reportAmount(entries.stream()
+    long openingBalanceMinor = entries.stream()
         .filter(journalEntry -> periodFrom != null
             && journalEntry.getVoucherDate() != null
             && journalEntry.getVoucherDate().isBefore(periodFrom))
-        .mapToLong(journalEntry -> (long) journalEntry.getDebit() - journalEntry.getCredit())
-        .sum());
-    int periodDebit = reportAmount(entries.stream()
+        .mapToLong(journalEntry -> Math.subtractExact(journalEntry.getDebitMinorValue(), journalEntry.getCreditMinorValue()))
+        .reduce(0L, Math::addExact);
+    int openingBalance = reportAccountingWholeKrona(openingBalanceMinor, "saldobalansens ingående saldo");
+    long periodDebitMinor = entries.stream()
         .filter(journalEntry -> isWithinPeriod(journalEntry.getVoucherDate(), periodFrom, periodTo))
-        .mapToLong(JournalEntry::getDebit)
-        .sum());
-    int periodCredit = reportAmount(entries.stream()
+        .mapToLong(JournalEntry::getDebitMinorValue)
+        .reduce(0L, Math::addExact);
+    long periodCreditMinor = entries.stream()
         .filter(journalEntry -> isWithinPeriod(journalEntry.getVoucherDate(), periodFrom, periodTo))
-        .mapToLong(JournalEntry::getCredit)
-        .sum());
-    int closingBalance = reportAmount((long) openingBalance + periodDebit - periodCredit);
+        .mapToLong(JournalEntry::getCreditMinorValue)
+        .reduce(0L, Math::addExact);
+    int periodDebit = reportAccountingWholeKrona(periodDebitMinor, "saldobalansens perioddebet");
+    int periodCredit = reportAccountingWholeKrona(periodCreditMinor, "saldobalansens periodkredit");
+    int closingBalance = reportAccountingWholeKrona(
+        Math.subtractExact(Math.addExact(openingBalanceMinor, periodDebitMinor), periodCreditMinor),
+        "saldobalansens utgående saldo");
 
     return new TrialBalanceLine(
         parts[0],
@@ -2856,7 +3017,15 @@ public class AccountingService {
 
   private ReportLine toReportLine(Map.Entry<String, Long> entry) {
     String[] parts = entry.getKey().split("\\|", 2);
-    return new ReportLine(parts[0], parts[1], reportAmount(entry.getValue()));
+    return new ReportLine(parts[0], parts[1], reportAccountingWholeKrona(entry.getValue(), "rapportens kontosaldo"));
+  }
+
+  private long accountingReportMovementMinor(JournalEntry entry, boolean creditPositive, String field) {
+    long movementMinor = creditPositive
+        ? journalMovementMinor(entry)
+        : Math.negateExact(journalMovementMinor(entry));
+    reportAccountingWholeKrona(movementMinor, field);
+    return movementMinor;
   }
 
   private ReportLine yearResultLine(int result) {
@@ -2915,8 +3084,8 @@ public class AccountingService {
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("B");
     Account bank = account(receivedAccount);
-    Account sales = account("3041");
-    Account outputVat = account("2611");
+    Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
+    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
 
     JournalEntry bankEntry = journalEntryRepository.save(new JournalEntry(
         invoice,
@@ -2958,8 +3127,8 @@ public class AccountingService {
     int netAmount = amount - vatAmount;
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("AR");
-    Account sales = account("3041");
-    Account outputVat = account("2611");
+    Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
+    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
     Account bank = account("1930");
 
     journalEntryRepository.save(new JournalEntry(
@@ -3050,41 +3219,45 @@ public class AccountingService {
   }
 
   private int cashMethodVatForPayment(Order invoice, int paidAmount) {
-    int invoiceTotal = invoice.getTotalAmount();
-    if (invoiceTotal <= 0 || invoice.getVatAmount() <= 0) {
+    int invoiceTotal = wholeKronaFromMinor(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "fakturans totalbelopp");
+    int invoiceVat = wholeKronaFromMinor(invoice.getVatAmountMinor(), invoice.getVatAmount(), "fakturans momsbelopp");
+    if (invoiceTotal <= 0 || invoiceVat <= 0) {
       return 0;
     }
 
-    int previouslyPaid = Math.max(invoice.getPaidAmount(), 0);
+    int previouslyPaid = Math.max(wholeKronaFromMinor(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "fakturans tidigare betalt"), 0);
     int paidAfterThisPayment = (int) Math.min((long) previouslyPaid + paidAmount, invoiceTotal);
-    int previousVat = WholeKronaMath.roundedRatio(invoice.getVatAmount(), previouslyPaid, invoiceTotal);
-    int vatAfterThisPayment = WholeKronaMath.roundedRatio(invoice.getVatAmount(), paidAfterThisPayment, invoiceTotal);
+    int previousVat = WholeKronaMath.roundedRatio(invoiceVat, previouslyPaid, invoiceTotal);
+    int vatAfterThisPayment = WholeKronaMath.roundedRatio(invoiceVat, paidAfterThisPayment, invoiceTotal);
     return Math.max(vatAfterThisPayment - previousVat, 0);
   }
 
   private int cashMethodVatForRefund(Order invoice, int refundAmount) {
-    int invoiceTotal = invoice.getTotalAmount();
-    if (invoiceTotal <= 0 || invoice.getVatAmount() <= 0) {
+    int invoiceTotal = wholeKronaFromMinor(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "fakturans totalbelopp");
+    int invoiceVat = wholeKronaFromMinor(invoice.getVatAmountMinor(), invoice.getVatAmount(), "fakturans momsbelopp");
+    if (invoiceTotal <= 0 || invoiceVat <= 0) {
       return 0;
     }
 
-    int previouslyRefunded = Math.max(invoice.getRefundedAmount(), 0);
-    int refundedAfterThisRefund = (int) Math.min((long) previouslyRefunded + refundAmount, invoice.getPaidAmount());
-    int previousVat = WholeKronaMath.roundedRatio(invoice.getVatAmount(), previouslyRefunded, invoiceTotal);
-    int vatAfterThisRefund = WholeKronaMath.roundedRatio(invoice.getVatAmount(), refundedAfterThisRefund, invoiceTotal);
+    int previouslyRefunded = Math.max(wholeKronaFromMinor(invoice.getRefundedAmountMinor(), invoice.getRefundedAmount(), "fakturans tidigare återbetalt"), 0);
+    int paidAmount = Math.max(wholeKronaFromMinor(invoice.getPaidAmountMinor(), invoice.getPaidAmount(), "fakturans betalt"), 0);
+    int refundedAfterThisRefund = (int) Math.min((long) previouslyRefunded + refundAmount, paidAmount);
+    int previousVat = WholeKronaMath.roundedRatio(invoiceVat, previouslyRefunded, invoiceTotal);
+    int vatAfterThisRefund = WholeKronaMath.roundedRatio(invoiceVat, refundedAfterThisRefund, invoiceTotal);
     return Math.max(vatAfterThisRefund - previousVat, 0);
   }
 
   private int cashMethodVatForSupplierInvoicePayment(SupplierInvoice supplierInvoice, int paidAmount) {
-    int invoiceTotal = supplierInvoice.getTotalAmount();
-    if (invoiceTotal <= 0 || supplierInvoice.getVatAmount() <= 0) {
+    int invoiceTotal = wholeKronaFromMinor(supplierInvoice.getTotalAmountMinor(), supplierInvoice.getTotalAmount(), "leverantörsfakturans totalbelopp");
+    int invoiceVat = wholeKronaFromMinor(supplierInvoice.getVatAmountMinor(), supplierInvoice.getVatAmount(), "leverantörsfakturans momsbelopp");
+    if (invoiceTotal <= 0 || invoiceVat <= 0) {
       return 0;
     }
 
-    int previouslyPaid = Math.max(supplierInvoice.getPaidAmount(), 0);
+    int previouslyPaid = Math.max(wholeKronaFromMinor(supplierInvoice.getPaidAmountMinor(), supplierInvoice.getPaidAmount(), "leverantörsfakturans tidigare betalt"), 0);
     int paidAfterThisPayment = (int) Math.min((long) previouslyPaid + paidAmount, invoiceTotal);
-    int previousVat = WholeKronaMath.roundedRatio(supplierInvoice.getVatAmount(), previouslyPaid, invoiceTotal);
-    int vatAfterThisPayment = WholeKronaMath.roundedRatio(supplierInvoice.getVatAmount(), paidAfterThisPayment, invoiceTotal);
+    int previousVat = WholeKronaMath.roundedRatio(invoiceVat, previouslyPaid, invoiceTotal);
+    int vatAfterThisPayment = WholeKronaMath.roundedRatio(invoiceVat, paidAfterThisPayment, invoiceTotal);
     return Math.max(vatAfterThisPayment - previousVat, 0);
   }
 
@@ -3093,7 +3266,51 @@ public class AccountingService {
   }
 
   private int vatAt25Percent(int netAmount) {
-    return WholeKronaMath.roundedRatio(netAmount, 1, 4);
+    return WholeKronaMath.roundedRatio(netAmount, 25, 100);
+  }
+
+  private int salesBase(List<JournalEntry> entries, String accountNumber) {
+    return reportVatWholeKrona(entries.stream()
+        .filter(entry -> accountNumber.equals(entry.getAccountNumber()))
+        .mapToLong(this::journalMovementMinor)
+        .sum());
+  }
+
+  private int outputVat(List<JournalEntry> entries, String accountNumber) {
+    return reportVatWholeKrona(entries.stream()
+        .filter(entry -> accountNumber.equals(entry.getAccountNumber()))
+        .mapToLong(this::journalMovementMinor)
+        .sum());
+  }
+
+  private long journalMovementMinor(JournalEntry entry) {
+    return Math.subtractExact(entry.getCreditMinorValue(), entry.getDebitMinorValue());
+  }
+
+  private int reportVatWholeKrona(long amountMinor) {
+    return reportAccountingWholeKrona(amountMinor, "momsrapportens belopp");
+  }
+
+  private void validateCorrectionAmounts(List<JournalEntry> entries, String field) {
+    for (JournalEntry entry : entries) {
+      reportAccountingWholeKrona(entry.getDebitMinorValue(), field + " debet");
+      reportAccountingWholeKrona(entry.getCreditMinorValue(), field + " kredit");
+    }
+  }
+
+  private int reportAccountingWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Rapporten innehåller ören i " + field + " som den nuvarande kronrapporten inte kan representera. Rapporten har stoppats.");
+    }
+    return reportAmount(amountMinor / 100L);
+  }
+
+  private int wholeKronaFromMinor(Long amountMinor, int legacyAmount, String field) {
+    long valueMinor = amountMinor == null
+        ? Math.multiplyExact((long) legacyAmount, 100L)
+        : amountMinor;
+    return reportAccountingWholeKrona(valueMinor, field);
   }
 
   private String sieString(String value) {
@@ -3116,6 +3333,13 @@ public class AccountingService {
 
   private boolean isSalesAccount(String accountNumber) {
     return accountNumber != null && accountNumber.startsWith("3");
+  }
+
+  private int accountMovement(List<JournalEntry> entries, String accountNumber) {
+    return reportVatWholeKrona(entries.stream()
+        .filter(entry -> accountNumber.equals(entry.getAccountNumber()))
+        .mapToLong(this::journalMovementMinor)
+        .sum());
   }
 
   private boolean isPurchaseOrExpenseAccount(String accountNumber) {
@@ -3239,8 +3463,10 @@ public class AccountingService {
       ParsedVoucherNumber parsedVoucherNumber = parseVoucherNumber(voucherNumber);
       String series = parsedVoucherNumber == null ? entry.getVoucherSeries() : parsedVoucherNumber.series();
       Integer sequenceNumber = parsedVoucherNumber == null ? null : parsedVoucherNumber.sequenceNumber();
+      int debit = reportAccountingWholeKrona(entry.getDebitMinorValue(), "verifikationskontrollens debetpost");
+      int credit = reportAccountingWholeKrona(entry.getCreditMinorValue(), "verifikationskontrollens kreditpost");
 
-      if (entry.getDebit() < 0 || entry.getCredit() < 0) {
+      if (debit < 0 || credit < 0) {
         issues.add(new VoucherControlIssue(
             "critical",
             "journal_line_negative_amount",
@@ -3249,13 +3475,13 @@ public class AccountingService {
             null,
             sequenceNumber,
             entry.getVoucherDate(),
-            entry.getDebit(),
-            entry.getCredit(),
+            debit,
+            credit,
             "Journal line has a negative debit or credit amount."
         ));
       }
 
-      if (entry.getDebit() == 0 && entry.getCredit() == 0) {
+      if (debit == 0 && credit == 0) {
         issues.add(new VoucherControlIssue(
             "critical",
             "journal_line_zero_amount",
@@ -3264,13 +3490,13 @@ public class AccountingService {
             null,
             sequenceNumber,
             entry.getVoucherDate(),
-            entry.getDebit(),
-            entry.getCredit(),
+            debit,
+            credit,
             "Journal line has neither debit nor credit."
         ));
       }
 
-      if (entry.getDebit() > 0 && entry.getCredit() > 0) {
+      if (debit > 0 && credit > 0) {
         issues.add(new VoucherControlIssue(
             "critical",
             "journal_line_has_debit_and_credit",
@@ -3279,8 +3505,8 @@ public class AccountingService {
             null,
             sequenceNumber,
             entry.getVoucherDate(),
-            entry.getDebit(),
-            entry.getCredit(),
+            debit,
+            credit,
             "Journal line has both debit and credit. Split it into separate rows."
         ));
       }
@@ -3288,9 +3514,13 @@ public class AccountingService {
   }
 
   private boolean stripeWebsiteSaleReferenceExists(String reference) {
-    return journalEntryRepository.findAll().stream()
-        .anyMatch(entry -> entry.getDescription() != null
-            && entry.getDescription().startsWith("Stripe website sale")
-            && entry.getDescription().contains(reference));
+    return journalEntryRepository.existsByDescription(reference);
+  }
+
+  private LocalDate requireExplicitAccountingDate(LocalDate date, String message) {
+    if (date == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+    return date;
   }
 }

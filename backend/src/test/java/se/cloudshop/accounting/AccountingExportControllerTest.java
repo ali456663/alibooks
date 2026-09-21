@@ -1,6 +1,7 @@
 package se.cloudshop.accounting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
@@ -22,11 +25,23 @@ class AccountingExportControllerTest {
   private final AuthHeader authHeader = new AuthHeader(jwtService);
   private final AccountingService accountingService = mock(AccountingService.class);
   private final AuditService auditService = mock(AuditService.class);
+  private final VatFilingService vatFilingService = mock(VatFilingService.class);
+  private final VoucherApprovalService voucherApprovalService = mock(VoucherApprovalService.class);
   private final AccountingExportController controller = new AccountingExportController(
       authHeader,
       accountingService,
       auditService
   );
+
+  private AccountingController accountingController() {
+    return new AccountingController(
+        accountingService,
+        vatFilingService,
+        voucherApprovalService,
+        authHeader,
+        auditService
+    );
+  }
 
   @Test
   void journalEntriesExportRecordsAuditEventWithEntryCount() {
@@ -58,6 +73,46 @@ class AccountingExportControllerTest {
         2,
         authorizationHeader
     );
+  }
+
+  @Test
+  void journalEntriesExportStopsWhenMinorShadowContainsOre() {
+    JournalEntry entry = new JournalEntry(
+        null,
+        new Account("1930", "Foretagskonto"),
+        "F-1",
+        1250,
+        0,
+        "Invoice",
+        LocalDate.of(2026, 7, 10)
+    );
+    ReflectionTestUtils.setField(entry, "debitMinor", 125050L);
+    when(accountingService.findAllEntries()).thenReturn(List.of(entry));
+    String authorizationHeader = "Bearer " + jwtService.createToken("ali@example.com");
+
+    assertThatThrownBy(() -> controller.exportJournalEntries(authorizationHeader, null, null))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("contains ore");
+  }
+
+  @Test
+  void vatFilingExportStopsPerRowWhenMinorShadowContainsOre() {
+    VatFiling filing = new VatFiling();
+    ReflectionTestUtils.setField(filing, "periodFrom", LocalDate.of(2026, 7, 1));
+    ReflectionTestUtils.setField(filing, "periodTo", LocalDate.of(2026, 7, 31));
+    ReflectionTestUtils.setField(filing, "outputVat", 1250);
+    ReflectionTestUtils.setField(filing, "inputVat", 0);
+    ReflectionTestUtils.setField(filing, "vatToPay", 1250);
+    ReflectionTestUtils.setField(filing, "outputVatMinor", 125050L);
+    ReflectionTestUtils.setField(filing, "inputVatMinor", 0L);
+    ReflectionTestUtils.setField(filing, "vatToPayMinor", 125050L);
+    ReflectionTestUtils.setField(filing, "status", "DRAFT");
+    when(vatFilingService.findAll()).thenReturn(List.of(filing));
+    String authorizationHeader = "Bearer " + jwtService.createToken("ali@example.com");
+
+    assertThatThrownBy(() -> accountingController().exportVatFilings(authorizationHeader))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("innehåller ören");
   }
 
   @Test

@@ -42,6 +42,33 @@ class ProductServiceTest {
   }
 
   @Test
+  void persistsConfiguredSupportedVatRate() {
+    ProductRepository productRepository = mock(ProductRepository.class);
+    ProductService productService = new ProductService(productRepository);
+    Product request = new Product("PT Start", "Coaching package", 1200);
+    request.setVatPercent(6);
+    when(productRepository.save(any(Product.class)))
+        .thenAnswer(invocation -> (Product) invocation.getArgument(0));
+
+    Product saved = productService.create(request);
+
+    assertThat(saved.getVatPercent()).isEqualTo(6);
+  }
+
+  @Test
+  void rejectsUnsupportedVatRateBeforeSaving() {
+    ProductRepository productRepository = mock(ProductRepository.class);
+    ProductService productService = new ProductService(productRepository);
+    Product request = new Product("PT Start", "Coaching package", 1200);
+    request.setVatPercent(17);
+
+    assertThatThrownBy(() -> productService.create(request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("VAT rate");
+    verify(productRepository, never()).save(any(Product.class));
+  }
+
+  @Test
   void rejectsEmptyServiceNameBeforeSaving() {
     ProductRepository productRepository = mock(ProductRepository.class);
     ProductService productService = new ProductService(productRepository);

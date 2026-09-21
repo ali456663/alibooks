@@ -63,15 +63,17 @@ check(
 );
 
 check(
-  "Visual shader chunk stays lazy and bounded",
-  visualChunks.length > 0 && largestVisualSize <= maxVisualBytes,
-  `Largest visual chunk is ${sizeLabel(largestVisualSize)}; budget is ${sizeLabel(maxVisualBytes)}.`
+  "Decorative 3D shader chunk is absent or bounded",
+  visualChunks.length === 0 || largestVisualSize <= maxVisualBytes,
+  visualChunks.length === 0
+    ? "No decorative 3D shader chunk is shipped with the accounting workspace."
+    : `Largest lazy visual chunk is ${sizeLabel(largestVisualSize)}; budget is ${sizeLabel(maxVisualBytes)}.`
 );
 
 check(
-  "Motion and animation dependencies are split",
-  motionChunks.length > 0 && animationChunks.length > 0,
-  "framer-motion and GSAP should stay in separate chunks instead of the main accounting app chunk."
+  "Landing motion is split and unused GSAP is absent",
+  motionChunks.length > 0 && animationChunks.length === 0,
+  "framer-motion should stay in its own landing chunk; unused GSAP should not ship with the accounting workspace."
 );
 
 check(

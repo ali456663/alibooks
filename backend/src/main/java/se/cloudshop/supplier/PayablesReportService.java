@@ -8,9 +8,11 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.SettlementSnapshot;
 import se.cloudshop.audit.AuditEventRepository;
 
@@ -96,20 +98,23 @@ public class PayablesReportService {
 
   private PayablesAgingInvoice toAgingInvoice(SupplierInvoice invoice, LocalDate asOf) {
     String status = String.valueOf(invoice.getStatus());
+    long totalAmountMinor = minorOrWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount());
+    long savedPaidAmountMinor = minorOrWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount());
     if (!List.of("unpaid", "prepared", "booked", "partial", "paid", "cancelled").contains(status)
-        || ("paid".equals(status) && invoice.getPaidAmount() != invoice.getTotalAmount())
-        || ("partial".equals(status) && (invoice.getPaidAmount() <= 0 || invoice.getPaidAmount() >= invoice.getTotalAmount()))
-        || (!List.of("paid", "partial").contains(status) && invoice.getPaidAmount() != 0)
+        || ("paid".equals(status) && savedPaidAmountMinor != totalAmountMinor)
+        || ("partial".equals(status) && (savedPaidAmountMinor <= 0 || savedPaidAmountMinor >= totalAmountMinor))
+        || (!List.of("paid", "partial").contains(status) && savedPaidAmountMinor != 0)
         || ("cancelled".equals(status) != (invoice.getCancelledAt() != null))) {
       throw SettlementSnapshot.incomplete();
     }
-    SettlementSnapshot balance = SettlementSnapshot.at(invoice.getTotalAmount(), invoice.getPaidAmount(),
-        invoice.getInvoiceDate(), invoice.getCancelledAt(), SupplierPaymentHistory.read(invoice.getPaymentHistory()), asOf);
+    SettlementSnapshot.MinorSettlement balance = SettlementSnapshot.atMinor(totalAmountMinor, savedPaidAmountMinor,
+        invoice.getInvoiceDate(), invoice.getCancelledAt(), SupplierPaymentHistory.read(invoice.getPaymentHistory()).stream()
+            .map(payment -> new SettlementSnapshot.MinorPayment(payment.date(), Math.multiplyExact((long) payment.amount(), 100L))).toList(), asOf);
     long daysOverdue = invoice.getDueDate() == null ? 0 : ChronoUnit.DAYS.between(invoice.getDueDate(), asOf);
     String bucketKey = bucketKey(invoice.getDueDate(), daysOverdue);
     String bucketTitle = bucketTitle(bucketKey);
     boolean paymentRecommended = asOf.equals(LocalDate.now()) && !"cancelled".equals(status)
-        && invoice.getRemainingAmount() > 0 && invoice.getDueDate() != null
+        && balance.remainingAmountMinor() > 0 && invoice.getDueDate() != null
         && ChronoUnit.DAYS.between(asOf, invoice.getDueDate()) <= 5;
 
     return new PayablesAgingInvoice(
@@ -119,14 +124,14 @@ public class PayablesReportService {
         invoice.getSupplierOrgNumber(),
         invoice.getInvoiceDate(),
         invoice.getDueDate(),
-        balance.paidAmount() > 0 ? "partial" : "unpaid",
+        balance.paidAmountMinor() > 0 ? "partial" : "unpaid",
         invoice.getReference(),
         invoice.getDescription(),
         invoice.getCategory(),
-        invoice.getNetAmount(),
-        invoice.getVatAmount(),
-        invoice.getTotalAmount(),
-        balance.remainingAmount(),
+        reportWholeKrona(minorOrWholeKrona(invoice.getNetAmountMinor(), invoice.getNetAmount()), "leverantörsfakturans nettobelopp"),
+        reportWholeKrona(minorOrWholeKrona(invoice.getVatAmountMinor(), invoice.getVatAmount()), "leverantörsfakturans momsbelopp"),
+        reportWholeKrona(totalAmountMinor, "leverantörsfakturans totalbelopp"),
+        reportWholeKrona(balance.remainingAmountMinor(), "leverantörsfakturans kvarvarande belopp"),
         Math.max(Math.toIntExact(daysOverdue), 0),
         bucketKey,
         bucketTitle,
@@ -166,6 +171,18 @@ public class PayablesReportService {
 
   private void addBucket(Map<String, BucketSummary> summaries, String key, String title) {
     summaries.put(key, new BucketSummary(title));
+  }
+
+  private long minorOrWholeKrona(Long minor, int wholeKrona) {
+    return minor == null ? Math.multiplyExact((long) wholeKrona, 100L) : minor;
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Leverantörsreskontran innehåller ören i " + field + ". Rapporten har stoppats för att undvika avrundningsfel.");
+    }
+    return reportAmount(amountMinor / 100L);
   }
 
   private static class BucketSummary {

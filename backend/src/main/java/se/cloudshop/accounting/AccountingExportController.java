@@ -6,12 +6,14 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.export.CsvEscaper;
@@ -42,7 +44,7 @@ public class AccountingExportController {
         .filter(entry -> isWithinPeriod(entry.getVoucherDate(), from, to))
         .toList();
     StringBuilder csv = new StringBuilder();
-    csv.append("Verifikat,Serie,Lopnummer,Datum,Kalla,Kallreferens,Underlagsstatus,Rattelse av,Konto,Kontonamn,Beskrivning,Debet,Kredit,Integritetskod\n");
+    csv.append("Verifikat,Serie,Lopnummer,Datum,Kalla,Kallreferens,Underlagsstatus,Rattelse av,Konto,Kontonamn,Beskrivning,Debet,Kredit,DebetMinor,KreditMinor,Integritetskod\n");
 
     for (JournalEntry entry : entries) {
       csv.append(escape(entry.getVoucherNumber())).append(",");
@@ -56,8 +58,12 @@ public class AccountingExportController {
       csv.append(escape(entry.getAccountNumber())).append(",");
       csv.append(escape(entry.getAccountName())).append(",");
       csv.append(escape(entry.getDescription())).append(",");
-      csv.append(entry.getDebit()).append(",");
-      csv.append(entry.getCredit()).append(",");
+      long debitMinor = entry.getDebitMinorValue();
+      long creditMinor = entry.getCreditMinorValue();
+      csv.append(reportWholeKrona(debitMinor, "journalexportens debet")).append(",");
+      csv.append(reportWholeKrona(creditMinor, "journalexportens kredit")).append(",");
+      csv.append(debitMinor).append(",");
+      csv.append(creditMinor).append(",");
       csv.append(escape(entry.getIntegrityHash())).append("\n");
     }
 
@@ -754,5 +760,18 @@ public class AccountingExportController {
 
   private String escape(String value) {
     return CsvEscaper.escape(value);
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Journal export contains ore in " + field + ". Reconcile the voucher before exporting.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Journal export amount is outside the supported whole-krona range.", exception);
+    }
   }
 }

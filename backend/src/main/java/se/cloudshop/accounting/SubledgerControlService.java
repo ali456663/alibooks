@@ -70,27 +70,34 @@ public class SubledgerControlService {
       }
       if (entry.getVoucherDate().isAfter(asOf)) continue;
       rowCount++;
-      long amount = "1510".equals(account) ? (long) entry.getDebit() - entry.getCredit()
-          : (long) entry.getCredit() - entry.getDebit();
-      total += amount;
+      long amount = "1510".equals(account)
+          ? Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue())
+          : Math.subtractExact(entry.getCreditMinorValue(), entry.getDebitMinorValue());
+      total = Math.addExact(total, amount);
       Long id = sourceId(account, entry);
       if (id == null) unlinked++;
-      else linked.merge(id, amount, Long::sum);
+      else linked.merge(id, amount, Math::addExact);
     }
-    int subledger = reportAmount(expected.values().stream().mapToLong(Integer::longValue).sum());
-    int ledger = reportAmount(total);
+    long subledgerMinor = expected.values().stream()
+        .mapToLong(value -> Math.multiplyExact((long) value, 100L))
+        .reduce(0L, Math::addExact);
+    int subledger = reportWholeKrona(subledgerMinor, account + " reskontra");
+    int ledger = reportWholeKrona(total, account + " huvudbok");
     var differences = new ArrayList<SubledgerControlReport.InvoiceDifference>();
     if (comparable) {
       var ids = new TreeSet<>(expected.keySet());
       ids.addAll(linked.keySet());
       for (Long id : ids) {
-        int expectedAmount = expected.getOrDefault(id, 0);
-        int ledgerAmount = reportAmount(linked.getOrDefault(id, 0L));
-        int difference = reportAmount((long) ledgerAmount - expectedAmount);
+        long expectedAmountMinor = Math.multiplyExact((long) expected.getOrDefault(id, 0), 100L);
+        int expectedAmount = reportWholeKrona(expectedAmountMinor, account + " reskontradetalj");
+        int ledgerAmount = reportWholeKrona(linked.getOrDefault(id, 0L), account + " huvudboksdetalj");
+        int difference = reportWholeKrona(Math.subtractExact(linked.getOrDefault(id, 0L), expectedAmountMinor),
+            account + " differens");
         if (difference != 0) differences.add(new SubledgerControlReport.InvoiceDifference(id, expectedAmount, ledgerAmount, difference));
       }
     }
-    Integer difference = comparable ? reportAmount((long) ledger - subledger) : null;
+    Integer difference = comparable ? reportWholeKrona(
+        Math.subtractExact(total, subledgerMinor), account + " totaldifferens") : null;
     String status = !comparable ? "UNSUPPORTED_METHOD"
         : unlinked > 0 || undated > 0 || !differences.isEmpty() || difference != 0 ? "REVIEW_REQUIRED"
         : rowCount == 0 && expected.isEmpty() ? "NO_DATA" : "MATCHED";
@@ -107,5 +114,13 @@ public class SubledgerControlService {
       return entry.getSupplierInvoice().getId();
     }
     return null;
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Reskontrakontrollen innehaller oren i " + field + ". Avstamningen har stoppats.");
+    }
+    return reportAmount(amountMinor / 100L);
   }
 }

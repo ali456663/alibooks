@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import se.cloudshop.accounting.SettlementSnapshot;
 import se.cloudshop.customer.Customer;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ReceivablesReportService {
@@ -93,33 +95,36 @@ public class ReceivablesReportService {
   }
 
   private ReceivablesAgingInvoice toAgingInvoice(Order invoice, LocalDate asOf, List<Order> credits) {
+    long totalAmountMinor = minorOrWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount());
+    long savedPaidAmountMinor = minorOrWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount());
     if (!List.of("SENT", "PARTIALLY_PAID", "PAID", "CREDITED").contains(String.valueOf(invoice.getStatus()))
-        || ("PAID".equals(invoice.getStatus()) && invoice.getPaidAmount() != invoice.getTotalAmount())
-        || ("SENT".equals(invoice.getStatus()) && invoice.getPaidAmount() != 0)
+        || ("PAID".equals(invoice.getStatus()) && savedPaidAmountMinor != totalAmountMinor)
+        || ("SENT".equals(invoice.getStatus()) && savedPaidAmountMinor != 0)
         || ("PARTIALLY_PAID".equals(invoice.getStatus())
-            && (invoice.getPaidAmount() <= 0 || invoice.getPaidAmount() >= invoice.getTotalAmount()))) {
+            && (savedPaidAmountMinor <= 0 || savedPaidAmountMinor >= totalAmountMinor))) {
       throw SettlementSnapshot.incomplete();
     }
     LocalDate closedDate = null;
     if ("CREDITED".equals(invoice.getStatus())) {
       if (credits.size() != 1 || credits.get(0).getInvoiceDate() == null || !"SENT".equals(credits.get(0).getStatus())
-          || (long) credits.get(0).getTotalAmount() != -(long) invoice.getTotalAmount()) {
+          || minorOrWholeKrona(credits.get(0).getTotalAmountMinor(), credits.get(0).getTotalAmount()) != -totalAmountMinor) {
         throw SettlementSnapshot.incomplete();
       }
       closedDate = credits.get(0).getInvoiceDate();
     } else if (!credits.isEmpty()) {
       throw SettlementSnapshot.incomplete();
     }
-    SettlementSnapshot balance = SettlementSnapshot.at(invoice.getTotalAmount(), invoice.getPaidAmount(),
+    SettlementSnapshot.MinorSettlement balance = SettlementSnapshot.atMinor(totalAmountMinor, savedPaidAmountMinor,
         invoice.getInvoiceDate(), closedDate, invoice.getPayments().stream()
-            .map(payment -> new SettlementSnapshot.Payment(payment.getPaymentDate(), payment.getAmount())).toList(), asOf);
+            .map(payment -> new SettlementSnapshot.MinorPayment(payment.getPaymentDate(),
+                payment.getAmountMinor() == null ? Math.multiplyExact((long) payment.getAmount(), 100L) : payment.getAmountMinor())).toList(), asOf);
     long daysOverdue = invoice.getDueDate() == null ? 0 : ChronoUnit.DAYS.between(invoice.getDueDate(), asOf);
     String bucketKey = bucketKey(invoice.getDueDate(), daysOverdue);
     String bucketTitle = bucketTitle(bucketKey);
     Customer customer = invoice.getCustomer();
     String customerName = customer == null ? invoice.getCustomerName() : customer.getName();
     String customerEmail = customer == null ? "" : customer.getEmail();
-    boolean reminderRecommended = asOf.equals(LocalDate.now()) && invoice.hasRemainingAmount()
+    boolean reminderRecommended = asOf.equals(LocalDate.now()) && balance.remainingAmountMinor() > 0
         && invoice.getDueDate() != null && daysOverdue > 0 && customerEmail != null && !customerEmail.isBlank();
 
     return new ReceivablesAgingInvoice(
@@ -129,10 +134,10 @@ public class ReceivablesReportService {
         customerEmail,
         invoice.getInvoiceDate(),
         invoice.getDueDate(),
-        balance.paidAmount() > 0 ? "PARTIALLY_PAID" : "SENT",
-        invoice.getTotalAmount(),
-        balance.paidAmount(),
-        balance.remainingAmount(),
+        balance.paidAmountMinor() > 0 ? "PARTIALLY_PAID" : "SENT",
+        reportWholeKrona(totalAmountMinor, "fakturans totalbelopp"),
+        reportWholeKrona(balance.paidAmountMinor(), "fakturans betalda belopp"),
+        reportWholeKrona(balance.remainingAmountMinor(), "fakturans kvarvarande belopp"),
         Math.max(daysOverdue, 0),
         bucketKey,
         bucketTitle,
@@ -172,6 +177,18 @@ public class ReceivablesReportService {
 
   private void addBucket(Map<String, BucketSummary> summaries, String key, String title) {
     summaries.put(key, new BucketSummary(title));
+  }
+
+  private long minorOrWholeKrona(Long minor, int wholeKrona) {
+    return minor == null ? Math.multiplyExact((long) wholeKrona, 100L) : minor;
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Kundreskontran innehaller ore i " + field + ". Rapporten har stoppats for att undvika avrundningsfel.");
+    }
+    return reportAmount(amountMinor / 100L);
   }
 
   private static class BucketSummary {

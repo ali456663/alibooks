@@ -63,6 +63,11 @@ public class StripePaymentService {
     if (!invoice.hasRemainingAmount()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice has no remaining amount to pay.");
     }
+    long remainingAmountMinor = invoice.getRemainingAmountMinor();
+    if (remainingAmountMinor % 100L != 0) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Stripe checkout cannot represent an invoice balance with ore. Reconcile the invoice manually.");
+    }
 
     SessionCreateParams params = SessionCreateParams.builder()
         .setMode(SessionCreateParams.Mode.PAYMENT)
@@ -76,7 +81,7 @@ public class StripePaymentService {
                 .setPriceData(
                     SessionCreateParams.LineItem.PriceData.builder()
                         .setCurrency("sek")
-                        .setUnitAmount((long) invoice.getRemainingAmount() * 100)
+                        .setUnitAmount(remainingAmountMinor)
                         .setProductData(
                             SessionCreateParams.LineItem.PriceData.ProductData.builder()
                                 .setName("Invoice #" + invoice.getId() + " - " + invoice.getProduct().getName())

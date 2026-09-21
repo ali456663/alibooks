@@ -4,6 +4,8 @@
 
 CSV-importen ar fortfarande ett granskningsflode for ett bankkonto pa 1930, med
 heltals-SEK. Den ar inte en bankkoppling eller ett bevis pa fullstandig avstamning.
+Saknat bankdatum ersatts aldrig med dagens datum; raden bevaras som odaterad och
+blir en kritisk granskningspunkt i avstamningen.
 Fullt ore-stod och flera bankkonton aterstar. Nya bankbokningar sparar nu en
 unik journalradskoppling; aldre bankrader lamnas okopplade for uttrycklig granskning.
 Inga tidigare belopp, bokforingsposter eller underlagsfiler andras av detta steg.
@@ -17,6 +19,8 @@ Inga tidigare belopp, bokforingsposter eller underlagsfiler andras av detta steg
 - Datum och HELA beloppet maste stamma med bokningen. Overbetalningar minskas inte
   automatiskt till restsaldo. Kostnadens netto plus moms maste motsvara utbetalningen
   och betalkontot maste vara 1930. Oren avvisas tills beloppsmodellen migrerats.
+- Manuella betalningar utan bankrad maste ha en betalreferens. Bankimportens bankrad-ID
+  ar den idempotenta identiteten och behovet inte ersatt av en fri textreferens.
 - Ett PostgreSQL advisory transaction lock per bankRowId serialiserar samtidiga
   forsok. Redan bokad eller overhoppad rad ger 409; historik maste granskas.
 - Betalning/kostnad, verifikationer, bankhistorik och audit sparas i samma transaktion.

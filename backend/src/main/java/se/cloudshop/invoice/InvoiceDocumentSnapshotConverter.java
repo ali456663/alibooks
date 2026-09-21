@@ -24,7 +24,9 @@ public class InvoiceDocumentSnapshotConverter implements AttributeConverter<Invo
     if (json == null) return null;
     try {
       InvoiceDocumentSnapshot snapshot = JSON.readValue(json, InvoiceDocumentSnapshot.class);
-      if (snapshot == null || snapshot.version() != 1) throw new IllegalStateException("Unsupported invoice document snapshot version.");
+      if (snapshot == null || snapshot.version() < 1 || snapshot.version() > 3) {
+        throw new IllegalStateException("Unsupported invoice document snapshot version.");
+      }
       return snapshot;
     } catch (JsonProcessingException exception) {
       // Do not echo stored customer data or silently substitute current register values.

@@ -102,8 +102,8 @@ public class AccountingPeriodLockService {
 
     long unbalancedVoucherCount = voucherGroups.values().stream()
         .filter(group -> {
-          long debit = group.stream().mapToLong(JournalEntry::getDebit).sum();
-          long credit = group.stream().mapToLong(JournalEntry::getCredit).sum();
+          long debit = group.stream().mapToLong(JournalEntry::getDebitMinorValue).reduce(0L, Math::addExact);
+          long credit = group.stream().mapToLong(JournalEntry::getCreditMinorValue).reduce(0L, Math::addExact);
           return debit != credit;
         })
         .count();
@@ -386,8 +386,12 @@ public class AccountingPeriodLockService {
       int lagDays = Math.toIntExact(ChronoUnit.DAYS.between(voucherDate, createdDate));
       if (lagDays > 35) {
         longestLagDays = Math.max(longestLagDays, lagDays);
-        int debit = ReportAmounts.reportAmount(entries.stream().mapToLong(JournalEntry::getDebit).sum());
-        int credit = ReportAmounts.reportAmount(entries.stream().mapToLong(JournalEntry::getCredit).sum());
+        int debit = reportWholeKrona(entries.stream()
+            .mapToLong(JournalEntry::getDebitMinorValue)
+            .reduce(0L, Math::addExact), "senbokförda verifikatens debet");
+        int credit = reportWholeKrona(entries.stream()
+            .mapToLong(JournalEntry::getCreditMinorValue)
+            .reduce(0L, Math::addExact), "senbokförda verifikatens kredit");
         String description = entries.stream()
             .map(JournalEntry::getDescription)
             .filter(value -> value != null && !value.isBlank())
@@ -413,6 +417,14 @@ public class AccountingPeriodLockService {
   }
 
   private record LateBookingStats(int lateVoucherCount, int longestLagDays, List<LateBookedVoucher> vouchers) {
+  }
+
+  private int reportWholeKrona(long amountMinor, String field) {
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Periodstangningen innehaller oren i " + field + ". Kontrollera underlaget innan perioden stangs.");
+    }
+    return ReportAmounts.reportAmount(amountMinor / 100L);
   }
 
 }

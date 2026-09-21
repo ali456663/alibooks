@@ -5,6 +5,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,6 +25,12 @@ public class VatFiling {
   private int outputVat;
   private int inputVat;
   private int vatToPay;
+  @Column(name = "output_vat_minor")
+  private Long outputVatMinor;
+  @Column(name = "input_vat_minor")
+  private Long inputVatMinor;
+  @Column(name = "vat_to_pay_minor")
+  private Long vatToPayMinor;
   private String status;
   private String submissionReference;
   private String paymentReference;
@@ -41,6 +50,9 @@ public class VatFiling {
     this.outputVat = report.outputVat();
     this.inputVat = report.inputVat();
     this.vatToPay = report.vatToPay();
+    this.outputVatMinor = toMinorUnits(this.outputVat);
+    this.inputVatMinor = toMinorUnits(this.inputVat);
+    this.vatToPayMinor = toMinorUnits(this.vatToPay);
     this.status = normalizedStatus;
     this.submissionReference = clean(request.submissionReference());
     this.paymentReference = clean(request.paymentReference());
@@ -48,6 +60,28 @@ public class VatFiling {
     this.createdAt = Instant.now();
     applyStatusTimestamps(normalizedStatus);
     this.updatedAt = Instant.now();
+  }
+
+  @PostLoad
+  private void validateMinorUnitShadow() {
+    if (outputVatMinor != null && outputVatMinor.longValue() != toMinorUnits(outputVat)) {
+      throw new IllegalStateException("VAT output shadow does not match the filing amount.");
+    }
+    if (inputVatMinor != null && inputVatMinor.longValue() != toMinorUnits(inputVat)) {
+      throw new IllegalStateException("VAT input shadow does not match the filing amount.");
+    }
+    if (vatToPayMinor != null && vatToPayMinor.longValue() != toMinorUnits(vatToPay)) {
+      throw new IllegalStateException("VAT payable shadow does not match the filing amount.");
+    }
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeMinorUnits() {
+    outputVatMinor = toMinorUnits(outputVat);
+    inputVatMinor = toMinorUnits(inputVat);
+    vatToPayMinor = toMinorUnits(vatToPay);
   }
 
   public Long getId() {
@@ -72,6 +106,21 @@ public class VatFiling {
 
   public int getVatToPay() {
     return vatToPay;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getOutputVatMinor() {
+    return outputVatMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getInputVatMinor() {
+    return inputVatMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getVatToPayMinor() {
+    return vatToPayMinor;
   }
 
   public String getStatus() {
@@ -135,5 +184,13 @@ public class VatFiling {
 
   private String clean(String value) {
     return value == null ? "" : value.trim();
+  }
+
+  private long toMinorUnits(int amount) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("VAT filing amount is outside the supported minor-unit range.", exception);
+    }
   }
 }

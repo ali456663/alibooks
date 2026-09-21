@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,11 +14,13 @@ function commandExists(command, versionArg = "--version") {
 }
 
 function run(command, args, options = {}) {
-  console.log(`\n> ${[command, ...args].join(" ")}`);
-  const result = spawnSync(command, args, {
+  const displayCommand = options.commandLine || [command, ...args].join(" ");
+  console.log(`\n> ${displayCommand}`);
+  const result = spawnSync(options.commandLine || command, options.commandLine ? [] : args, {
     cwd: options.cwd || repoRoot,
     stdio: "inherit",
-    shell: false
+    shell: options.shell ?? false,
+    env: options.env || process.env
   });
 
   if (result.error) {
@@ -33,6 +35,27 @@ function dockerCommand() {
   return process.platform === "win32" ? "docker.exe" : "docker";
 }
 
+function findIntellijMaven() {
+  if (process.platform !== "win32") return null;
+
+  const jetBrainsRoot = path.join(process.env.ProgramFiles || "C:\\Program Files", "JetBrains");
+  if (!existsSync(jetBrainsRoot)) return null;
+
+  for (const directory of readdirSync(jetBrainsRoot, { withFileTypes: true })) {
+    if (!directory.isDirectory()) continue;
+    const ideRoot = path.join(jetBrainsRoot, directory.name);
+    const mavenCmd = path.join(ideRoot, "plugins", "maven-plugin", "lib", "maven3", "bin", "mvn.cmd");
+    if (existsSync(mavenCmd)) {
+      return {
+        command: mavenCmd,
+        javaHome: path.join(ideRoot, "jbr")
+      };
+    }
+  }
+
+  return null;
+}
+
 const mvnwCmd = path.join(backendDir, process.platform === "win32" ? "mvnw.cmd" : "mvnw");
 if (existsSync(mvnwCmd)) {
   run(mvnwCmd, ["test"], { cwd: backendDir });
@@ -41,6 +64,18 @@ if (existsSync(mvnwCmd)) {
 const localMaven = process.platform === "win32" ? "mvn.cmd" : "mvn";
 if (commandExists(localMaven)) {
   run(localMaven, ["test"], { cwd: backendDir });
+}
+
+const intellijMaven = findIntellijMaven();
+if (intellijMaven) {
+  console.log("Maven was not found on PATH. Running backend tests with IntelliJ's bundled Maven.");
+  const commandLine = `call "${intellijMaven.command}" -DargLine=-Dnet.bytebuddy.experimental=true test`;
+  run("", [], {
+    cwd: backendDir,
+    env: { ...process.env, JAVA_HOME: intellijMaven.javaHome },
+    commandLine,
+    shell: true
+  });
 }
 
 const docker = dockerCommand();

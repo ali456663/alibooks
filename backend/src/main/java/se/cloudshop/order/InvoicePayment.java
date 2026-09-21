@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -24,6 +28,8 @@ public class InvoicePayment {
 
   private LocalDate paymentDate;
   private int amount;
+  @Column(name = "amount_minor")
+  private Long amountMinor;
   private String reference;
   private Instant createdAt;
 
@@ -34,6 +40,7 @@ public class InvoicePayment {
     this.invoice = invoice;
     this.paymentDate = paymentDate;
     this.amount = amount;
+    this.amountMinor = toMinorUnits(amount);
     this.reference = reference;
     this.createdAt = Instant.now();
   }
@@ -50,11 +57,38 @@ public class InvoicePayment {
     return amount;
   }
 
+  long getAmountMinorValue() {
+    return amountMinor == null ? toMinorUnits(amount) : amountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getAmountMinor() {
+    return amountMinor;
+  }
+
   public String getReference() {
     return reference;
   }
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  private static long toMinorUnits(int amount) {
+    return Math.multiplyExact((long) amount, 100L);
+  }
+
+  @PostLoad
+  private void validateMinorUnitShadow() {
+    if (amountMinor != null && amountMinor.longValue() != toMinorUnits(amount)) {
+      throw new IllegalStateException("Invoice payment shadow does not match the payment amount.");
+    }
+    amountMinor = toMinorUnits(amount);
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeMinorUnits() {
+    amountMinor = toMinorUnits(amount);
   }
 }

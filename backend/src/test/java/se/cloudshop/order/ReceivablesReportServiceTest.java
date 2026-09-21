@@ -76,6 +76,18 @@ class ReceivablesReportServiceTest {
   }
 
   @Test
+  void stopsWhenReceivableContainsOreLegacyReportCannotRepresent() {
+    Order order = invoice(1L, "F-ORE", new Product("Test", "Test", 1000), LocalDate.of(2026, 4, 10), "SENT");
+    org.springframework.test.util.ReflectionTestUtils.setField(order, "totalAmountMinor", 12550L);
+    when(orderRepository.findAll()).thenReturn(List.of(order));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> receivablesReportService.createAgingReport(LocalDate.of(2026, 4, 10)))
+        .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+  }
+
+  @Test
   void createsAgingReportForOpenReceivablesOnly() {
     Product product = new Product("PT", "Training", 1000);
     Order notDue = invoice(1L, "F-2026-0001", product, LocalDate.of(2026, 8, 20), "SENT");

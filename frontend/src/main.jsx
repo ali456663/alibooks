@@ -3,11 +3,10 @@ import { createRoot } from "react-dom/client";
 import AiLoader from "./components/ui/AiLoader.jsx";
 import AnimatedGlowingSearchBar from "./components/ui/AnimatedGlowingSearchBar.jsx";
 import HeroErrorBoundary from "./components/ui/hero-error-boundary.jsx";
-import SafeRenderBoundary from "./components/ui/SafeRenderBoundary.jsx";
 import { readReportResponse } from "./lib/report-response.js";
 import SubledgerControl from "./components/ui/SubledgerControl.jsx";
 import BankJournalLink from "./components/ui/BankJournalLink.jsx";
-import { verifiedSieLines } from "./lib/import-money.js";
+import { parseWholeSekInput, verifiedSieLines } from "./lib/import-money.js";
 import { analyzeSieText } from "./lib/sie-analysis.js";
 import { parseBankCsv, splitCsvLine } from "./lib/bank-csv.js";
 import { identifyBankRows, bankRowPayload, bankPaymentPayload, bankRequest, uniqueBankInvoice } from "./lib/bank-booking.js";
@@ -18,8 +17,6 @@ const apiUrl =
   import.meta.env.VITE_API_URL ||
   "http://localhost:3000";
 const LiquidMetalHero = lazy(() => import("./components/ui/liquid-metal-hero.jsx"));
-const FlowingMenu = lazy(() => import("./components/ui/FlowingMenu.jsx"));
-const LiquidEther = lazy(() => import("./components/ui/LiquidEther.jsx"));
 
 function applyStartupRecoveryFromUrl() {
   try {
@@ -128,6 +125,8 @@ const copy = {
     payroll: "Payroll",
     serviceName: "Service name",
     serviceDescription: "Service description",
+    serviceVatRate: "VAT rate",
+    serviceVatRateNote: "Choose the rate confirmed for this service. Verify the tax treatment for your exact offer.",
     ordinaryPrice: "Ordinary price",
     discountPrice: "Discount price",
     discountLabel: "Discount label",
@@ -203,6 +202,11 @@ const copy = {
     clearTestData: "Clear test data",
     testDataCleared: "Test data cleared.",
     company: "Company",
+    companyAddress: "Registered street address",
+    companyPostalCode: "Postal code",
+    companyCity: "City",
+    companyOrganizationNumber: "Company registration number",
+    vatRegistrationNumber: "VAT registration number",
     companyType: "Company type",
     soleTrader: "Sole trader",
     limitedCompany: "Limited company",
@@ -230,7 +234,8 @@ const copy = {
     appliesTo: "Applies to",
     debit: "Debit",
     credit: "Credit",
-    vatPercent: "VAT percent",
+    vatPercent: "Global VAT default",
+    vatPercentMvpNote: "The global default stays at 25%. Set the confirmed rate on each service and select it for manually booked Stripe sales.",
     paymentTermsDays: "Payment terms days",
     noEmail: "No email",
     noPersonalNumber: "No personal number",
@@ -295,6 +300,8 @@ const copy = {
     payroll: "Lon",
     serviceName: "Tjanstens namn",
     serviceDescription: "Beskrivning",
+    serviceVatRate: "Momssats",
+    serviceVatRateNote: "Valj den sats som har bekraftats for tjansten. Kontrollera momshanteringen for just ditt erbjudande.",
     ordinaryPrice: "Ordinarie pris",
     discountPrice: "Rabattpris",
     discountLabel: "Rabatttext",
@@ -370,6 +377,11 @@ const copy = {
     clearTestData: "Rensa testdata",
     testDataCleared: "Testdata rensad.",
     company: "Foretag",
+    companyAddress: "Registrerad gatuadress",
+    companyPostalCode: "Postnummer",
+    companyCity: "Ort",
+    companyOrganizationNumber: "Organisationsnummer",
+    vatRegistrationNumber: "Momsregistreringsnummer",
     companyType: "Foretagsform",
     soleTrader: "Enskild firma",
     limitedCompany: "Aktiebolag",
@@ -397,7 +409,8 @@ const copy = {
     appliesTo: "Galler",
     debit: "Debet",
     credit: "Kredit",
-    vatPercent: "Momsprocent",
+    vatPercent: "Globalt standardvarde for moms",
+    vatPercentMvpNote: "Standardvardet ar 25 %. Ange bekraftad sats per tjanst och valj sats for manuellt bokford Stripe-forsaljning.",
     paymentTermsDays: "Betalningsvillkor dagar",
     noEmail: "Ingen e-post",
     noPersonalNumber: "Inget personnummer",
@@ -422,6 +435,9 @@ function invoiceNetAmount(item) {
 
 function servicePriceLabel(service, language) {
   const effectivePrice = serviceEffectivePrice(service);
+  const vatSuffix = language === "sv"
+    ? ` + moms ${service?.vatPercent ?? 25}%`
+    : ` + VAT ${service?.vatPercent ?? 25}%`;
 
   if (!effectivePrice || effectivePrice <= 0) {
     return language === "sv" ? "Kontakta for pris" : "Contact for price";
@@ -429,11 +445,11 @@ function servicePriceLabel(service, language) {
 
   if (service.discountPrice > 0) {
     return language === "sv"
-      ? `${service.discountPrice} SEK (ord. ${service.price} SEK)`
-      : `${service.discountPrice} SEK (regular ${service.price} SEK)`;
+      ? `${service.discountPrice} SEK (ord. ${service.price} SEK)${vatSuffix}`
+      : `${service.discountPrice} SEK (regular ${service.price} SEK)${vatSuffix}`;
   }
 
-  return `${effectivePrice} SEK`;
+  return `${effectivePrice} SEK${vatSuffix}`;
 }
 
 function serviceEffectivePrice(service) {
@@ -442,6 +458,45 @@ function serviceEffectivePrice(service) {
 
 function serviceHasInvoicePrice(service) {
   return serviceEffectivePrice(service) > 0;
+}
+
+function exactWholeKronaVat(netAmount, vatPercent) {
+  const net = Number(netAmount);
+  const rate = Number(vatPercent);
+  const vatNumerator = net * rate;
+
+  if (!Number.isSafeInteger(net) || !Number.isSafeInteger(rate) || !Number.isSafeInteger(vatNumerator)) {
+    return null;
+  }
+
+  return vatNumerator % 100 === 0 ? vatNumerator / 100 : null;
+}
+
+function exactWholeKronaTaxInclusiveSplit(totalAmount, vatPercent) {
+  const total = Number(totalAmount);
+  const rate = Number(vatPercent);
+
+  if (!Number.isSafeInteger(total) || !Number.isSafeInteger(rate) || rate < 0) {
+    return { netAmount: total, vatAmount: 0, vatError: true };
+  }
+
+  if (rate === 0) {
+    return { netAmount: total, vatAmount: 0, vatError: false };
+  }
+
+  const numerator = total * 100;
+  const denominator = 100 + rate;
+
+  if (!Number.isSafeInteger(numerator) || numerator % denominator !== 0) {
+    return { netAmount: total, vatAmount: 0, vatError: true };
+  }
+
+  const netAmount = numerator / denominator;
+  return {
+    netAmount,
+    vatAmount: total - netAmount,
+    vatError: false
+  };
 }
 
 function invoicePreviewFor(service, quantityValue) {
@@ -453,22 +508,41 @@ function invoicePreviewFor(service, quantityValue) {
   const ordinaryPrice = (service.price || 0) * quantity;
   const netAmount = serviceEffectivePrice(service) * quantity;
   const discountAmount = Math.max(ordinaryPrice - netAmount, 0);
-  const vatAmount = Math.round(netAmount * 0.25);
-  const totalAmount = netAmount + vatAmount;
+  const vatPercent = Number(service.vatPercent ?? 25);
+  const vatAmount = exactWholeKronaVat(netAmount, vatPercent);
+  const vatError = vatAmount === null;
+  const totalAmount = vatError ? null : netAmount + vatAmount;
 
   return {
     quantity,
+    vatPercent,
     ordinaryPrice,
     discountAmount,
     discountLabel: service.discountLabel,
     netAmount,
     vatAmount,
-    totalAmount
+    totalAmount,
+    vatError
   };
 }
 
 function invoiceVatAmount(item) {
-  return item.vatAmount || Math.round(invoiceNetAmount(item) * 0.25);
+  if (item.vatAmount !== null && item.vatAmount !== undefined && item.vatAmount !== "") {
+    return Number(item.vatAmount) || 0;
+  }
+
+  const calculatedVat = exactWholeKronaVat(
+    invoiceNetAmount(item),
+    Number(item.vatPercent ?? item.product?.vatPercent ?? 25)
+  );
+  return calculatedVat === null ? 0 : calculatedVat;
+}
+
+function invoiceExpectedVat(item) {
+  return exactWholeKronaVat(
+    invoiceNetAmount(item),
+    Number(item.vatPercent ?? item.product?.vatPercent ?? 25)
+  );
 }
 
 function invoiceTotalAmount(item) {
@@ -991,6 +1065,14 @@ function authErrorMessage(data, fallback, language) {
 
   if (normalized.includes("user already exists")) {
     return "Det finns redan ett konto med den e-postadressen.";
+  }
+
+  if (normalized.includes("registration is closed")) {
+    return "Registrering ar stangd eftersom arbetsytan redan har ett agarkonto.";
+  }
+
+  if (normalized.includes("account setup key is required")) {
+    return "Ange den engangsnyckel som arbetsytans agare har fatt.";
   }
 
   return message;
@@ -1828,6 +1910,7 @@ function App() {
   const [serviceName, setServiceName] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
   const [servicePrice, setServicePrice] = useState("");
+  const [serviceVatPercent, setServiceVatPercent] = useState("25");
   const [serviceDiscountPrice, setServiceDiscountPrice] = useState("");
   const [serviceDiscountLabel, setServiceDiscountLabel] = useState("");
   const [serviceActive, setServiceActive] = useState(true);
@@ -1838,6 +1921,7 @@ function App() {
   const [authPanelOpen, setAuthPanelOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [registrationSetupKey, setRegistrationSetupKey] = useState("");
   const [token, setToken] = useState(readStoredSessionToken);
   const [currentEmail, setCurrentEmail] = useState(() => token ? localStorage.getItem("alibooks-email") || "" : "");
   const [language, setLanguage] = useState(() => {
@@ -2041,6 +2125,7 @@ function App() {
   const [stripePayouts, setStripePayouts] = useState([]);
   const [stripeWebsiteSaleDate, setStripeWebsiteSaleDate] = useState(new Date().toISOString().slice(0, 10));
   const [stripeWebsiteSaleAmount, setStripeWebsiteSaleAmount] = useState("");
+  const [stripeWebsiteSaleVatPercent, setStripeWebsiteSaleVatPercent] = useState("25");
   const [stripeWebsiteSaleReference, setStripeWebsiteSaleReference] = useState("");
   const [stripeWebsiteSaleMessage, setStripeWebsiteSaleMessage] = useState("");
   const [copiedPaymentInfoId, setCopiedPaymentInfoId] = useState(null);
@@ -2668,6 +2753,12 @@ function App() {
     }
 
     if (status === "PAID") {
+      if (!vatFilingPaymentReference.trim() && (vatReport?.vatToPay || 0) !== 0) {
+        setError(language === "sv"
+          ? "Betalreferens kravs nar momsperioden markeras som betald."
+          : "A payment reference is required when the VAT filing is marked as paid.");
+        return;
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(vatFilingPaymentDate)) {
         setError(language === "sv" ? "Betalningsdatum maste vara YYYY-MM-DD." : "Payment date must be YYYY-MM-DD.");
         return;
@@ -2719,6 +2810,12 @@ function App() {
     setVatFilingMessage("");
 
     if (status === "PAID") {
+      if (!vatFilingPaymentReference.trim() && (selectedVatFiling?.vatToPay || 0) !== 0) {
+        setError(language === "sv"
+          ? "Betalreferens kravs nar momsperioden markeras som betald."
+          : "A payment reference is required when the VAT filing is marked as paid.");
+        return;
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(vatFilingPaymentDate)) {
         setError(language === "sv" ? "Betalningsdatum maste vara YYYY-MM-DD." : "Payment date must be YYYY-MM-DD.");
         return;
@@ -3277,9 +3374,18 @@ function App() {
     setInvoice(null);
 
     const invoiceQuantityValue = Number(quantity || 1);
+    const service = services.find((item) => String(item.id) === String(serviceId));
+    const preview = invoicePreviewFor(service, invoiceQuantityValue);
 
-    if (invoiceQuantityValue <= 0) {
-      setError(language === "sv" ? "Antal maste vara minst 1." : "Quantity must be at least 1.");
+    if (!Number.isSafeInteger(invoiceQuantityValue) || invoiceQuantityValue <= 0) {
+      setError(language === "sv" ? "Antal maste vara ett heltal pa minst 1." : "Quantity must be a whole number of at least 1.");
+      return null;
+    }
+
+    if (preview?.vatError) {
+      setError(language === "sv"
+        ? "Fakturan innehaller ore i exakt moms. Justera antal eller pris innan fakturan skapas."
+        : "The invoice contains fractional VAT. Adjust the quantity or price before creating the invoice.");
       return null;
     }
 
@@ -3353,6 +3459,13 @@ function App() {
 
     if (!customer || !service || !preview) {
       setQuoteMessage(language === "sv" ? "Valj kund, tjanst och antal for offerten." : "Choose customer, service and quantity for the quote.");
+      return;
+    }
+
+    if (preview.vatError) {
+      setQuoteMessage(language === "sv"
+        ? "Offerten innehaller ore i exakt moms. Justera antal eller pris."
+        : "The quote contains fractional VAT. Adjust the quantity or price.");
       return;
     }
 
@@ -3644,8 +3757,8 @@ function App() {
     setError("");
 
     const supplier = suppliers.find((item) => String(item.id) === String(supplierInvoiceSupplierId));
-    const totalAmount = Math.round(Number(supplierInvoiceTotalAmount || 0));
-    const vatAmount = Math.round(Number(supplierInvoiceVatAmount || 0));
+    const totalAmount = parseWholeSekInput(supplierInvoiceTotalAmount);
+    const vatAmount = parseWholeSekInput(supplierInvoiceVatAmount);
 
     if (!supplier) {
       setSupplierMessage(language === "sv" ? "Valj leverantor." : "Choose supplier.");
@@ -3667,7 +3780,7 @@ function App() {
       return;
     }
 
-    if (totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
+    if (totalAmount === null || vatAmount === null || totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
       setSupplierMessage(language === "sv" ? "Kontrollera totalbelopp och moms." : "Check total amount and VAT.");
       return;
     }
@@ -3765,15 +3878,21 @@ function App() {
   async function updateSupplierInvoiceStatus(invoiceId, status, paidAmountOverride = null, paymentReferenceOverride = "") {
     const currentInvoice = supplierInvoices.find((invoice) => String(invoice.id) === String(invoiceId));
     const remainingAmount = currentInvoice ? supplierInvoiceRemainingAmount(currentInvoice) : 0;
-    const paidAmount = status === "paid"
-      ? Math.round(Number(paidAmountOverride || supplierPaymentAmounts[invoiceId] || remainingAmount))
-      : 0;
+    const paymentInput = paidAmountOverride !== null && paidAmountOverride !== undefined
+      ? paidAmountOverride
+      : supplierPaymentAmounts[invoiceId] || remainingAmount;
+    const paidAmount = status === "paid" ? parseWholeSekInput(paymentInput) : 0;
     const paymentReference = paymentReferenceOverride || supplierPaymentReferences[invoiceId] || "";
 
     if (status !== "paid" && currentInvoice && (["paid", "partial", "booked"].includes(currentInvoice.status) || supplierInvoicePaidAmount(currentInvoice) > 0)) {
       setSupplierMessage(language === "sv"
         ? "Leverantorsfakturan har redan betalning eller bokforingshistorik. Skapa rattelse eller korrigerande post i stallet for att backa status."
         : "The supplier invoice already has payment or bookkeeping history. Create a correction or adjusting entry instead of moving the status backwards.");
+      return;
+    }
+
+    if (status === "paid" && paidAmount === null) {
+      setSupplierMessage(language === "sv" ? "Betalbelopp maste anges i hela kronor tills ore-stod ar klart." : "Payment amount must be entered in whole SEK until minor-unit support is complete.");
       return;
     }
 
@@ -4014,15 +4133,15 @@ function App() {
     setFixedAssetMessage("");
     setError("");
 
-    const purchaseAmount = Math.round(Number(fixedAssetPurchaseAmount || 0));
-    const vatAmount = Math.round(Number(fixedAssetVatAmount || 0));
+    const purchaseAmount = parseWholeSekInput(fixedAssetPurchaseAmount);
+    const vatAmount = parseWholeSekInput(fixedAssetVatAmount);
 
     if (!fixedAssetName.trim()) {
       setFixedAssetMessage(language === "sv" ? "Skriv namn pa tillgangen." : "Enter asset name.");
       return;
     }
 
-    if (purchaseAmount <= 0 || vatAmount < 0 || vatAmount > purchaseAmount) {
+    if (purchaseAmount === null || vatAmount === null || purchaseAmount <= 0 || vatAmount < 0 || vatAmount > purchaseAmount) {
       setFixedAssetMessage(language === "sv" ? "Kontrollera anskaffningsvarde och moms." : "Check purchase amount and VAT.");
       return;
     }
@@ -4173,7 +4292,12 @@ function App() {
     setOwnerTransactionMessage("");
     setError("");
 
-    const amount = Math.round(Number(ownerTransactionAmount || 0));
+    const amount = parseWholeSekInput(ownerTransactionAmount);
+
+    if (amount === null) {
+      setOwnerTransactionMessage(language === "sv" ? "Beloppet maste anges i hela kronor tills ore-stod ar klart." : "Amount must be entered in whole SEK until minor-unit support is complete.");
+      return;
+    }
 
     if (amount <= 0) {
       setOwnerTransactionMessage(language === "sv" ? "Beloppet maste vara storre an 0." : "Amount must be greater than 0.");
@@ -4632,8 +4756,13 @@ function App() {
     const service = services.find((item) => String(item.id) === String(job.serviceId));
     const quantity = Math.max(1, Number(job.quantity || 1));
     const unitPrice = Number(job.unitPrice ?? serviceEffectivePrice(service) ?? 0);
-    const netAmount = Math.round(unitPrice * quantity);
-    const vatAmount = Math.round(netAmount * 0.25);
+    const vatPercent = Number(job.vatPercent ?? service?.vatPercent ?? 25);
+    const rawNetAmount = unitPrice * quantity;
+    const amountError = !Number.isSafeInteger(rawNetAmount);
+    const netAmount = amountError ? 0 : rawNetAmount;
+    const exactVatAmount = exactWholeKronaVat(netAmount, vatPercent);
+    const vatError = amountError || exactVatAmount === null;
+    const vatAmount = vatError ? 0 : exactVatAmount;
     const totalAmount = netAmount + vatAmount;
     const laborPercent = Math.min(100, Math.max(0, Number(job.laborPercent ?? 100)));
     const laborAmount = Math.round(totalAmount * (laborPercent / 100));
@@ -4644,8 +4773,10 @@ function App() {
     return {
       quantity,
       unitPrice,
+      vatPercent,
       netAmount,
       vatAmount,
+      vatError,
       totalAmount,
       laborPercent,
       laborAmount,
@@ -4684,13 +4815,29 @@ function App() {
       return;
     }
 
-    if (quantity <= 0) {
-      setServiceJobMessage(language === "sv" ? "Antal maste vara minst 1." : "Quantity must be at least 1.");
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      setServiceJobMessage(language === "sv" ? "Antal maste vara ett heltal pa minst 1." : "Quantity must be a whole number of at least 1.");
       return;
     }
 
     if (laborPercent < 0 || laborPercent > 100) {
       setServiceJobMessage(language === "sv" ? "Arbetsdel maste vara mellan 0 och 100 procent." : "Labor part must be between 0 and 100 percent.");
+      return;
+    }
+
+    const calculation = serviceJobCalculation({
+      serviceId: service.id,
+      unitPrice: serviceEffectivePrice(service),
+      quantity,
+      vatPercent: service.vatPercent,
+      rutRotType: serviceJobRutRotType,
+      laborPercent
+    });
+
+    if (calculation.vatError) {
+      setServiceJobMessage(language === "sv"
+        ? "Servicejobbet innehaller ore i exakt moms. Justera pris eller antal innan jobbet sparas."
+        : "The service job contains fractional VAT. Adjust the price or quantity before saving the job.");
       return;
     }
 
@@ -4702,6 +4849,7 @@ function App() {
       serviceId: Number(service.id),
       serviceName: service.name,
       unitPrice: serviceEffectivePrice(service),
+      vatPercent: Number(service.vatPercent ?? 25),
       quantity,
       date: serviceJobDate,
       startTime: serviceJobStartTime,
@@ -5645,8 +5793,8 @@ function App() {
     setCardPurchaseMessage("");
     setError("");
 
-    const totalAmount = Math.round(Number(cardPurchaseTotalAmount || 0));
-    const vatAmount = Math.round(Number(cardPurchaseVatAmount || 0));
+    const totalAmount = parseWholeSekInput(cardPurchaseTotalAmount);
+    const vatAmount = parseWholeSekInput(cardPurchaseVatAmount);
 
     if (!cardPurchaseDate) {
       setCardPurchaseMessage(language === "sv" ? "Valj kopdatum." : "Choose purchase date.");
@@ -5656,7 +5804,7 @@ function App() {
       setCardPurchaseMessage(language === "sv" ? "Skriv butik/leverantor." : "Enter merchant/supplier.");
       return;
     }
-    if (totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
+    if (totalAmount === null || vatAmount === null || totalAmount <= 0 || vatAmount < 0 || vatAmount > totalAmount) {
       setCardPurchaseMessage(language === "sv" ? "Kontrollera totalbelopp och moms." : "Check total amount and VAT.");
       return;
     }
@@ -6072,8 +6220,18 @@ function App() {
       return;
     }
 
+    if (!Number.isSafeInteger(price)) {
+      setError(language === "sv" ? "Ordinarie pris maste anges i hela kronor." : "Ordinary price must be entered in whole kronor.");
+      return;
+    }
+
     if (discountPrice < 0) {
       setError(language === "sv" ? "Rabattpris kan inte vara negativt." : "Discount price cannot be negative.");
+      return;
+    }
+
+    if (!Number.isSafeInteger(discountPrice)) {
+      setError(language === "sv" ? "Rabattpris maste anges i hela kronor." : "Discount price must be entered in whole kronor.");
       return;
     }
 
@@ -6093,6 +6251,7 @@ function App() {
         name: serviceName,
         description: serviceDescription,
         price,
+        vatPercent: Number(serviceVatPercent || 25),
         discountPrice,
         discountLabel: serviceDiscountLabel,
         active: serviceActive
@@ -6117,6 +6276,7 @@ function App() {
     setServiceName(service.name || "");
     setServiceDescription(service.description || "");
     setServicePrice(String(service.price || 0));
+    setServiceVatPercent(String(service.vatPercent ?? 25));
     setServiceDiscountPrice(service.discountPrice ? String(service.discountPrice) : "");
     setServiceDiscountLabel(service.discountLabel || "");
     setServiceActive(service.active !== false);
@@ -6129,6 +6289,7 @@ function App() {
     setServiceName("");
     setServiceDescription("");
     setServicePrice("");
+    setServiceVatPercent("25");
     setServiceDiscountPrice("");
     setServiceDiscountLabel("");
     setServiceActive(true);
@@ -6227,6 +6388,13 @@ function App() {
 
     if (isPaid && paidAmount > remainingAmount) {
       setError(language === "sv" ? "Betalt belopp kan inte vara storre an kvar att betala." : "Paid amount cannot be greater than remaining amount.");
+      return;
+    }
+
+    if (isPaid && !paymentReference.trim()) {
+      setError(language === "sv"
+        ? "Betalreferens kravs for manuell betalning. Anvand bankimport nar du har en bankrad."
+        : "A payment reference is required for manual payments. Use bank import when you have a bank row.");
       return;
     }
 
@@ -6402,6 +6570,26 @@ function App() {
       return;
     }
 
+    const reference = stripeWebsiteSaleReference.trim();
+    if (!reference) {
+      setError(language === "sv"
+        ? "Ange Stripe-referensen fran betalningen innan du bokfor manuellt."
+        : "Enter the Stripe payment reference before booking manually.");
+      return;
+    }
+    if (reference.length > 240 || reference.includes("\n") || reference.includes("\r")) {
+      setError(language === "sv" ? "Stripe-referensen ar ogiltig." : "The Stripe reference is invalid.");
+      return;
+    }
+
+    const vatSplit = exactWholeKronaTaxInclusiveSplit(totalAmount, Number(stripeWebsiteSaleVatPercent));
+    if (vatSplit.vatError) {
+      setError(language === "sv"
+        ? "Stripe-forsaljningen kan inte delas exakt i netto och moms i hela kronor. Kontrollera totalbeloppet."
+        : "The Stripe sale cannot be split into exact whole-krona net and VAT amounts. Check the total.");
+      return;
+    }
+
     const response = await fetch(`${apiUrl}/journal-entries/stripe-website-sale`, {
       method: "POST",
       headers: {
@@ -6411,7 +6599,8 @@ function App() {
       body: JSON.stringify({
         saleDate: stripeWebsiteSaleDate,
         totalAmount,
-        reference: stripeWebsiteSaleReference
+        reference,
+        vatPercent: Number(stripeWebsiteSaleVatPercent)
       })
     });
     const data = await response.json();
@@ -6606,16 +6795,7 @@ function App() {
 
   function bankImportExpenseAmounts(row, category = bankImportExpenseCategory(row), vatRate = bankImportExpenseVatRate(row, category)) {
     const total = Math.abs(row.amount || 0);
-
-    if (vatRate <= 0) {
-      return { netAmount: total, vatAmount: 0 };
-    }
-
-    const netAmount = Math.round(total / (1 + (vatRate / 100)));
-    return {
-      netAmount,
-      vatAmount: total - netAmount
-    };
+    return exactWholeKronaTaxInclusiveSplit(total, vatRate);
   }
 
   function normalizeBankImportMatchText(value) {
@@ -6850,6 +7030,13 @@ function App() {
     const category = bankImportExpenseCategory(row);
     const vatRate = bankImportExpenseVatRate(row, category);
     const amounts = bankImportExpenseAmounts(row, category, vatRate);
+
+    if (amounts.vatError) {
+      setBankImportMessage(language === "sv"
+        ? "Bankradens totalbelopp kan inte delas exakt i netto och moms i hela kronor. Kontrollera kvittot manuellt."
+        : "The bank row total cannot be split into exact whole-krona net and VAT amounts. Review the receipt manually.");
+      return;
+    }
 
     let data;
     try {
@@ -8264,10 +8451,15 @@ function App() {
 
   function addPeriodizationItem(event) {
     event.preventDefault();
-    const amount = Math.round(Number(periodizationAmount || 0));
+    const amount = parseWholeSekInput(periodizationAmount);
 
     if (!periodizationDescription.trim()) {
       setPeriodizationMessage(language === "sv" ? "Skriv en beskrivning for justeringen." : "Enter a description for the adjustment.");
+      return;
+    }
+
+    if (amount === null) {
+      setPeriodizationMessage(language === "sv" ? "Beloppet maste anges i hela kronor tills ore-stod ar klart." : "Amount must be entered in whole SEK until minor-unit support is complete.");
       return;
     }
 
@@ -13660,7 +13852,13 @@ function App() {
     const report = vatReport || { outputVat: 0, inputVat: 0, vatToPay: 0 };
     const rows = [
       ["Rad", "Konto", "Belopp"],
-      [t.outputVat, "2611", report.outputVat || 0],
+      [t.outputVat, "2611 + 2621 + 2631", report.outputVat || 0],
+      [language === "sv" ? "Underlag 25 %" : "Tax base 25%", "3041", report.salesBase25 || 0],
+      [language === "sv" ? "Utgaende moms 25 %" : "Output VAT 25%", "2611", report.outputVat25 || 0],
+      [language === "sv" ? "Underlag 12 %" : "Tax base 12%", "3042", report.salesBase12 || 0],
+      [language === "sv" ? "Utgaende moms 12 %" : "Output VAT 12%", "2621", report.outputVat12 || 0],
+      [language === "sv" ? "Underlag 6 %" : "Tax base 6%", "3043", report.salesBase6 || 0],
+      [language === "sv" ? "Utgaende moms 6 %" : "Output VAT 6%", "2631", report.outputVat6 || 0],
       [t.inputVat, "2641", report.inputVat || 0],
       [t.vatToPay, "", report.vatToPay || 0]
     ];
@@ -13675,7 +13873,7 @@ function App() {
       ["Status", vatPeriodStatusText],
       ["Intakter exkl. moms", vatPeriodRevenue],
       ["Kostnader exkl. moms", vatPeriodExpenses],
-      ["Utgaende moms 2611", vatPeriodOutputVat],
+      ["Utgaende moms 2611 + 2621 + 2631", vatPeriodOutputVat],
       ["Ingaende moms 2641", vatPeriodInputVat],
       ["Moms att betala/fa tillbaka", vatPeriodToPay],
       ["Verifikat", vatPeriodVoucherNumbers.size],
@@ -13684,7 +13882,7 @@ function App() {
     ];
 
     vatPeriodEntries
-      .filter((entry) => entry.accountNumber === "2611" || entry.accountNumber === "2641")
+      .filter((entry) => ["2611", "2621", "2631", "2641"].includes(entry.accountNumber))
       .sort((first, second) => String(first.voucherDate || "").localeCompare(String(second.voucherDate || "")))
       .forEach((entry) => {
         rows.push([
@@ -13909,11 +14107,16 @@ function App() {
     setError("");
     setInvoice(null);
 
+    const authHeaders = {
+      "Content-Type": "application/json"
+    };
+    if (authMode === "register" && registrationSetupKey.trim()) {
+      authHeaders["X-AliBooks-Setup-Key"] = registrationSetupKey.trim();
+    }
+
     const response = await fetch(`${apiUrl}/auth/${authMode}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders,
       body: JSON.stringify({ email, password })
     });
 
@@ -13935,6 +14138,7 @@ function App() {
     setAuthPanelOpen(false);
     setEmail("");
     setPassword("");
+    setRegistrationSetupKey("");
     loadInvoices(data.token);
     loadCustomers(data.token);
     loadJournalEntries(data.token);
@@ -14329,7 +14533,7 @@ function App() {
       row.expenses += debit - credit;
     }
 
-    if (accountNumber === "2611") {
+    if (["2611", "2621", "2631"].includes(accountNumber)) {
       row.outputVat += credit - debit;
     }
 
@@ -14367,7 +14571,7 @@ function App() {
     return true;
   });
   const vatPeriodOutputVat = vatPeriodEntries
-    .filter((entry) => entry.accountNumber === "2611")
+    .filter((entry) => ["2611", "2621", "2631"].includes(entry.accountNumber))
     .reduce((sum, entry) => sum + (entry.credit || 0) - (entry.debit || 0), 0);
   const vatPeriodInputVat = vatPeriodEntries
     .filter((entry) => entry.accountNumber === "2641")
@@ -14886,8 +15090,8 @@ function App() {
 
     if (normalizedQuestion.includes("faktura") || normalizedQuestion.includes("invoice")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Vald metod ar ${accountingMethodLabel(accountingMethod, language)}. Vid faktureringsmetoden bokas fakturan som 1510 debet, 3041 kredit och 2611 kredit nar den skapas. Vid kontantmetoden bokas 1930 debet, 3041 kredit och 2611 kredit nar betalningen registreras. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
-        : `${answerIntro} For invoices: create or choose a customer, choose a service, create the invoice and send PDF/email. Selected method is ${accountingMethodLabel(accountingMethod, language)}. With invoice method, the invoice is booked as 1510 debit, 3041 credit and 2611 credit when created. With cash method, 1930 debit, 3041 credit and 2611 credit are booked when payment is registered. You currently have ${openInvoiceCount} open invoices and ${totalOutstanding} SEK outstanding.`, "invoices");
+        ? `${answerIntro} For fakturor: skapa eller valj kund, valj tjanst, skapa faktura och skicka PDF/e-post. Vald metod ar ${accountingMethodLabel(accountingMethod, language)}. Momsen och intaktskontot valjs fran tjanstens sparade momssats; kontrollera satsen innan fakturering. Vid faktureringsmetoden bokas fordran nar fakturan skapas, och vid kontantmetoden bokas intakt och moms nar betalningen registreras. Du har just nu ${openInvoiceCount} oppna fakturor och ${totalOutstanding} SEK kvar att fa betalt.`
+        : `${answerIntro} For invoices: create or choose a customer, choose a service, create the invoice and send PDF/email. Selected method is ${accountingMethodLabel(accountingMethod, language)}. VAT and revenue accounts follow the service's saved rate; verify the rate before invoicing. With invoice method, the receivable is booked when the invoice is created; with cash method, revenue and VAT are booked when payment is registered. You currently have ${openInvoiceCount} open invoices and ${totalOutstanding} SEK outstanding.`, "invoices");
     }
 
     if (normalizedQuestion.includes("kund") || normalizedQuestion.includes("customer") || normalizedQuestion.includes("personnummer")) {
@@ -16399,7 +16603,7 @@ function App() {
 
     if (accountNumber.startsWith("3")) totals.revenue += credit - debit;
     if (["4", "5", "6", "7", "8"].some((prefix) => accountNumber.startsWith(prefix))) totals.expenses += debit - credit;
-    if (accountNumber === "2611") totals.outputVat += credit - debit;
+    if (["2611", "2621", "2631"].includes(accountNumber)) totals.outputVat += credit - debit;
     if (accountNumber === "2641") totals.inputVat += debit - credit;
     if (accountNumber === "1930") {
       totals.cashIn += debit;
@@ -16883,6 +17087,7 @@ function App() {
     : null;
   const createAccountReconciliationRow = ({
     accountNumber,
+    accountNumbers = null,
     accountName,
     expected = null,
     mode = "closing",
@@ -16893,9 +17098,10 @@ function App() {
     exportLabel,
     forcedStatus = null
   }) => {
-    const actual = actualOverride !== null ? actualOverride : mode === "annual"
-      ? accountReconciliationAnnualAmount(accountNumber)
-      : accountReconciliationClosingAmount(accountNumber);
+    const actual = actualOverride !== null ? actualOverride : (accountNumbers || [accountNumber])
+      .reduce((sum, number) => sum + (mode === "annual"
+        ? accountReconciliationAnnualAmount(number)
+        : accountReconciliationClosingAmount(number)), 0);
     const difference = expected === null ? null : actual - expected;
     const status = forcedStatus || (expected === null
       ? "info"
@@ -16969,7 +17175,8 @@ function App() {
     }),
     createAccountReconciliationRow({
       accountNumber: "2611",
-      accountName: language === "sv" ? "Utgaende moms" : "Output VAT",
+      accountNumbers: ["2611", "2621", "2631"],
+      accountName: language === "sv" ? "Utgaende moms (alla satser)" : "Output VAT (all rates)",
       expected: annualCloseTotals.outputVat,
       mode: "annual",
       detail: language === "sv"
@@ -17002,8 +17209,8 @@ function App() {
       accountName: language === "sv" ? "Redovisningskonto moms" : "VAT settlement account",
       expected: annualCloseVatToPay,
       detail: language === "sv"
-        ? "Visar om moms har flyttats till redovisningskonto eller fortfarande ligger pa 2611/2641."
-        : "Shows if VAT has been moved to the settlement account or remains on 2611/2641.",
+        ? "Visar om moms har flyttats till redovisningskonto eller fortfarande ligger pa 2611, 2621, 2631 eller 2641."
+        : "Shows if VAT has been moved to the settlement account or remains on 2611, 2621, 2631 or 2641.",
       action: () => {
         setActiveView("vat");
         setVatPeriodFrom(annualCloseRange.from);
@@ -17231,7 +17438,7 @@ function App() {
     createAccountSignControlRow({
       key: "2611",
       accountNumber: "2611",
-      title: language === "sv" ? "Utgaende moms" : "Output VAT",
+      title: language === "sv" ? "Utgaende moms 25 %" : "Output VAT 25%",
       amount: accountReconciliationClosingAmount("2611"),
       expected: language === "sv" ? "Normalt kreditsaldo eller 0" : "Normally credit balance or zero",
       detail: language === "sv"
@@ -17239,6 +17446,19 @@ function App() {
         : "Negative output VAT is unusual and should be checked against invoices, credits and VAT settlement.",
       action: () => setActiveView("vat")
     }),
+    ...["2621", "2631"].map((accountNumber) => createAccountSignControlRow({
+      key: accountNumber,
+      accountNumber,
+      title: accountNumber === "2621"
+        ? (language === "sv" ? "Utgaende moms 12 %" : "Output VAT 12%")
+        : (language === "sv" ? "Utgaende moms 6 %" : "Output VAT 6%"),
+      amount: accountReconciliationClosingAmount(accountNumber),
+      expected: language === "sv" ? "Normalt kreditsaldo eller 0" : "Normally credit balance or zero",
+      detail: language === "sv"
+        ? "Kontrollera saldot mot fakturor, krediter och momsavstamning."
+        : "Reconcile this balance against invoices, credit notes and the VAT report.",
+      action: () => setActiveView("vat")
+    })),
     createAccountSignControlRow({
       key: "2641",
       accountNumber: "2641",
@@ -18299,10 +18519,14 @@ function App() {
     return Math.abs(storedTotal - expectedTotal) > 1;
   });
   const invoiceVatMismatchIssues = invoices.filter((item) => {
-    const storedVat = Number(item.vatAmount || 0);
-    if (!storedVat) return false;
-    const expectedVat = Math.round(invoiceNetAmount(item) * 0.25);
-    return Math.abs(storedVat - expectedVat) > 1;
+    const storedVat = item.vatAmount === null || item.vatAmount === undefined || item.vatAmount === ""
+      ? null
+      : Number(item.vatAmount);
+    const expectedVat = invoiceExpectedVat(item);
+    if (expectedVat === null) {
+      return invoiceNetAmount(item) !== 0 && Number(item.vatPercent ?? item.product?.vatPercent ?? 25) !== 0;
+    }
+    return storedVat === null ? expectedVat !== 0 : storedVat !== expectedVat;
   });
   const overpaidInvoiceIssues = invoices.filter((item) => invoicePaidAmount(item) > invoiceTotalAmount(item));
   const negativeInvoiceIssues = invoices.filter((item) => invoiceNetAmount(item) < 0 || invoiceVatAmount(item) < 0 || invoiceTotalAmount(item) < 0);
@@ -18362,8 +18586,12 @@ function App() {
       severity: "warning",
       area: "vat",
       areaLabel: language === "sv" ? "Moms" : "VAT",
-      title: language === "sv" ? "Fakturamoms avviker fran 25 procent" : "Invoice VAT differs from 25 percent",
-      detail: `${invoiceVatAmount(item)} SEK ${language === "sv" ? "mot forvantat" : "vs expected"} ${Math.round(invoiceNetAmount(item) * 0.25)} SEK`,
+      title: language === "sv" ? "Fakturamoms avviker fran tjanstens momssats" : "Invoice VAT differs from the service VAT rate",
+      detail: invoiceExpectedVat(item) === null
+        ? (language === "sv" ? "Momsbeloppet kan inte representeras exakt i hela kronor; kontrollera fakturan." : "The VAT amount cannot be represented exactly in whole kronor; check the invoice.")
+        : item.vatAmount === null || item.vatAmount === undefined || item.vatAmount === ""
+          ? (language === "sv" ? `Momsbelopp saknas; forvantat ${invoiceExpectedVat(item)} SEK.` : `VAT amount is missing; expected ${invoiceExpectedVat(item)} SEK.`)
+        : `${invoiceVatAmount(item)} SEK ${language === "sv" ? "mot forvantat" : "vs expected"} ${invoiceExpectedVat(item)} SEK`,
       reference: invoiceNumber(item),
       action: () => {
         setActiveView("invoices");
@@ -20071,7 +20299,21 @@ function App() {
   const maintenanceTestDataResetEnabled = Boolean(systemStatus?.maintenance?.testDataResetEnabled);
   const maintenanceBankResetEnabled = Boolean(systemStatus?.maintenance?.bankReconciliationResetEnabled);
   const maintenanceSafeForProduction = Boolean(systemStatus?.maintenance?.safeForProduction);
+  const minorUnitSupport = systemStatus?.moneyModel?.supportsMinorUnits === true;
   const securityPrivacyControlRows = [
+    {
+      key: "bookkeeping-precision",
+      status: minorUnitSupport ? "ok" : "critical",
+      title: language === "sv" ? "Beloppsprecision (ore)" : "Amount precision (minor units)",
+      statusLabel: minorUnitSupport ? "OK" : (language === "sv" ? "Blockerare" : "Blocker"),
+      score: minorUnitSupport ? 100 : 20,
+      detail: minorUnitSupport
+        ? (language === "sv" ? "Systemstatus bekraftar stod for kronor och oren." : "System status confirms support for major and minor currency units.")
+        : (language === "sv" ? "Belopp lagras i hela kronor. Oren bevaras inte genom hela bokforingsflodet." : "Amounts are stored as whole kronor. Minor units are not preserved through the full bookkeeping flow."),
+      recommendation: language === "sv"
+        ? "Anvand inte AliBooks som enda system for skarp bokforing forran ore-stod och migrering ar verifierade."
+        : "Do not use AliBooks as the sole live bookkeeping system until minor-unit support and migration are verified."
+    },
     {
       key: "jwt",
       status: systemStatus?.security?.jwtStrong ? "ok" : "warning",
@@ -20202,6 +20444,7 @@ function App() {
   ];
   securityPrivacyRiskRows = securityPrivacyControlRows.filter((row) => row.status !== "ok");
   const securityPrivacyPriorityOrder = {
+    "bookkeeping-precision": 0,
     jwt: 1,
     cors: 2,
     "login-attempts": 3,
@@ -20215,7 +20458,7 @@ function App() {
   const securityPrivacyNextActions = securityPrivacyRiskRows
     .map((row) => ({
       ...row,
-      priority: securityPrivacyPriorityOrder[row.key] || 99
+      priority: securityPrivacyPriorityOrder[row.key] ?? 99
     }))
     .sort((a, b) => a.priority - b.priority || a.score - b.score)
     .slice(0, 6);
@@ -20224,8 +20467,8 @@ function App() {
   );
   const securityPrivacyMainRecommendation = securityPrivacyRiskRows.length > 0
     ? (language === "sv"
-      ? "Kontrollera riskerna innan du exporterar data till AI, demo eller externa analysverktyg."
-      : "Review the risks before exporting data to AI, demos or external analytics tools.")
+      ? "Kontrollera sakerhets- och bokforingsriskerna innan du anvander riktiga data eller exporterar."
+      : "Review security and bookkeeping risks before using real data or exporting.")
     : (language === "sv"
       ? "Sakerhets- och integritetskontrollen ser bra ut for nasta analyssteg."
       : "Security and privacy controls look good for the next analytics step.");
@@ -21137,6 +21380,18 @@ function App() {
   const mvpFinishLineScore = Math.round(mvpFinishLineRows.reduce((sum, row) => sum + row.score, 0) / Math.max(mvpFinishLineRows.length, 1));
   const firstRealDataGateRows = [
     {
+      key: "money-precision",
+      status: minorUnitSupport ? "ok" : "critical",
+      statusLabel: minorUnitSupport ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: minorUnitSupport ? 100 : 0,
+      title: language === "sv" ? "Kronor och oren bevaras" : "Krona and minor units are preserved",
+      detail: minorUnitSupport
+        ? (language === "sv" ? "Backendens pengamodell bekraftar stod for kronor och oren genom hela bokforingsflodet." : "The backend money model confirms support for kronor and minor units throughout bookkeeping.")
+        : (language === "sv" ? "Orestod ar inte fardigt. Anvand inte AliBooks for riktiga bokforingsposter forran hela migreringen och avstamningen ar verifierad." : "Minor-unit support is not complete. Do not use AliBooks for real bookkeeping entries until the full migration and reconciliation are verified."),
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
+    {
       key: "local-release",
       status: goLiveCriticalCount === 0 && calculationCriticalCount === 0 ? "ok" : "critical",
       statusLabel: goLiveCriticalCount === 0 && calculationCriticalCount === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
@@ -21255,6 +21510,18 @@ function App() {
       score: goLiveSystemOk ? 100 : goLiveSystemKnown ? 20 : 65,
       actionLabel: t.settings,
       action: () => setActiveView("settings")
+    },
+    {
+      key: "money-support",
+      status: minorUnitSupport ? "ok" : "warning",
+      statusLabel: minorUnitSupport ? "OK" : (language === "sv" ? "Begransat" : "Limited"),
+      title: language === "sv" ? "Lokal testning, inte skarp bokforing" : "Local testing, not live bookkeeping",
+      detail: minorUnitSupport
+        ? (language === "sv" ? "Backendens pengamodell bekraftar kronor och oren." : "The backend money model confirms support for kronor and minor units.")
+        : (language === "sv" ? "Fortsatt bara med avskild testdata. For inte in verkliga bokforingsposter forran ore-stod och migrering ar verifierade." : "Continue only with isolated test data. Do not enter real bookkeeping entries until minor-unit support and migration are verified."),
+      score: minorUnitSupport ? 100 : 40,
+      actionLabel: t.security,
+      action: () => setActiveView("security")
     },
     {
       key: "render",
@@ -24024,6 +24291,20 @@ function App() {
   const migrationImportQueueOpenCount = bokioImportReviewCount + bokioImportReadyCount;
   const migrationCenterRows = [
     {
+      key: "money-precision",
+      status: minorUnitSupport ? "good" : "critical",
+      priority: minorUnitSupport ? 5 : 1,
+      title: language === "sv" ? "Beloppsmodell och ore" : "Amount model and minor units",
+      count: minorUnitSupport ? "OK" : "STOPP",
+      detail: minorUnitSupport
+        ? (language === "sv" ? "Kronor och oren bevaras genom hela bokforingsflodet." : "Major and minor units are preserved through the bookkeeping flow.")
+        : (language === "sv" ? "Nuvarande modell bevarar inte oren genom hela bokforingsflodet." : "The current model does not preserve minor units through the full bookkeeping flow."),
+      recommendation: language === "sv"
+        ? "Anvand endast isolerad testdata tills beloppsmigrering och historisk avstamning ar verifierade."
+        : "Use isolated test data only until amount migration and historical reconciliation are verified.",
+      action: () => setActiveView("security")
+    },
+    {
       key: "source-export",
       status: bokioImportQueue.length > 0 ? "good" : "warning",
       priority: bokioImportQueue.length > 0 ? 5 : 2,
@@ -26137,41 +26418,6 @@ function App() {
         : (language === "sv" ? "Att gora-listan ar tom" : "The to-do list is empty");
   const todoListScore = Math.max(0, Math.round(100 - (todoListCriticalCount * 16) - (todoListWarningCount * 7) - Math.max(0, todoListTotalCount - todoListCriticalCount - todoListWarningCount) * 2));
 
-  const reactBitsMenuItems = [
-    {
-      text: language === "sv" ? "Fakturor" : "Invoices",
-      image: "https://picsum.photos/600/400?random=31",
-      onClick: (event) => {
-        event.preventDefault();
-        setActiveView("invoices");
-      }
-    },
-    {
-      text: language === "sv" ? "Bankimport" : "Bank import",
-      image: "https://picsum.photos/600/400?random=32",
-      onClick: (event) => {
-        event.preventDefault();
-        setActiveView("payments");
-      }
-    },
-    {
-      text: language === "sv" ? "Budget & mal" : "Budget goals",
-      image: "https://picsum.photos/600/400?random=33",
-      onClick: (event) => {
-        event.preventDefault();
-        setActiveView("budget");
-      }
-    },
-    {
-      text: language === "sv" ? "Rapporter" : "Reports",
-      image: "https://picsum.photos/600/400?random=34",
-      onClick: (event) => {
-        event.preventDefault();
-        setActiveView("reports");
-      }
-    }
-  ];
-
   const coreWorkspaceShortcutRows = [
     {
       key: "startklar",
@@ -26370,9 +26616,22 @@ function App() {
                       />
                     </label>
                     {authMode === "register" && (
-                      <p className="form-help">
-                        {language === "sv" ? "Anvand minst 8 tecken." : "Use at least 8 characters."}
-                      </p>
+                      <>
+                        <label>
+                          {language === "sv" ? "Engangsnyckel for forsta kontot" : "One-time key for the first account"}
+                          <input
+                            type="password"
+                            value={registrationSetupKey}
+                            onChange={(event) => setRegistrationSetupKey(event.target.value)}
+                            autoComplete="one-time-code"
+                          />
+                        </label>
+                        <p className="form-help">
+                          {language === "sv"
+                            ? "Anvand minst 8 tecken. Nyckeln kravs vid forsta konto i produktionsmiljo; registrering stangs nar agarkontot skapats."
+                            : "Use at least 8 characters. The key is required for the first production account; registration closes after the owner account is created."}
+                        </p>
+                      </>
                     )}
 
                     <button type="submit">
@@ -26542,60 +26801,6 @@ function App() {
               ))}
             </div>
           </section>
-        )}
-
-        {token && activeView === "overview" && (
-          <SafeRenderBoundary
-            label="React Bits overview panel failed"
-            resetKey={`${language}-${activeView}`}
-            fallback={
-              <section className="orders-section react-bits-fallback-panel">
-                {language === "sv"
-                  ? "Den visuella snabbpanelen kunde inte laddas, men AliBooks fungerar fortfarande."
-                  : "The visual quick panel could not load, but AliBooks is still available."}
-              </section>
-            }
-          >
-            <section className="orders-section react-bits-showcase">
-              <div className="react-bits-ether">
-                <Suspense fallback={null}>
-                  <LiquidEther
-                    colors={["#155ee8", "#f2a900", "#62d6a3"]}
-                    mouseForce={18}
-                    cursorSize={130}
-                    resolution={0.55}
-                    autoSpeed={0.35}
-                    autoIntensity={1.7}
-                    autoResumeDelay={1200}
-                  />
-                </Suspense>
-              </div>
-
-              <div className="react-bits-copy">
-                <p className="eyebrow">{language === "sv" ? "Interaktivt kontrollrum" : "Interactive control room"}</p>
-                <h2>{language === "sv" ? "Hoppa snabbt mellan de viktigaste delarna" : "Jump quickly between the most important areas"}</h2>
-                <p>
-                  {language === "sv"
-                    ? "Den har panelen anvander React Bits-kansla for att gora AliBooks mer levande, men varje val leder fortfarande till en riktig arbetsvy."
-                    : "This panel brings a React Bits feel into AliBooks, while every choice still opens a real work view."}
-                </p>
-              </div>
-
-              <div className="react-bits-menu-frame">
-                <Suspense fallback={<div className="react-bits-loading">{language === "sv" ? "Laddar meny..." : "Loading menu..."}</div>}>
-                  <FlowingMenu
-                    items={reactBitsMenuItems}
-                    speed={18}
-                    textColor="#ffffff"
-                    bgColor="#111827"
-                    marqueeBgColor="#f2a900"
-                    marqueeTextColor="#111827"
-                    borderColor="rgba(255, 255, 255, 0.22)"
-                  />
-                </Suspense>
-              </div>
-            </section>
-          </SafeRenderBoundary>
         )}
 
         {token && activeView === "overview" && (
@@ -30464,13 +30669,20 @@ function App() {
                     <span>{invoicePreview.netAmount} SEK</span>
                   </p>
                   <p>
-                    <span>{t.vat} 25%</span>
-                    <span>{invoicePreview.vatAmount} SEK</span>
+                    <span>{t.vat} {invoicePreview.vatPercent}%</span>
+                    <span>{invoicePreview.vatError ? "-" : `${invoicePreview.vatAmount} SEK`}</span>
                   </p>
                   <p className="invoice-preview-total">
                     <span>{t.total}</span>
-                    <span>{invoicePreview.totalAmount} SEK</span>
+                    <span>{invoicePreview.vatError ? "-" : `${invoicePreview.totalAmount} SEK`}</span>
                   </p>
+                  {invoicePreview.vatError && (
+                    <p className="message warning">
+                      {language === "sv"
+                        ? "Exakt moms innehaller ore som dagens fakturamodell inte kan spara. Justera antal eller pris."
+                        : "Exact VAT contains fractional kronor that the current invoice model cannot store. Adjust the quantity or price."}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -30480,7 +30692,7 @@ function App() {
 
               <button
                 type="submit"
-                disabled={!token || !selectedCustomerId || !selectedServiceId || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                disabled={!token || !selectedCustomerId || !selectedServiceId || invoicePreview?.vatError || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
               >
                 {t.createInvoice}
               </button>
@@ -31350,13 +31562,13 @@ function App() {
                       <strong>{language === "sv" ? "Nasta faktura" : "Next invoice"}: {contract.nextInvoiceDate}</strong>
                       <span className={`due-status ${isDue ? "due-status-soon" : "due-status-neutral"}`}>
                         {contract.active
-                          ? (isDue ? (language === "sv" ? "Redo att fakturera" : "Ready to invoice") : (language === "sv" ? "Aktiv" : "Active"))
+                          ? (isDue ? (language === "sv" ? "Redo att fakturera" : "Ready to invoice") : (language === "sv" ? "Schemalagd" : "Scheduled"))
                           : (language === "sv" ? "Pausad" : "Paused")}
                       </span>
                       <button
                         type="button"
                         className="primary-small-button"
-                        disabled={!token || !contract.active || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
+                        disabled={!token || !contract.active || !isDue || isAccountingDateLocked(new Date().toISOString().slice(0, 10))}
                         onClick={() => createContractInvoice(contract)}
                       >
                         {language === "sv" ? "Skapa faktura" : "Create invoice"}
@@ -31525,8 +31737,15 @@ function App() {
                     <>
                       <div>
                         <span>{language === "sv" ? "Totalt inkl. moms" : "Total incl. VAT"}</span>
-                        <strong>{preview.totalAmount} SEK</strong>
+                        <strong>{preview.vatError ? "-" : `${preview.totalAmount} SEK`}</strong>
                       </div>
+                      {preview.vatError && (
+                        <p className="warning-text">
+                          {language === "sv"
+                            ? `Moms ${preview.vatPercent}% kan inte beraknas exakt i hela kronor. Justera pris eller antal.`
+                            : `VAT at ${preview.vatPercent}% cannot be represented exactly in whole kronor. Adjust the price or quantity.`}
+                        </p>
+                      )}
                       <div>
                         <span>{language === "sv" ? "Arbetskostnad" : "Labor cost"}</span>
                         <strong>{preview.laborAmount} SEK</strong>
@@ -31544,7 +31763,7 @@ function App() {
                 })()}
               </div>
 
-              <button type="submit" disabled={!token || !serviceJobCustomerId || !serviceJobServiceId}>
+              <button type="submit" disabled={!token || !serviceJobCustomerId || !serviceJobServiceId || serviceJobFormPreview().vatError}>
                 {language === "sv" ? "Spara servicejobb" : "Save service job"}
               </button>
             </form>
@@ -31759,6 +31978,19 @@ function App() {
                   />
                 </label>
               </div>
+
+              <label>
+                {t.serviceVatRate}
+                <select
+                  value={serviceVatPercent}
+                  onChange={(event) => setServiceVatPercent(event.target.value)}
+                >
+                  <option value="25">25%</option>
+                  <option value="12">12%</option>
+                  <option value="6">6%</option>
+                </select>
+                <small>{t.serviceVatRateNote}</small>
+              </label>
 
               <label>
                 {t.discountLabel}
@@ -33559,7 +33791,7 @@ function App() {
                 <ul className="security-rule-list">
                   <li>{language === "sv" ? "Kor backend och databas forst, annars ar allt annat osakert." : "Run backend and database first, otherwise everything else is uncertain."}</li>
                   <li>{language === "sv" ? "Skapa en testkund och en riktig tjanst, sedan en faktura med PDF." : "Create a test customer and real service, then an invoice with PDF."}</li>
-                  <li>{language === "sv" ? "Registrera betalning och kontrollera att 1510, 1930, 3041 och 2611 hamnar ratt." : "Register payment and verify that 1510, 1930, 3041 and 2611 are correct."}</li>
+                  <li>{language === "sv" ? "Registrera betalning och kontrollera att fordran, bank, intakt och moms bokas pa konton som foljer tjanstens momssats." : "Register payment and verify receivable, bank, revenue and VAT use accounts matching the service VAT rate."}</li>
                   <li>{language === "sv" ? "Avsluta med momsrapport, export och backup." : "Finish with VAT report, export and backup."}</li>
                 </ul>
               </div>
@@ -35456,7 +35688,7 @@ function App() {
                       </>
                     )}
                     <span>{t.net}: {invoiceNetAmount(item)} SEK</span>
-                    <span>{t.vat} 25%: {invoiceVatAmount(item)} SEK</span>
+                    <span>{t.vat} {Number(item.vatPercent ?? item.product?.vatPercent ?? 25)}%: {invoiceVatAmount(item)} SEK</span>
                     <span>{t.total}: {invoiceTotalAmount(item)} SEK</span>
                     <div className="payment-info">
                       <strong>{t.payment}</strong>
@@ -35893,20 +36125,36 @@ function App() {
                   />
                 </label>
                 <label>
+                  {language === "sv" ? "Momssats for denna forsaljning" : "VAT rate for this sale"}
+                  <select
+                    value={stripeWebsiteSaleVatPercent}
+                    onChange={(event) => setStripeWebsiteSaleVatPercent(event.target.value)}
+                  >
+                    <option value="25">25%</option>
+                    <option value="12">12%</option>
+                    <option value="6">6%</option>
+                  </select>
+                  <small>
+                    {language === "sv"
+                      ? "Valj sats utifran den salda varan eller tjansten och kontrollera den innan bokforing."
+                      : "Choose the rate for the item or service sold and verify it before posting."}
+                  </small>
+                </label>
+                <label>
                   {language === "sv" ? "Stripe-referens" : "Stripe reference"}
                   <input
                     type="text"
                     value={stripeWebsiteSaleReference}
                     onChange={(event) => setStripeWebsiteSaleReference(event.target.value)}
-                    placeholder={language === "sv" ? "pi_ eller cs_" : "pi_ or cs_"}
+                    placeholder={language === "sv" ? "pi_ eller cs_ (obligatorisk)" : "pi_ or cs_ (required)"}
                   />
                 </label>
               </div>
               <div className="button-row">
                 <span className="status">
                   {language === "sv"
-                    ? "Bokfor: 1580 debet, 3041 kredit, 2611 kredit"
-                    : "Books: 1580 debit, 3041 credit, 2611 credit"}
+                    ? `Bokfor: 1580 debet, ${Number(stripeWebsiteSaleVatPercent) === 6 ? "3043/2631" : Number(stripeWebsiteSaleVatPercent) === 12 ? "3042/2621" : "3041/2611"} kredit (${stripeWebsiteSaleVatPercent} %)`
+                    : `Books: 1580 debit, ${Number(stripeWebsiteSaleVatPercent) === 6 ? "3043/2631" : Number(stripeWebsiteSaleVatPercent) === 12 ? "3042/2621" : "3041/2611"} credit (${stripeWebsiteSaleVatPercent}%)`}
                 </span>
                 <button type="button" className="primary-small-button" onClick={createStripeWebsiteSale}>
                   {language === "sv" ? "Bokfor Stripe-forsaljning" : "Book Stripe sale"}
@@ -36546,7 +36794,15 @@ function App() {
                                       }}
                                     />
                                   </label>
-                                  <span>{language === "sv" ? "Netto/moms" : "Net/VAT"}: {suggestedExpenseAmounts.netAmount} / {suggestedExpenseAmounts.vatAmount} SEK</span>
+                                  {suggestedExpenseAmounts.vatError ? (
+                                    <span className="warning-text">
+                                      {language === "sv"
+                                        ? "Kontroll krävs: totalbeloppet kan inte delas exakt i hela kronor och moms."
+                                        : "Review required: the total cannot be split into exact whole-krona net and VAT amounts."}
+                                    </span>
+                                  ) : (
+                                    <span>{language === "sv" ? "Netto/moms" : "Net/VAT"}: {suggestedExpenseAmounts.netAmount} / {suggestedExpenseAmounts.vatAmount} SEK</span>
+                                  )}
                                   {existingExpenseMatch && (
                                     <span className="warning-text">
                                       {language === "sv"
@@ -36557,11 +36813,13 @@ function App() {
                                   <button
                                     type="button"
                                     className="primary-small-button"
-                                    disabled={Boolean(existingExpenseMatch)}
+                                    disabled={Boolean(existingExpenseMatch) || suggestedExpenseAmounts.vatError}
                                     onClick={() => createExpenseFromBankImport(row)}
                                   >
                                     {existingExpenseMatch
                                       ? (language === "sv" ? "Redan bokford" : "Already booked")
+                                      : suggestedExpenseAmounts.vatError
+                                        ? (language === "sv" ? "Kontrollera underlag" : "Review receipt")
                                       : (language === "sv" ? "Skapa kostnad" : "Create expense")}
                                   </button>
                                 </>
@@ -37530,7 +37788,7 @@ function App() {
 
           <div className="vat-report">
             <article>
-              <span>{t.outputVat} 2611</span>
+              <span>{t.outputVat} 2611 + 2621 + 2631</span>
               <strong>{vatReport?.outputVat || 0} SEK</strong>
             </article>
             <article>
@@ -37635,7 +37893,7 @@ function App() {
               <strong>{vatPeriodExpenses} SEK</strong>
             </article>
             <article>
-              <span>{t.outputVat} 2611</span>
+              <span>{t.outputVat} 2611 + 2621 + 2631</span>
               <strong>{vatPeriodOutputVat} SEK</strong>
             </article>
             <article>
@@ -38827,6 +39085,20 @@ function App() {
               <span>{language === "sv" ? "Saknade underlag" : "Missing receipts"}</span>
               <strong>{expensesMissingReceipt.length}</strong>
             </article>
+          </div>
+
+          <div className="expense-summary-grid vat-reconciliation-summary-grid">
+            {[25, 12, 6].map((rate) => {
+              const base = vatReport?.[`salesBase${rate}`] || 0;
+              const vat = vatReport?.[`outputVat${rate}`] || 0;
+              return (
+                <article key={rate}>
+                  <span>{language === "sv" ? `Underlag ${rate} %` : `${rate}% tax base`}</span>
+                  <strong>{base} SEK</strong>
+                  <small>{language === "sv" ? `Utgaende moms: ${vat} SEK` : `Output VAT: ${vat} SEK`}</small>
+                </article>
+              );
+            })}
           </div>
 
           <div className="section-heading report-subheading">
@@ -41193,6 +41465,58 @@ function App() {
                 </label>
 
                 <label>
+                  {t.companyAddress}
+                  <input
+                    autoComplete="street-address"
+                    value={settings.companyAddress || ""}
+                    onChange={(event) => setSettings({ ...settings, companyAddress: event.target.value })}
+                  />
+                </label>
+
+                <div className="two-column-fields">
+                  <label>
+                    {t.companyPostalCode}
+                    <input
+                      autoComplete="postal-code"
+                      value={settings.companyPostalCode || ""}
+                      onChange={(event) => setSettings({ ...settings, companyPostalCode: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    {t.companyCity}
+                    <input
+                      autoComplete="address-level2"
+                      value={settings.companyCity || ""}
+                      onChange={(event) => setSettings({ ...settings, companyCity: event.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <div className="two-column-fields">
+                  <label>
+                    {t.companyOrganizationNumber}
+                    <input
+                      autoComplete="off"
+                      value={settings.companyOrganizationNumber || ""}
+                      onChange={(event) => setSettings({ ...settings, companyOrganizationNumber: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    {t.vatRegistrationNumber}
+                    <input
+                      autoComplete="off"
+                      value={settings.vatRegistrationNumber || ""}
+                      onChange={(event) => setSettings({ ...settings, vatRegistrationNumber: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <p className="settings-hint">
+                  {language === "sv"
+                    ? "Fakturan kan inte utfardas innan foretagsnamn och registrerad adress ar ifyllda. Momsregistreringsnummer kravs nar fakturan innehaller moms."
+                    : "An invoice cannot be issued until the company name and registered address are complete. A VAT registration number is required when the invoice charges VAT."}
+                </p>
+
+                <label>
                   {t.companyType}
                   <select
                     value={settings.companyType || "SOLE_TRADER"}
@@ -41331,13 +41655,15 @@ function App() {
                   />
                 </label>
 
-                <label>
-                  {t.vatPercent}
+                  <label>
+                    {language === "sv" ? "Globalt standardvarde moms (%)" : "Global VAT default (%)"}
                   <input
                     type="number"
                     value={settings.vatPercent || 25}
+                    aria-describedby="vat-percent-mvp-note"
                     onChange={(event) => setSettings({ ...settings, vatPercent: Number(event.target.value) })}
                   />
+                  <small id="vat-percent-mvp-note">{t.vatPercentMvpNote}</small>
                 </label>
 
                 <label>

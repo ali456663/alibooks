@@ -4,6 +4,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,6 +24,12 @@ public class Expense {
   private int netAmount;
   private int vatAmount;
   private int totalAmount;
+  @jakarta.persistence.Column(name = "net_amount_minor")
+  private Long netAmountMinor;
+  @jakarta.persistence.Column(name = "vat_amount_minor")
+  private Long vatAmountMinor;
+  @jakarta.persistence.Column(name = "total_amount_minor")
+  private Long totalAmountMinor;
   private String category;
   private String paidFrom;
   private String receiptFileName;
@@ -39,6 +48,9 @@ public class Expense {
     this.netAmount = netAmount;
     this.vatAmount = vatAmount;
     this.totalAmount = Math.addExact(netAmount, vatAmount);
+    this.netAmountMinor = toMinorUnits(this.netAmount, "netAmount");
+    this.vatAmountMinor = toMinorUnits(this.vatAmount, "vatAmount");
+    this.totalAmountMinor = toMinorUnits(this.totalAmount, "totalAmount");
     this.category = category;
     this.paidFrom = paidFrom;
     this.createdAt = Instant.now();
@@ -66,6 +78,36 @@ public class Expense {
 
   public int getTotalAmount() {
     return totalAmount;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getNetAmountMinor() {
+    return netAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getVatAmountMinor() {
+    return vatAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getTotalAmountMinor() {
+    return totalAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getNetAmountMinorValue() {
+    return minorValue(netAmountMinor, netAmount, "netAmount");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getVatAmountMinorValue() {
+    return minorValue(vatAmountMinor, vatAmount, "vatAmount");
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public long getTotalAmountMinorValue() {
+    return minorValue(totalAmountMinor, totalAmount, "totalAmount");
   }
 
   public String getCategory() {
@@ -118,5 +160,34 @@ public class Expense {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  /**
+   * The whole-krona columns remain authoritative while the minor-unit migration is staged.
+   * This keeps older rows and direct legacy imports compatible without losing the new shadow data.
+   */
+  @PostLoad
+  void synchronizeMinorUnitShadowsFromLegacy() {
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  void synchronizeMinorUnits() {
+    netAmountMinor = toMinorUnits(netAmount, "netAmount");
+    vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
+    totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
+  }
+
+  private static long toMinorUnits(int amount, String field) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Expense " + field + " is outside the supported money range.", exception);
+    }
+  }
+
+  private static long minorValue(Long shadow, int legacyAmount, String field) {
+    return shadow == null ? toMinorUnits(legacyAmount, field) : shadow;
   }
 }

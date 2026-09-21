@@ -111,7 +111,8 @@ const requiredVars = [
   "SPRING_JPA_HIBERNATE_DDL_AUTO",
   "APP_SCHEMA_PATCH_ENABLED",
   "JWT_SECRET",
-  "JWT_EXPIRATION_MINUTES"
+  "JWT_EXPIRATION_MINUTES",
+  "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY"
 ];
 
 for (const key of requiredVars) {
@@ -136,6 +137,7 @@ const frontendUrl = value(env, "APP_FRONTEND_URL");
 const corsOrigins = value(env, "APP_CORS_ALLOWED_ORIGINS");
 const datasourceUrl = value(env, "SPRING_DATASOURCE_URL");
 const jwtSecret = value(env, "JWT_SECRET");
+const registrationBootstrapKey = value(env, "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY");
 const ddlAuto = value(env, "SPRING_JPA_HIBERNATE_DDL_AUTO");
 const schemaPatchEnabled = value(env, "APP_SCHEMA_PATCH_ENABLED");
 const allowedDdlModes = ["none", "validate", "update", "create", "create-drop"];
@@ -151,6 +153,7 @@ check("Hibernate ddl-auto mode is explicit", allowedDdlModes.includes(ddlAuto), 
 check("Production avoids automatic schema mutation", ["validate", "none"].includes(ddlAuto), "For production/RDS, prefer validate or none. Use update only during controlled migration rehearsal.");
 check("Production disables startup schema patch", schemaPatchEnabled === "false", "APP_SCHEMA_PATCH_ENABLED should be false for production/RDS so startup does not run ALTER TABLE patches.");
 check("JWT expiration is reasonable", Number(value(env, "JWT_EXPIRATION_MINUTES")) >= 15 && Number(value(env, "JWT_EXPIRATION_MINUTES")) <= 1440, "JWT_EXPIRATION_MINUTES should be between 15 and 1440");
+check("Owner setup key is strong", registrationBootstrapKey.length >= 32 && !isPlaceholder(registrationBootstrapKey) && new Set(registrationBootstrapKey).size >= 12 && registrationBootstrapKey !== jwtSecret, "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY should be a unique, non-placeholder secret with at least 32 characters", strict ? "fail" : "warn");
 
 const stripeKey = value(env, "STRIPE_SECRET_KEY");
 const stripeWebhook = value(env, "STRIPE_WEBHOOK_SECRET");

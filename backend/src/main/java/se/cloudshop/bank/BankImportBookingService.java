@@ -62,8 +62,22 @@ public class BankImportBookingService {
     if ("booked".equals(status)) entry.linkJournalEntry(journalEntry);
     BankReconciliationEntry saved = rows.save(entry);
     audit.record("bank", "bank_reconciliation_entry", saved.getId(), "bank_reconciliation_entry_created",
-        saved.getBankRowId(), "Bank reconciliation entry created.", saved.getAmount(), authorization);
+        saved.getBankRowId(), "Bank reconciliation entry created.", wholeKrona(saved), authorization);
     return saved;
+  }
+
+  private int wholeKrona(BankReconciliationEntry entry) {
+    long amountMinor = entry.getAmountMinorValue();
+    if (amountMinor % 100L != 0L) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankradens auditbelopp innehaller oren och kan inte sparas som hela kronor.");
+    }
+    try {
+      return Math.toIntExact(amountMinor / 100L);
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Bankradens auditbelopp ligger utanfor stodet for hela kronor.", exception);
+    }
   }
 
   private void validate(BankImportRow row) {

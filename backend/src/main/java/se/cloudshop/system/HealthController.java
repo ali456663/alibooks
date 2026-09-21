@@ -136,6 +136,12 @@ public class HealthController {
         "jwtStrong", jwtIsConfigured() && jwtSecret.length() >= 32,
         "jwtExpirationMinutes", jwtExpirationMinutes
     ));
+    status.put("moneyModel", Map.of(
+        "currency", "SEK",
+        "unit", "whole-krona",
+        "supportsMinorUnits", false,
+        "productionBookkeepingReady", false
+    ));
     status.put("auth", Map.of(
         "loginAttemptLockEnabled", authMaxFailedLoginAttempts > 0 && authLoginLockMinutes > 0,
         "maxFailedLoginAttempts", authMaxFailedLoginAttempts,

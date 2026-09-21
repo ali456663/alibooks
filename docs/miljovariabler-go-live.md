@@ -18,6 +18,7 @@ For lokal test kan AliBooks starta med standardvarden, men detta ska fortfarande
 - `APP_BANK_RECONCILIATION_RESET_ENABLED=false`
 - `JWT_SECRET` ska vara minst 32 tecken om du testar riktig inloggning.
 - `JWT_EXPIRATION_MINUTES=60` ar rimligt lokalt.
+- `APP_AUTH_REGISTRATION_BOOTSTRAP_KEY` kan lamnas tom lokalt; i produktion skyddar den skapandet av det forsta agarkontot.
 
 Skapa en stark lokal JWT-hemlighet utan att spara den i kod:
 
@@ -26,6 +27,14 @@ npm run generate:jwt-secret
 ```
 
 Kopiera bara resultatet till IntelliJ Run Configuration > Environment variables.
+
+Skapa en separat engangsnyckel for forsta agarkontot i PowerShell:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(36).toString('base64url'))"
+```
+
+Spara den endast som `APP_AUTH_REGISTRATION_BOOTSTRAP_KEY` pa produktionsservern/secret manager. Registrerings-API:t tillater endast forsta kontot; nar agarkontot skapats stangs oppen registrering. Nyckeln maste vara minst 32 tecken, unik fran JWT-nyckeln och ska aldrig visas i frontendkoden eller Git.
 
 ## Produktion eller publik demo
 
@@ -41,8 +50,11 @@ For publik demo eller riktig drift ska detta vara satt:
 - `APP_SCHEMA_PATCH_ENABLED=false`.
 - `JWT_SECRET` ska vara unik, minst 32 tecken och inte ateranvandas.
 - `JWT_EXPIRATION_MINUTES` ska vara mellan 15 och 1440.
+- `APP_AUTH_REGISTRATION_BOOTSTRAP_KEY` ska vara en separat, slumpad nyckel pa minst 32 tecken for forsta agarkontot.
 - `APP_TEST_DATA_RESET_ENABLED=false`.
 - `APP_BANK_RECONCILIATION_RESET_ENABLED=false`.
+
+Produktions-Compose satter `APP_ENV=production`. Backend startar da inte om JWT- eller startnyckeln ar svag, ateranvand eller en mall, databasen ar lokal eller anvander standarduppgifter, CORS saknar explicita publika origin, lokal CORS ar aktiverad, automatisk schemaandring ar pa eller test-reset ar aktiverad. Kor `npm run check:prod -- --env-file din-riktiga-env-fil --strict` innan deploy; startvakten ar ett extra skydd, inte ersattning for kontrollen.
 
 ## Integrationer
 
@@ -72,6 +84,8 @@ AI:
 Stoppa innan riktig drift om:
 
 - `JWT_SECRET` ar `change_me_in_production` eller kortare an 32 tecken.
+- `APP_AUTH_REGISTRATION_BOOTSTRAP_KEY` saknas, ar kortare an 32 tecken eller ateranvander JWT-hemligheten.
+- `JWT_SECRET`, DB-adress, DB-uppgifter eller CORS-adress har kvar ett exempel-/mallvarde.
 - `APP_CORS_LOCAL_DEV_ENABLED=true` i produktion.
 - `APP_CORS_ALLOWED_ORIGINS` pekar pa localhost i produktion.
 - `SPRING_DATASOURCE_URL` pekar pa localhost eller Docker `db` i produktion.
@@ -79,6 +93,7 @@ Stoppa innan riktig drift om:
 - `APP_SCHEMA_PATCH_ENABLED=true` anvands mot RDS.
 - Stripe eller SMTP visas som klara utan testbevis.
 - AI-nycklar ligger i frontend eller GitHub.
+- API-nycklar, SMTP-/databaslosenord och JWT-hemligheter som tidigare delats i chatt, loggar eller skarmbilder ska roteras fore drift.
 
 ## Kontrollkommando
 

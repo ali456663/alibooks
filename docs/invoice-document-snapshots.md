@@ -1,13 +1,28 @@
 # Fakturadokument och utskicksordning
 
-## Omfattning 2026-09-09
+## Omfattning 2026-09-18
 
 Nya vanliga fakturor och avtalsfakturor sparar en versionssatt kopia av kundens
-kontaktuppgifter, tjanstens namn, utstallare, kontaktadress, F-skatt och
+kontaktuppgifter, tjanstens namn, utstallarens registrerade adress,
+organisationsnummer och momsregistreringsnummer, kontaktadress, F-skatt och
 betalningsuppgifter. Fakturans befintliga beloppsfalt anvands fortsatt.
-Senare registerandringar skriver inte om dessa uppgifter i PDF-kopian.
+Nar ett utkast utfardas uppdateras endast utstallarens profiluppgifter fran
+foretagsinstallningarna. Kund, tjanst och betalningsuppgifter forblir frysta.
+Efter utfardande skriver senare registerandringar inte om PDF-kopian.
 Kreditfakturan arver originalets sparade dokumentuppgifter och belopp.
-Snapshoten kan inte ersattas genom Order-metoden efter att den har skapats.
+Snapshotversionerna 1 och 2 kan fortsatt lasas; nya och uppdaterade utkast
+sparas som version 3. Endast den sarskilda utkastmetoden far uppdatera
+utstallarprofilen.
+
+Utfardande och mejlutskick stoppas innan bokforing om foretagsnamn eller
+registrerad adress saknas. Momsregistreringsnummer kravs nar fakturan har ett
+momsbelopp. Tjanstebeskrivning kravs. Nar totalbeloppet overstiger 4 000 SEK
+inklusive moms kravs ocksa koparens namn och fullstandiga adress innan fakturan
+kan utfardas. PDF:en visar enhetspris exklusive moms och beskattningsunderlag.
+Kreditfakturan hanvisar till originalets synliga fakturanummer, inte dess interna
+databas-ID. Detta ar grundkontroller, inte en fullstandig kontroll av
+fakturatext, momsbehandling eller att uppgifterna ar verifierade mot Skatteverket.
+Faktureringsregler och grans for forenklad faktura: [Skatteverket](https://www.skatteverket.se/foretagochorganisationer/moms/saljavarorochtjanster/fakturering.4.58d555751259e4d66168000403.html).
 
 PDF visar betalt och kvarvarande belopp separat. Ett utkast markeras som utkast,
 inte som en betalningsbegaran med noll kvar. Kreditfakturan har negativ total,

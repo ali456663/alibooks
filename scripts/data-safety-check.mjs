@@ -140,7 +140,7 @@ const expectations = [
     route: "/supplier-invoices/{id}",
     details: [
       ["booked supplier invoices cannot be deleted", "hasSupplierInvoiceEntries(invoice)"],
-      ["paid supplier invoices cannot be deleted", "invoice.getPaidAmount() > 0"],
+      ["paid supplier invoices cannot be deleted", "accountingWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount()"],
       ["supplier deletion rejected regardless of period", "Registered supplier invoices must be retained for dated balances"],
       ["supplier deletion responds with conflict", "HttpStatus.CONFLICT"]
     ]

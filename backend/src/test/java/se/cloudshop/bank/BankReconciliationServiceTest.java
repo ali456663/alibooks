@@ -108,6 +108,21 @@ class BankReconciliationServiceTest {
     assertThat(report.issues()).extracting(BankReconciliationIssue::issueType).contains("unlinked_bank_row", "unmatched_journal_entry");
   }
 
+  @Test
+  void missingBankDateIsNotReplacedWithTodaysDate() {
+    var undated = new BankReconciliationEntry(new CreateBankReconciliationEntryRequest(
+        "undated", null, "Imported row", "ref", 50, "csv", "skipped", "Review"));
+    when(journalEntryRepository.findAll()).thenReturn(List.of());
+    when(bankReconciliationEntryRepository.findAll()).thenReturn(List.of(undated));
+
+    var report = bankReconciliationService.createReport(null, null);
+
+    assertThat(undated.getBankDate()).isNull();
+    assertThat(report.issues()).extracting(BankReconciliationIssue::issueType)
+        .contains("invalid_bank_identity_or_date");
+    assertThat(report.criticalIssueCount()).isPositive();
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"date", "amount", "account", "missing", "duplicate", "status", "undated"})
   void corruptLinksCannotPassReconciliation(String problem) {

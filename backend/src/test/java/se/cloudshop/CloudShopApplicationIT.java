@@ -39,15 +39,18 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import se.cloudshop.accounting.AccountingService;
+import se.cloudshop.accounting.AccountingController;
 import se.cloudshop.accounting.CreateManualJournalEntryRequest;
 import se.cloudshop.accounting.CreateManualJournalEntryLineRequest;
 import se.cloudshop.accounting.CreateManualMultiLineJournalEntryRequest;
 import se.cloudshop.accounting.CreateOpeningBalanceRequest;
+import se.cloudshop.accounting.CreateCorrectionJournalEntryRequest;
 import java.util.List;
 import se.cloudshop.accounting.JournalEntry;
 import se.cloudshop.accounting.JournalEntryRepository;
 import se.cloudshop.audit.AuditService;
 import se.cloudshop.auth.JwtService;
+import se.cloudshop.auth.AuthRequest;
 import se.cloudshop.expense.CreateExpenseRequest;
 import se.cloudshop.expense.ExpenseController;
 import se.cloudshop.order.CreateOrderRequest;
@@ -68,6 +71,7 @@ import se.cloudshop.supplier.SupplierInvoiceRepository;
 import se.cloudshop.supplier.SupplierController;
 import se.cloudshop.supplier.CreateSupplierInvoiceRequest;
 import se.cloudshop.supplier.UpdateSupplierInvoiceStatusRequest;
+import se.cloudshop.supplier.CancelSupplierInvoiceRequest;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CloudShopApplicationIT {
@@ -79,6 +83,7 @@ class CloudShopApplicationIT {
   @Autowired ProductRepository products;
   @Autowired JournalEntryRepository journal;
   @Autowired AccountingService accounting;
+  @Autowired AccountingController accountingController;
   @Autowired se.cloudshop.accounting.AccountingPeriodLockService periodLocks;
   @Autowired SettingsService settings;
   @Autowired se.cloudshop.bank.BankReconciliationController bankController;
@@ -117,9 +122,11 @@ class CloudShopApplicationIT {
     reset(audit, invoiceEmails);
     jdbc.execute("DROP TRIGGER IF EXISTS reject_test_credit ON journal_entries");
     jdbc.execute("ALTER TABLE invoice_originals DROP CONSTRAINT IF EXISTS reject_test_original");
-    jdbc.execute("TRUNCATE invoice_originals, journal_entries, customer_orders, expenses, audit_events, stripe_webhook_events, supplier_invoices, suppliers, bank_reconciliation_entries RESTART IDENTITY CASCADE");
+    jdbc.execute("TRUNCATE app_users, invoice_originals, journal_entries, customer_orders, expenses, audit_events, stripe_webhook_events, supplier_invoices, suppliers, bank_reconciliation_entries RESTART IDENTITY CASCADE");
     jdbc.update("UPDATE app_settings SET accounting_locked_through_date = NULL, accounting_method = 'INVOICE_METHOD'");
     settings.getSettings();
+    jdbc.update("UPDATE app_settings SET company_name = ?, company_address = ?, company_postal_code = ?, company_city = ?, company_organization_number = ?, vat_registration_number = ?",
+        "Integration Test Seller", "Test Street 1", "111 22", "Stockholm", "556000-0000", "SE556000000001");
     product = products.save(new Product("Integration test service", "Test only", 100));
     authorization = "Bearer " + jwt.createToken("integration@example.invalid");
   }
@@ -129,6 +136,17 @@ class CloudShopApplicationIT {
     assertThat(http.getForEntity("/health", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
     assertThat(jdbc.queryForObject("SELECT count(*) FROM accounts", Long.class)).isPositive();
+  }
+
+  @Test
+  void productionOwnerRegistrationCanOnlyBeUsedOncePerWorkspace() {
+    AuthRequest ownerRequest = new AuthRequest("owner@example.invalid", "StrongTestPassword123");
+    var first = http.postForEntity("/auth/register", ownerRequest, String.class);
+    var second = http.postForEntity("/auth/register", new AuthRequest("second@example.invalid", "StrongTestPassword123"), String.class);
+
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM app_users", Long.class)).isEqualTo(1L);
   }
 
   @ParameterizedTest
@@ -185,6 +203,62 @@ class CloudShopApplicationIT {
     assertThat(invoice.getStatus()).isEqualTo("SENT");
     assertThat(journal.count()).isEqualTo(3);
     assertBalanced();
+  }
+
+  @Test
+  void incompleteSellerProfileCannotIssueOrBookInvoice() {
+    Long id = draft().getId();
+    jdbc.update("UPDATE app_settings SET company_city = ''");
+
+    assertThatThrownBy(() -> invoices.markInvoiceAsSent(authorization, id))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("registered address");
+
+    assertThat(journal.count()).isZero();
+    assertThat(orders.findById(id).orElseThrow().getStatus()).isEqualTo("DRAFT");
+  }
+
+  @Test
+  void invoiceOverSimplifiedInvoiceLimitNeedsBuyerAddressBeforeBooking() {
+    Long id = invoices.createInvoice(authorization,
+        new CreateOrderRequest("Test customer", null, product.getId(), 41)).getId();
+
+    assertThatThrownBy(() -> invoices.markInvoiceAsSent(authorization, id))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST))
+        .hasMessageContaining("4,000 SEK");
+
+    Order rejected = orders.findById(id).orElseThrow();
+    assertThat(rejected.getStatus()).isEqualTo("DRAFT");
+    assertThat(journal.findByInvoice(rejected)).isEmpty();
+    assertThat(originalRows.findById(id)).isEmpty();
+  }
+
+  @Test
+  void invoiceOverSimplifiedInvoiceLimitCanBeIssuedWithCompleteBuyerAddress() {
+    var customer = customers.save(new se.cloudshop.customer.Customer(
+        "Test business buyer", "buyer@example.invalid", "", "Buyer Street 1", "", "111 22", "Stockholm"));
+    Long id = invoices.createInvoice(authorization,
+        new CreateOrderRequest(customer.getName(), customer.getId(), product.getId(), 41)).getId();
+
+    Order issued = invoices.markInvoiceAsSent(authorization, id);
+
+    assertThat(issued.getStatus()).isEqualTo("SENT");
+    assertThat(journal.findByInvoice(issued)).hasSize(3);
+    assertThat(issued.isDocumentSnapshotAvailable()).isTrue();
+    assertBalanced();
+  }
+
+  @Test
+  void invoiceAtSimplifiedInvoiceLimitCanBeIssuedWithoutBuyerAddress() {
+    Long id = invoices.createInvoice(authorization,
+        new CreateOrderRequest("Test customer", null, product.getId(), 32)).getId();
+
+    Order issued = invoices.markInvoiceAsSent(authorization, id);
+
+    assertThat(issued.getTotalAmount()).isEqualTo(4_000);
+    assertThat(issued.getStatus()).isEqualTo("SENT");
+    assertThat(journal.findByInvoice(issued)).hasSize(3);
   }
 
   @Test
@@ -448,6 +522,52 @@ class CloudShopApplicationIT {
     }
   }
 
+  @Test
+  void concurrentCorrectionRequestsCreateOnlyOneCorrectionVoucher() throws Exception {
+    String originalVoucher = accounting.createManualEntry(new CreateManualJournalEntryRequest(
+        LocalDate.now(), "Correction concurrency test", "1930", "2018", 100)).getFirst().getVoucherNumber();
+    var executor = Executors.newFixedThreadPool(2);
+    var correctionCreated = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var secondStarted = new CountDownLatch(1);
+    try {
+      var first = executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {
+        accounting.createCorrectionEntry(originalVoucher, new CreateCorrectionJournalEntryRequest(LocalDate.now()));
+        correctionCreated.countDown();
+        try {
+          if (!release.await(15, TimeUnit.SECONDS)) throw new IllegalStateException("Test release timed out");
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException(exception);
+        }
+        return null;
+      }));
+      assertThat(correctionCreated.await(15, TimeUnit.SECONDS)).isTrue();
+      var second = executor.submit(() -> {
+        secondStarted.countDown();
+        try {
+          accounting.createCorrectionEntry(originalVoucher, new CreateCorrectionJournalEntryRequest(LocalDate.now()));
+          return false;
+        } catch (ResponseStatusException exception) {
+          return exception.getStatusCode() == HttpStatus.CONFLICT;
+        }
+      });
+      assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+      release.countDown();
+      first.get(15, TimeUnit.SECONDS);
+      assertThat(second.get(15, TimeUnit.SECONDS)).isTrue();
+      List<JournalEntry> correctionEntries = journal.findByCorrectionOfVoucherNumber(originalVoucher);
+      assertThat(correctionEntries).hasSize(2);
+      assertThat(correctionEntries.stream().map(JournalEntry::getVoucherNumber).distinct().count()).isEqualTo(1);
+      assertBalanced();
+    } finally {
+      release.countDown();
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(ints = {0, -1, Integer.MIN_VALUE, Integer.MAX_VALUE})
   void invalidPaymentAmountLeavesInvoiceAndJournalUnchanged(int amount) {
@@ -484,7 +604,7 @@ class CloudShopApplicationIT {
     Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
     invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 50, "first"));
     invoices.markInvoiceAsPaid(authorization, id,
-        omitBody ? null : new MarkInvoicePaidRequest(null, null, "remaining"));
+        new MarkInvoicePaidRequest(LocalDate.now(), null, "remaining"));
     Order saved = orders.findById(id).orElseThrow();
     assertThat(saved.getPaidAmount()).isEqualTo(125);
     assertThat(saved.getStatus()).isEqualTo("PAID");
@@ -499,7 +619,7 @@ class CloudShopApplicationIT {
     Long id = refundableInvoice();
     invoices.markInvoiceRefunded(authorization, id, new MarkInvoiceRefundRequest(LocalDate.now(), 50, "first"));
     invoices.markInvoiceRefunded(authorization, id,
-        omitBody ? null : new MarkInvoiceRefundRequest(null, null, "remaining"));
+        new MarkInvoiceRefundRequest(LocalDate.now(), null, "remaining"));
     Order saved = orders.findById(id).orElseThrow();
     assertThat(saved.getRefundedAmount()).isEqualTo(125);
     assertThat(saved.getRefundableAmount()).isZero();
@@ -691,7 +811,7 @@ class CloudShopApplicationIT {
 
   @Test
   void expenseAcceptsExplicitZeroVatAndBooksExactAmount() {
-    assertThat(http.postForEntity("/expenses", jsonRequest("{\"description\":\"Test\",\"netAmount\":100,\"vatAmount\":0}"), String.class)
+    assertThat(http.postForEntity("/expenses", jsonRequest("{\"expenseDate\":\"" + LocalDate.now() + "\",\"description\":\"Test\",\"netAmount\":100,\"vatAmount\":0}"), String.class)
         .getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(jdbc.queryForObject("SELECT total_amount FROM expenses", Integer.class)).isEqualTo(100);
     assertBalanced();
@@ -722,7 +842,7 @@ class CloudShopApplicationIT {
     jdbc.update("UPDATE app_settings SET accounting_method = 'CASH_METHOD'");
     product.setPrice(100_000);
     products.save(product);
-    Long id = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
+    Long id = invoices.markInvoiceAsSent(authorization, draftWithBuyerAddress().getId()).getId();
     invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 100_000, "first"));
     invoices.markInvoiceAsPaid(authorization, id, new MarkInvoicePaidRequest(LocalDate.now(), 25_000, "last"));
     assertThat(jdbc.queryForObject("SELECT sum(credit) FROM journal_entries WHERE account_number='2611'", Long.class)).isEqualTo(25_000);
@@ -795,7 +915,8 @@ class CloudShopApplicationIT {
   @Test
   void concurrentSupplierPaymentCannotReactivateCancelledInvoice() throws Exception {
     Long id = supplierInvoice(125, LocalDate.now()).getId();
-    afterUncommittedWrite(() -> supplierController.cancelSupplierInvoice(authorization, id, null), () ->
+    afterUncommittedWrite(() -> supplierController.cancelSupplierInvoice(
+            authorization, id, new CancelSupplierInvoiceRequest(LocalDate.now())), () ->
         assertThatThrownBy(() -> paySupplier(id, 50, "late")).hasMessageContaining("cannot be reactivated"));
     assertThat(supplierInvoices.findById(id).orElseThrow().getStatus()).isEqualTo("cancelled");
     assertThat(supplierInvoices.findById(id).orElseThrow().getPaidAmount()).isZero();
@@ -849,7 +970,7 @@ class CloudShopApplicationIT {
       if (path.startsWith("/receivables")) {
         product.setPrice(1_200_000_000);
         products.save(product);
-        invoices.markInvoiceAsSent(authorization, draft().getId());
+        invoices.markInvoiceAsSent(authorization, draftWithBuyerAddress().getId());
       } else {
         supplierInvoice(1_500_000_000, LocalDate.now());
       }
@@ -932,10 +1053,10 @@ class CloudShopApplicationIT {
     assertThatThrownBy(() -> supplierController.deleteSupplierInvoice(authorization, id))
         .isInstanceOf(ResponseStatusException.class).hasMessageContaining("must be retained");
     assertThatThrownBy(() -> supplierController.updateSupplierInvoiceStatus(authorization, id,
-        new UpdateSupplierInvoiceStatusRequest("cancelled", null, null, "")))
+        new UpdateSupplierInvoiceStatusRequest("cancelled", LocalDate.now(), null, "")))
         .isInstanceOf(ResponseStatusException.class).hasMessageContaining("cancellation endpoint");
     assertThat(supplierInvoices.findById(id)).isPresent();
-    supplierController.cancelSupplierInvoice(authorization, id, null);
+    supplierController.cancelSupplierInvoice(authorization, id, new CancelSupplierInvoiceRequest(LocalDate.now()));
     assertThat(supplierInvoices.findById(id).orElseThrow().getCancelledAt()).isEqualTo(LocalDate.now());
   }
 
@@ -1278,6 +1399,28 @@ class CloudShopApplicationIT {
     assertBalanced();
   }
 
+  @Test
+  void manualVoucherAuditFailureRollsBackAllJournalLines() {
+    failAudit();
+
+    assertThatThrownBy(() -> accountingController.createManualJournalEntry(
+        authorization,
+        new CreateManualJournalEntryRequest(
+            LocalDate.now(),
+            "Manual audit rollback",
+            "5420",
+            "1930",
+            100
+        )
+    )).isInstanceOf(RuntimeException.class);
+
+    assertThat(journal.count()).isZero();
+    assertThat(jdbc.queryForObject(
+        "SELECT count(*) FROM audit_events WHERE event_action = 'manual_created'",
+        Long.class
+    )).isZero();
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void bankAuditOrJournalFailureRollsBackEverything(boolean auditFailure) {
@@ -1601,6 +1744,13 @@ class CloudShopApplicationIT {
     return invoices.createInvoice(authorization, new CreateOrderRequest("Test customer", null, product.getId(), 1));
   }
 
+  private Order draftWithBuyerAddress() {
+    var buyer = customers.save(new se.cloudshop.customer.Customer(
+        "Test business buyer", "buyer@example.invalid", "", "Buyer Street 1", "", "111 22", "Stockholm"));
+    return invoices.createInvoice(authorization,
+        new CreateOrderRequest(buyer.getName(), buyer.getId(), product.getId(), 1));
+  }
+
   @Autowired se.cloudshop.invoice.InvoicePdfService invoicePdf;
   @Autowired se.cloudshop.invoice.InvoiceOriginalService invoiceOriginals;
   @Autowired se.cloudshop.invoice.InvoiceOriginalRepository originalRows;
@@ -1758,15 +1908,25 @@ class CloudShopApplicationIT {
     assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class)).isEqualTo(auditCount);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void journalOrAuditFailurePreventsEmailTransport(boolean auditFailure) {
+  @Test
+  void journalFailurePreventsEmailTransport() {
     var draft = draft();
-    if (auditFailure) failAudit(); else rejectCreditRows();
+    rejectCreditRows();
     assertThatThrownBy(() -> invoices.sendInvoiceEmail(authorization, draft.getId())).isInstanceOf(RuntimeException.class);
     org.mockito.Mockito.verify(invoiceEmails, org.mockito.Mockito.never()).sendInvoice(any());
     assertThat(journal.count()).isZero();
     assertThat(orders.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo("DRAFT");
+  }
+
+  @Test
+  void auditFailureAfterEmailTransportLeavesNoSentState() {
+    var draft = draft();
+    failAudit();
+    assertThatThrownBy(() -> invoices.sendInvoiceEmail(authorization, draft.getId())).isInstanceOf(RuntimeException.class);
+    org.mockito.Mockito.verify(invoiceEmails).sendInvoice(any());
+    assertThat(journal.count()).isZero();
+    assertThat(orders.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo("DRAFT");
+    assertThat(orders.findById(draft.getId()).orElseThrow().hasReminder("INVOICE_EMAIL", "SENT")).isFalse();
   }
 
   @ParameterizedTest
@@ -1813,8 +1973,23 @@ class CloudShopApplicationIT {
     assertThat(reloaded.getNetAmount()).isEqualTo(100);
     invoices.markInvoiceAsSent(authorization, created.getId());
     var credit = invoices.createCreditInvoice(authorization, created.getId());
-    assertThat(orders.findById(credit.getId()).orElseThrow().getDocumentSnapshot()).isEqualTo(snapshot);
+    var creditSnapshot = orders.findById(credit.getId()).orElseThrow().getDocumentSnapshot();
+    assertThat(creditSnapshot).isNotEqualTo(snapshot);
+    assertThat(creditSnapshot.creditedInvoiceNumber()).isEqualTo(created.getInvoiceNumber());
     assertThat(credit.getTotalAmount()).isEqualTo(-125);
+  }
+
+  @Test
+  void invoiceExportIncludesExplicitMinorUnitColumns() {
+    draft();
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+
+    var response = http.exchange("/invoices/export", org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).contains("NettoMinor,MomsMinor,TotaltMinor", "10000,2500,12500");
   }
 
   @Test

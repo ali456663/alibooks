@@ -13,6 +13,8 @@ import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import java.io.ByteArrayOutputStream;
 import java.awt.Color;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import org.springframework.stereotype.Service;
 import se.cloudshop.order.Order;
 import se.cloudshop.settings.SettingsService;
@@ -56,6 +58,14 @@ public class InvoicePdfService {
     document.add(brand);
     Paragraph company = new Paragraph(value(snapshot.issuerName(), "-"), companyFont);
     document.add(company);
+    document.add(new Paragraph(value(snapshot.issuerAddress(), "-"), companyFont));
+    document.add(new Paragraph(value(snapshot.issuerPostalCode(), "") + " " + value(snapshot.issuerCity(), ""), companyFont));
+    if (snapshot.issuerOrganizationNumber() != null && !snapshot.issuerOrganizationNumber().isBlank()) {
+      document.add(new Paragraph("Organisationsnummer / Company registration no: " + snapshot.issuerOrganizationNumber(), companyFont));
+    }
+    if (snapshot.vatRegistrationNumber() != null && !snapshot.vatRegistrationNumber().isBlank()) {
+      document.add(new Paragraph("Momsregistreringsnummer / VAT registration no: " + snapshot.vatRegistrationNumber(), companyFont));
+    }
     document.add(new Paragraph(" "));
     document.add(new Paragraph(" "));
 
@@ -68,7 +78,8 @@ public class InvoicePdfService {
       document.add(new Paragraph("Rekonstruerad kopia / Reconstructed copy: originaldokument eller historiska registeruppgifter saknas. Kontrollera mot originalfakturan.", normalFont));
     }
     if (invoice.isCreditInvoice()) {
-      document.add(new Paragraph("Krediterar faktura-ID / Credits invoice ID: " + (invoice.getCreditedInvoiceId() == null ? "-" : invoice.getCreditedInvoiceId()), normalFont));
+      document.add(new Paragraph("Hänvisar till originalfaktura / References original invoice: "
+          + value(snapshot.creditedInvoiceNumber(), "Saknas - kontrollera originalfakturan / Missing - verify original invoice"), normalFont));
     }
     document.add(new Paragraph(" "));
 
@@ -94,43 +105,50 @@ public class InvoicePdfService {
     addCustomer(document, snapshot, normalFont);
 
     document.add(new Paragraph(" "));
-    PdfPTable rows = new PdfPTable(5);
+    PdfPTable rows = new PdfPTable(6);
     rows.setWidthPercentage(100);
+    rows.setWidths(new float[] {3.4f, 0.7f, 1.25f, 1.3f, 1.1f, 1.25f});
     addCell(rows, "Tjanst / Service", headingFont);
     addCell(rows, "Antal / Qty", headingFont);
-    addCell(rows, "Netto / Net", headingFont);
-    addCell(rows, "Moms / VAT", headingFont);
+    addCell(rows, "Enhetspris exkl. moms / Unit price excl. VAT", headingFont);
+    addCell(rows, "Beskattningsunderlag / Tax base", headingFont);
+    addCell(rows, "Moms / VAT (" + invoice.getVatPercent() + "%)", headingFont);
     addCell(rows, "Totalt / Total", headingFont);
     addCell(rows, value(snapshot.productName(), "Tjanst / Service"), normalFont);
     addCell(rows, String.valueOf(invoice.getQuantity()), normalFont);
-    addCell(rows, invoice.getNetAmount() + " SEK", normalFont);
-    addCell(rows, invoice.getVatAmount() + " SEK", normalFont);
-    addCell(rows, invoice.getTotalAmount() + " SEK", normalFont);
+    long unitPriceMinor = ordinaryPriceMinor(invoice) / invoice.getQuantity();
+    if (invoice.isCreditInvoice()) unitPriceMinor = -unitPriceMinor;
+    addCell(rows, formatSek(unitPriceMinor), normalFont);
+    addCell(rows, formatSek(netAmountMinor(invoice)), normalFont);
+    addCell(rows, formatSek(vatAmountMinor(invoice)), normalFont);
+    addCell(rows, formatSek(totalAmountMinor(invoice)), normalFont);
     document.add(rows);
 
-    if (invoice.getDiscountAmount() > 0) {
+    if (discountAmountMinor(invoice) > 0) {
       PdfPTable discount = new PdfPTable(2);
       discount.setWidthPercentage(100);
       discount.setSpacingBefore(8);
       addCell(discount, "Ordinarie pris / Regular price", normalFont);
-      addCell(discount, invoice.getOrdinaryPrice() + " SEK", normalFont);
+      int creditSign = invoice.isCreditInvoice() ? -1 : 1;
+      addCell(discount, formatSek(creditSign * ordinaryPriceMinor(invoice)), normalFont);
       addCell(discount, "Rabatt / Discount" + discountLabelSuffix(invoice), normalFont);
-      addCell(discount, "-" + invoice.getDiscountAmount() + " SEK", normalFont);
+      addCell(discount, formatSek(creditSign * -discountAmountMinor(invoice)), normalFont);
       document.add(discount);
     }
 
     document.add(new Paragraph(" "));
     if (!invoice.isCreditInvoice()) {
       document.add(sectionTitle("Betalning / Payment", headingFont));
-      document.add(new Paragraph("Betalt / Paid: " + invoice.getPaidAmount() + " SEK", normalFont));
+      document.add(new Paragraph("Betalt / Paid: " + formatSek(paidAmountMinor(invoice)), normalFont));
       document.add(new Paragraph("DRAFT".equals(invoice.getStatus())
           ? "Utkast - inte betalningsunderlag / Draft - not a payment request"
-          : "Att betala / Remaining: " + invoice.getRemainingAmount() + " SEK", headingFont));
+          : "Att betala / Remaining: " + formatSek(invoice.getRemainingAmountMinor()), headingFont));
       document.add(new Paragraph("PlusGiro: " + value(snapshot.plusGiro(), "-"), normalFont));
       document.add(new Paragraph("OCR: " + value(snapshot.ocr(), "-"), normalFont));
       document.add(new Paragraph("Mottagare / Recipient: " + value(snapshot.paymentRecipient(), "-"), normalFont));
     } else {
-      document.add(new Paragraph("Kreditbelopp / Credit amount: " + invoice.getTotalAmount() + " SEK. Ingen betalningsbegaran / Not a payment request.", normalFont));
+      document.add(new Paragraph("Kreditbelopp / Credit amount: " + formatSek(totalAmountMinor(invoice))
+          + ". Ingen betalningsbegaran / Not a payment request.", normalFont));
     }
     if (snapshot.fTaxApproved()) {
       document.add(new Paragraph("Godkand for F-skatt / Approved for F-tax", normalFont));
@@ -182,6 +200,42 @@ public class InvoicePdfService {
   private String discountLabelSuffix(Order invoice) {
     String label = invoice.getDiscountLabel();
     return label == null || label.isBlank() ? "" : " (" + label + ")";
+  }
+
+  private long netAmountMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getNetAmountMinor(), invoice.getNetAmount());
+  }
+
+  private long vatAmountMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getVatAmountMinor(), invoice.getVatAmount());
+  }
+
+  private long totalAmountMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount());
+  }
+
+  private long paidAmountMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getPaidAmountMinor(), invoice.getPaidAmount());
+  }
+
+  private long ordinaryPriceMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getOrdinaryPriceMinor(), invoice.getOrdinaryPrice());
+  }
+
+  private long discountAmountMinor(Order invoice) {
+    return minorOrWholeKrona(invoice.getDiscountAmountMinor(), invoice.getDiscountAmount());
+  }
+
+  private long minorOrWholeKrona(Long minor, int wholeKrona) {
+    return minor == null ? Math.multiplyExact((long) wholeKrona, 100L) : minor;
+  }
+
+  private String formatSek(long minor) {
+    BigDecimal amount = BigDecimal.valueOf(minor, 2).setScale(2, RoundingMode.UNNECESSARY);
+    String formatted = minor % 100L == 0L
+        ? amount.setScale(0, RoundingMode.UNNECESSARY).toPlainString()
+        : amount.toPlainString();
+    return formatted.replace('.', ',') + " SEK";
   }
 
   private String value(String value, String fallback) {

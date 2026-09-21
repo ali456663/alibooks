@@ -4,6 +4,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,6 +24,12 @@ public class StripePayout {
   private int grossAmount;
   private int feeAmount;
   private int netAmount;
+  @Column(name = "gross_amount_minor")
+  private Long grossAmountMinor;
+  @Column(name = "fee_amount_minor")
+  private Long feeAmountMinor;
+  @Column(name = "net_amount_minor")
+  private Long netAmountMinor;
   private String reference;
   private String voucherNumber;
   private Instant createdAt;
@@ -32,9 +42,34 @@ public class StripePayout {
     this.grossAmount = grossAmount;
     this.feeAmount = feeAmount;
     this.netAmount = grossAmount - feeAmount;
+    this.grossAmountMinor = toMinorUnits(grossAmount);
+    this.feeAmountMinor = toMinorUnits(feeAmount);
+    this.netAmountMinor = toMinorUnits(this.netAmount);
     this.reference = reference;
     this.voucherNumber = voucherNumber;
     this.createdAt = Instant.now();
+  }
+
+  @PostLoad
+  private void validateMinorUnitShadow() {
+    if (grossAmountMinor != null && grossAmountMinor.longValue() != toMinorUnits(grossAmount)) {
+      throw new IllegalStateException("Stripe payout gross amount shadow does not match the ledger amount.");
+    }
+    if (feeAmountMinor != null && feeAmountMinor.longValue() != toMinorUnits(feeAmount)) {
+      throw new IllegalStateException("Stripe payout fee shadow does not match the ledger amount.");
+    }
+    if (netAmountMinor != null && netAmountMinor.longValue() != toMinorUnits(netAmount)) {
+      throw new IllegalStateException("Stripe payout net amount shadow does not match the ledger amount.");
+    }
+    synchronizeMinorUnits();
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeMinorUnits() {
+    grossAmountMinor = toMinorUnits(grossAmount);
+    feeAmountMinor = toMinorUnits(feeAmount);
+    netAmountMinor = toMinorUnits(netAmount);
   }
 
   public Long getId() {
@@ -57,6 +92,21 @@ public class StripePayout {
     return netAmount;
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getGrossAmountMinor() {
+    return grossAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getFeeAmountMinor() {
+    return feeAmountMinor;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public Long getNetAmountMinor() {
+    return netAmountMinor;
+  }
+
   public String getReference() {
     return reference;
   }
@@ -67,5 +117,13 @@ public class StripePayout {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  private long toMinorUnits(int amount) {
+    try {
+      return Math.multiplyExact((long) amount, 100L);
+    } catch (ArithmeticException exception) {
+      throw new IllegalArgumentException("Stripe payout amount is outside the supported minor-unit range.", exception);
+    }
   }
 }
