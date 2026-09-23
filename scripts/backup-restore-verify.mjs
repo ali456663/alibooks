@@ -18,6 +18,7 @@ export async function isolatedDatabase(action) {
   const name = `alibooks-restore-${randomUUID()}`;
   let created = false;
   try {
+    docker(["pull", "postgres:16"]);
     docker(["create", "--name", name, "--network", "none",
       "--label", "alibooks.purpose=isolated-restore-drill",
       "--tmpfs", "/var/lib/postgresql/data", "--tmpfs", "/app/uploads",

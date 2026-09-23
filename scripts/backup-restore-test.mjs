@@ -59,6 +59,47 @@ try {
     assert.equal(good.moneyModel.moneyColumnsVerified, 31);
     console.log("PASS: real pg_dump/pg_restore, receipt copy and journal verification"); passed++;
 
+    const deploy = readFileSync(new URL("./ec2-deploy.sh", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+    function deployProbe(id, mount) {
+      const stub = `COMPOSE_FILE=/etc/hosts
+ENV_FILE=/tmp/alibooks-test.env
+FRONTEND_URL=
+BACKEND_URL=
+cat > "$ENV_FILE" <<'TEST_ENV'
+DOCKERHUB_USERNAME=alibooks-test
+IMAGE_TAG=sha-abcdef0
+APP_FRONTEND_URL=https://books.example.test
+APP_CORS_ALLOWED_ORIGINS=https://books.example.test
+SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/alibooks
+SPRING_DATASOURCE_USERNAME=alibooks
+SPRING_DATASOURCE_PASSWORD=synthetic-test-password
+SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+APP_SCHEMA_PATCH_ENABLED=false
+APP_CORS_LOCAL_DEV_ENABLED=false
+APP_TEST_DATA_RESET_ENABLED=false
+APP_BANK_RECONCILIATION_RESET_ENABLED=false
+JWT_SECRET=synthetic-test-jwt-secret-with-more-than-32-chars
+APP_AUTH_REGISTRATION_BOOTSTRAP_KEY=synthetic-test-bootstrap-key-different-and-long
+TEST_ENV
+docker() {
+  case "$*" in
+    *"ps -a -q backend") printf '%s\\n' '${id}' ;;
+    inspect*) printf '%s\\n' '${mount}' ;;
+    *" up -d"*) printf 'MOCK-UP\\n' ;;
+    *" config --quiet"|*" pull"|*" ps"|*" logs --tail=40 backend") : ;;
+    *) return 99 ;;
+  esac
+}
+`;
+      return docker(["exec", "-i", source, "sh"], stub + deploy);
+    }
+    assert.throws(() => deployProbe("legacy-container", ""), /Docker exec failed/);
+    console.log("PASS: deploy blocks legacy container without receipt volume"); passed++;
+    assert.match(deployProbe("persistent-container", "/app/uploads"), /MOCK-UP/);
+    console.log("PASS: deploy permits existing persistent receipt volume"); passed++;
+    assert.match(deployProbe("", ""), /MOCK-UP/);
+    console.log("PASS: first deployment permits new receipt volume"); passed++;
+
     writeFileSync(path.join(receipts, "unlinked.pdf"), "Unlinked synthetic file");
     const bundleOptions = { container: source, database: "alibooks_restore_test", username: "postgres",
       receiptsDirectory: receipts, backupDirectory: path.join(root, "bundle"), writersStopped: true };
@@ -112,30 +153,6 @@ try {
     await assert.rejects(verifyBackup(dump, receipts), /Docker exec failed/);
     console.log("PASS: invalid dump blocks verification"); passed++;
 
-    const deploy = readFileSync(new URL("./ec2-deploy.sh", import.meta.url), "utf8").replaceAll("\r\n", "\n");
-    function deployProbe(id, mount) {
-      const stub = `COMPOSE_FILE=/etc/hosts
-ENV_FILE=/etc/hosts
-FRONTEND_URL=
-BACKEND_URL=
-docker() {
-  case "$*" in
-    *"ps -a -q backend") printf '%s\\n' '${id}' ;;
-    inspect*) printf '%s\\n' '${mount}' ;;
-    *" up -d") printf 'MOCK-UP\\n' ;;
-    *" pull"|*" ps"|*" logs --tail=40 backend") : ;;
-    *) return 99 ;;
-  esac
-}
-`;
-      return docker(["exec", "-i", source, "sh"], stub + deploy);
-    }
-    assert.throws(() => deployProbe("legacy-container", ""), /Docker exec failed/);
-    console.log("PASS: deploy blocks legacy container without receipt volume"); passed++;
-    assert.match(deployProbe("persistent-container", "/app/uploads"), /MOCK-UP/);
-    console.log("PASS: deploy permits existing persistent receipt volume"); passed++;
-    assert.match(deployProbe("", ""), /MOCK-UP/);
-    console.log("PASS: first deployment permits new receipt volume"); passed++;
   });
   console.log(`Backup/restore integration: ${passed}/16 passed. Synthetic fixtures, not a production backup approval.`);
 } finally {
