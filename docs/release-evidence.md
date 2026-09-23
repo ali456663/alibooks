@@ -1,5 +1,19 @@
 # AliBooks release evidence
 
+## Inloggningsskydd mot resursmissbruk 2026-09-23
+
+Misslyckade loginforsok har nu ett konfigurerbart cachetak och inaktiva poster
+stadas bort. Nar taket nadts nekas nya forsoksnycklar utan att aktiva sparrar
+tas bort. Produktions-Nginx begransar login till 30 anrop/minut per klient-IP
+med kort burst, returnerar 429 vid overskridande och begransar bara login-body
+till 16 KiB; kvitto- och dokumentuppladdningar behaller sin tidigare grans.
+
+Verifierat lokalt: backend 497 tester, 0 fel pa Java 21; frontend release gate;
+Docker-konfigurationsgrind; production frontend image build; `nginx -t` godkand.
+GitHub Actions for den har andringen aterstar efter push. Detta ar inte go-live-
+godkannande: extern WAF/rate limit, audit-retention, restore, molndrift,
+integrationer och redovisningsgranskning aterstar.
+
 ## Produktionscontainrar och releasevalidering 2026-09-23
 
 Produktionsimagesen har nu healthchecks for backend och frontend. EC2-deployen

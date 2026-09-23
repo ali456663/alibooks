@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class LoginAttemptServiceTest {
@@ -50,5 +51,67 @@ class LoginAttemptServiceTest {
     assertThat(result.blocked()).isFalse();
     assertThat(result.failedAttempts()).isZero();
     assertThat(disabledService.isBlocked("ali@example.com")).isFalse();
+  }
+
+  @Test
+  void capsTrackedEmailsAndFailsClosedWithoutEvictingAnActiveLock() {
+    LoginAttemptService bounded = new LoginAttemptService(
+        2,
+        Duration.ofMinutes(15),
+        Clock.fixed(Instant.parse("2026-07-01T10:00:00Z"), ZoneOffset.UTC),
+        2,
+        Duration.ofMinutes(15)
+    );
+    bounded.recordFailure("locked@example.com");
+    bounded.recordFailure("locked@example.com");
+    bounded.recordFailure("other@example.com");
+
+    LoginAttemptResult overflow = bounded.recordFailure("new@example.com");
+
+    assertThat(overflow.blocked()).isTrue();
+    assertThat(bounded.trackedAttemptCount()).isEqualTo(2);
+    assertThat(bounded.isBlocked("locked@example.com")).isTrue();
+  }
+
+  @Test
+  void removesExpiredEntriesAndAllowsNewEmails() {
+    MutableClock clock = new MutableClock(Instant.parse("2026-07-01T10:00:00Z"));
+    LoginAttemptService bounded = new LoginAttemptService(
+        5, Duration.ofMinutes(15), clock, 1, Duration.ofMinutes(15));
+    bounded.recordFailure("old@example.com");
+    clock.advance(Duration.ofMinutes(16));
+
+    LoginAttemptResult next = bounded.recordFailure("new@example.com");
+
+    assertThat(next.blocked()).isFalse();
+    assertThat(next.failedAttempts()).isEqualTo(1);
+    assertThat(bounded.trackedAttemptCount()).isEqualTo(1);
+  }
+
+  private static final class MutableClock extends Clock {
+    private final AtomicReference<Instant> instant;
+
+    private MutableClock(Instant initial) {
+      instant = new AtomicReference<>(initial);
+    }
+
+    private void advance(Duration duration) {
+      instant.updateAndGet(current -> current.plus(duration));
+    }
+
+    @Override
+    public ZoneOffset getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(java.time.ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return instant.get();
+    }
   }
 }

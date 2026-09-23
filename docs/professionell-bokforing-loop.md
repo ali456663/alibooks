@@ -84,7 +84,11 @@ Officiella utgangspunkter:
     Faktura-PDF, lonebesked/zip och dynamiska CSV-exporter anvander ocksa sakra `Content-Disposition`-filnamn.
     CSV-exporter neutraliserar formelstarter som `=`, `+`, `-` och `@` for att minska risk nar filer oppnas i Excel.
     Inloggning har temporar lasning efter upprepade fel. Styrs av `APP_AUTH_MAX_FAILED_LOGIN_ATTEMPTS`
-    och `APP_AUTH_LOGIN_LOCK_MINUTES`, och visas i `Sakerhet`.
+    och `APP_AUTH_LOGIN_LOCK_MINUTES`, och visas i `Sakerhet`. Forsoksminnet ar begransat av
+    `APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES` och `APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES`;
+    produktions-Nginx begransar login per klient-IP och avvisar request-kroppar over 16 KiB.
+    Vid cachetaket nekas nya unika forsoksnycklar utan att aktiva sparrar tas bort. Rate limit ersatter
+    inte en extern WAF eller driftpolicy for gallring/retention av revisionshandelser.
     JWT-sessionens livslangd styrs av `JWT_EXPIRATION_MINUTES`. Frontend loggar ut automatiskt nar sessionen gar ut
     och visar ett tydligt meddelande istallet for att lamna anvandaren i ett trasigt API-lage.
     Login, blockerade loginforsok och registreringar skrivs till revisionsspar.

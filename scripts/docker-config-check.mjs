@@ -26,6 +26,7 @@ const backendDockerfile = read("backend/Dockerfile");
 const compose = read("docker-compose.yml");
 const composeProd = read("docker-compose.prod.yml");
 const nginx = read("frontend/nginx.conf");
+const nginxMain = read("frontend/nginx-main.conf");
 const entrypoint = read("frontend/docker-entrypoint.sh");
 const ec2Deploy = read("scripts/ec2-deploy.sh");
 
@@ -45,6 +46,7 @@ requireIncludes(backendDockerfile, "HEALTHCHECK", "backend/Dockerfile");
 requireIncludes(backendDockerfile, "curl --fail --silent http://localhost:3000/health", "backend/Dockerfile");
 requireIncludes(frontendProdDockerfile, "HEALTHCHECK", "frontend/Dockerfile.prod");
 requireIncludes(frontendProdDockerfile, "wget --quiet --spider http://localhost/", "frontend/Dockerfile.prod");
+requireIncludes(frontendProdDockerfile, "COPY nginx-main.conf /etc/nginx/nginx.conf", "frontend/Dockerfile.prod");
 
 requireIncludes(compose, "5157:5157", "docker-compose.yml");
 requireIncludes(compose, "SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshop", "docker-compose.yml");
@@ -59,6 +61,10 @@ requireIncludes(composeProd, "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}", "
 requireIncludes(composeProd, "SPRING_JPA_HIBERNATE_DDL_AUTO=${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}", "docker-compose.prod.yml");
 requireIncludes(composeProd, "APP_SCHEMA_PATCH_ENABLED=${APP_SCHEMA_PATCH_ENABLED:-false}", "docker-compose.prod.yml");
 requireIncludes(composeProd, "APP_CORS_LOCAL_DEV_ENABLED=${APP_CORS_LOCAL_DEV_ENABLED:-false}", "docker-compose.prod.yml");
+requireIncludes(composeProd, "APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES=${APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES:-10000}", "docker-compose.prod.yml");
+requireIncludes(composeProd, "APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES=${APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES:-15}", "docker-compose.prod.yml");
+requireIncludes(compose, "APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES=${APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES:-10000}", "docker-compose.yml");
+requireIncludes(compose, "APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES=${APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES:-15}", "docker-compose.yml");
 requireIncludes(composeProd, "condition: service_healthy", "docker-compose.prod.yml");
 requireIncludes(composeProd, "init: true", "docker-compose.prod.yml");
 requireIncludes(ec2Deploy, "up -d --wait --wait-timeout 120", "scripts/ec2-deploy.sh");
@@ -68,6 +74,11 @@ requireIncludes(ec2Deploy, "APP_CORS_LOCAL_DEV_ENABLED", "scripts/ec2-deploy.sh"
 requireIncludes(ec2Deploy, "docker compose --env-file \"$ENV_FILE\" -p \"$PROJECT_NAME\" -f \"$COMPOSE_FILE\" config --quiet", "scripts/ec2-deploy.sh");
 
 requireIncludes(nginx, "proxy_pass http://backend:3000/;", "frontend/nginx.conf");
+requireIncludes(nginx, "location = /api/auth/login", "frontend/nginx.conf");
+requireIncludes(nginx, "limit_req zone=login burst=10 nodelay;", "frontend/nginx.conf");
+requireIncludes(nginx, "client_max_body_size 16k;", "frontend/nginx.conf");
+requireIncludes(nginxMain, "limit_req_zone $binary_remote_addr zone=login:10m rate=30r/m;", "frontend/nginx-main.conf");
+requireIncludes(nginxMain, "include /etc/nginx/conf.d/*.conf;", "frontend/nginx-main.conf");
 requireIncludes(entrypoint, "window.__ALIBOOKS_CONFIG__", "frontend/docker-entrypoint.sh");
 
 console.log("Docker config check passed.");
