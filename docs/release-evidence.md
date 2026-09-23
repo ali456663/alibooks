@@ -10,7 +10,9 @@ till 16 KiB; kvitto- och dokumentuppladdningar behaller sin tidigare grans.
 
 Verifierat lokalt: backend 497 tester, 0 fel pa Java 21; frontend release gate;
 Docker-konfigurationsgrind; production frontend image build; `nginx -t` godkand.
-GitHub Actions for den har andringen aterstar efter push. Detta ar inte go-live-
+GitHub Actions passerade for commit `b79680a` i
+[run 35887369388](https://github.com/ali456663/alibooks/actions/runs/35887369388).
+Detta ar inte go-live-
 godkannande: extern WAF/rate limit, audit-retention, restore, molndrift,
 integrationer och redovisningsgranskning aterstar.
 
