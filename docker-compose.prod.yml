@@ -1,16 +1,19 @@
 services:
   frontend:
     image: ${DOCKERHUB_USERNAME}/cloudshop-frontend:${IMAGE_TAG:-latest}
+    init: true
     restart: unless-stopped
     ports:
       - "80:80"
     environment:
       - VITE_API_URL=${VITE_API_URL}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   backend:
     image: ${DOCKERHUB_USERNAME}/cloudshop-backend:${IMAGE_TAG:-latest}
+    init: true
     restart: unless-stopped
     volumes:
       - receipt_uploads:/app/uploads
@@ -24,6 +27,9 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
       - APP_SCHEMA_PATCH_ENABLED=${APP_SCHEMA_PATCH_ENABLED:-false}
+      - APP_MONEY_MIGRATION_VERIFY_ON_STARTUP=${APP_MONEY_MIGRATION_VERIFY_ON_STARTUP:-true}
+      - APP_MONEY_MIGRATION_FULL_CHECK_CRON=${APP_MONEY_MIGRATION_FULL_CHECK_CRON:-0 0 2 * * *}
+      - APP_MONEY_MIGRATION_MAX_FULL_CHECK_AGE_HOURS=${APP_MONEY_MIGRATION_MAX_FULL_CHECK_AGE_HOURS:-26}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
       - APP_FRONTEND_URL=${APP_FRONTEND_URL}

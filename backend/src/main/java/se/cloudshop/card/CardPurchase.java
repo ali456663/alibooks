@@ -31,6 +31,8 @@ public class CardPurchase {
   private Long vatAmountMinor;
   @Column(name = "total_amount_minor")
   private Long totalAmountMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String category;
   private String clearingAccount;
   private String status;
@@ -106,19 +108,20 @@ public class CardPurchase {
     return totalAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getNetAmountMinor() {
     return netAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getVatAmountMinor() {
     return vatAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getTotalAmountMinor() {
     return totalAmountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public String getCategory() {

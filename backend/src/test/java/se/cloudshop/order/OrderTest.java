@@ -3,6 +3,7 @@ package se.cloudshop.order;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import se.cloudshop.product.Product;
@@ -43,6 +44,18 @@ class OrderTest {
     assertThat(order.getNetAmountMinor()).isEqualTo(200_000L);
     assertThat(order.getVatAmountMinor()).isEqualTo(50_000L);
     assertThat(order.getTotalAmountMinor()).isEqualTo(250_000L);
+    assertThat(order.getCurrencyCode()).isEqualTo("SEK");
+  }
+
+  @Test
+  void exposesExactInvoiceMinorUnitContractAlongsideLegacyFields() throws Exception {
+    Order order = new Order("Ali Wafa", new Product("PT", "Training", 1000), Instant.now(), 2);
+
+    var json = new ObjectMapper().findAndRegisterModules().valueToTree(order);
+
+    assertThat(json.path("totalAmount").asInt()).isEqualTo(2500);
+    assertThat(json.path("totalAmountMinor").asLong()).isEqualTo(250_000L);
+    assertThat(json.path("currencyCode").asText()).isEqualTo("SEK");
   }
 
   @Test

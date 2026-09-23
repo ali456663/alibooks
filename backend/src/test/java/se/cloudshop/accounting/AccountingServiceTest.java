@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.test.util.ReflectionTestUtils;
 import se.cloudshop.bank.BankReconciliationReport;
@@ -216,7 +217,7 @@ class AccountingServiceTest {
     when(voucherApprovalRepository.findByVoucherNumber(any())).thenReturn(Optional.empty());
     when(voucherApprovalRepository.findAll()).thenReturn(List.of());
     when(voucherApprovalRepository.save(any(VoucherApproval.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    when(stripePayoutRepository.save(any(StripePayout.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(stripePayoutRepository.saveAndFlush(any(StripePayout.class))).thenAnswer(invocation -> invocation.getArgument(0));
     when(stripePayoutRepository.findByReference(any())).thenReturn(Optional.empty());
     when(vatFilingRepository.findAll()).thenReturn(List.of());
     when(vatFilingRepository.findFirstByStatusInOrderByPeriodToDesc(List.of("SUBMITTED", "PAID"))).thenReturn(Optional.empty());
@@ -2082,7 +2083,7 @@ class AccountingServiceTest {
     ));
 
     ArgumentCaptor<StripePayout> payoutCaptor = ArgumentCaptor.forClass(StripePayout.class);
-    verify(stripePayoutRepository).save(payoutCaptor.capture());
+    verify(stripePayoutRepository).saveAndFlush(payoutCaptor.capture());
     assertThat(payoutCaptor.getValue().getGrossAmountMinor()).isEqualTo(125000L);
     assertThat(payoutCaptor.getValue().getFeeAmountMinor()).isEqualTo(3900L);
     assertThat(payoutCaptor.getValue().getNetAmountMinor()).isEqualTo(121100L);
@@ -2108,6 +2109,24 @@ class AccountingServiceTest {
       assertThat(entry.getVoucherDate()).isEqualTo(LocalDate.of(2026, 6, 30));
       assertThat(entry.getDescription()).contains("po_test_123");
     });
+  }
+
+  @Test
+  void convertsConcurrentStripePayoutDuplicateIntoConflict() {
+    when(voucherNumberService.nextVoucherNumber("SU")).thenReturn("SU-duplicate");
+    when(stripePayoutRepository.saveAndFlush(any(StripePayout.class)))
+        .thenThrow(new DataIntegrityViolationException("stripe_payouts_reference_unique"));
+
+    assertThatThrownBy(() -> accountingService.createStripePayoutEntry(new CreateStripePayoutRequest(
+        LocalDate.of(2026, 7, 1),
+        1_250,
+        39,
+        "po_duplicate"
+    )))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Stripe payout reference is already registered");
+
+    verify(stripePayoutRepository).saveAndFlush(any(StripePayout.class));
   }
 
   @Test

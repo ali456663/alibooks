@@ -116,7 +116,7 @@ npm run test:backend
 Detta ar AliBooks grund.
 
 **Status: KLAR LOKALT.** Kärnflödet är verifierat med backend-enhetstester
-och en isolerad PostgreSQL-integration: **477 backendtester och 215
+och en isolerad PostgreSQL-integration: **495 backendtester och 216
 integrationstester, 0 fel**. Detta betyder att den lokala MVP-kärnan fungerar,
 inte att systemet är godkänt för verklig bokföring i produktion.
 

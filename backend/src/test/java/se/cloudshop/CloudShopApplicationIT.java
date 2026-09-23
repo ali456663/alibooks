@@ -139,6 +139,21 @@ class CloudShopApplicationIT {
   }
 
   @Test
+  void systemStatusRequiresAuthenticationButHealthRemainsPublic() throws Exception {
+    assertThat(http.getForEntity("/system/status", String.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var response = http.exchange("/system/status", org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(new ObjectMapper().readTree(response.getBody()).path("database").path("ok").asBoolean())
+        .isTrue();
+  }
+
+  @Test
   void productionOwnerRegistrationCanOnlyBeUsedOncePerWorkspace() {
     AuthRequest ownerRequest = new AuthRequest("owner@example.invalid", "StrongTestPassword123");
     var first = http.postForEntity("/auth/register", ownerRequest, String.class);

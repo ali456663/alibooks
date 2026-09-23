@@ -52,6 +52,9 @@ Kontrollera ocksa bevisen i samma workflow:
 ## Dockerhub
 
 Dockerhub workflow ska kunna koras manuellt eller via versionstagg.
+Publicering sker forst efter en gron releasevalidering med CI-kontrakt,
+rapporttester och frontendens release gate. EC2-deployen vantar pa backend- och
+frontend-healthchecks innan publikt smoke-test kors.
 
 Krav:
 

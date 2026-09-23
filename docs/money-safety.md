@@ -6,6 +6,90 @@ AliBooks ar fortfarande INTE godkant som enda system for skarp bokforing.
 Databasens beloppsfalt, flera API-kontrakt och rapporter anvander heltal i SEK.
 Detta steg andrar INTE enheten i lagrade belopp och andrar ingen historisk bokforing.
 
+## Verifierad skuggmigrering 2026-09-21
+
+Den dagliga användningsgaten behandlar nu saknat fullständigt örestöd som en
+stoppande punkt för riktig bokföring, inte som en vanlig varning. Isolerad
+testdata är fortfarande tillåten, men ett grönt lokalt test får inte tolkas som
+ett godkännande att lägga in verkliga bokföringsposter.
+
+Startup verifierar nu den additiva migreringen innan backend blir frisk. Om en
+farsk, lyckad nattlig helkontroll finns anvands en snabb checkpoint; annars
+kors en full kontroll innan backend blir frisk:
+
+- alla definierade legacy/minor-par maste matcha exakt enligt valutans minor-unit-faktor;
+- valutakoden maste vara `SEK`;
+- varje verifikat maste balansera i minor units;
+- kontoaggregat maste matcha mellan legacy- och minor-falten;
+- avvikelser sparas radvis i `money_migration_issues`;
+- godkand kontroll sparas i `money_migration_ledger` och exponeras i det autentiserade `/system/status`.
+
+Nya och uppdaterade rader garanteras dessutom av PostgreSQL-triggers som skriver
+minor-shadowen fran legacybeloppet med explicit `ROUND(..., 0)`. En omgaende
+skrivning av bara legacy- eller bara minor-faltet kan darfor inte lamna ett
+inkonsekvent par. Valutans exponent ligger i tabellen `currencies`; aktuell
+verifiering ar SEK med exponent 2. Full kontroll kor aven schemalagt varje natt
+med `APP_MONEY_MIGRATION_FULL_CHECK_CRON`. En checkpoint blir for gammal efter
+`APP_MONEY_MIGRATION_MAX_FULL_CHECK_AGE_HOURS` timmar och da blockeras inte
+kontrollen genom att hoppa over en ny full korning.
+
+Checkpointen bevisar att den senaste fulla kontrollen var felfri och att alla
+runtime-triggers fortfarande finns. Den ersatter inte nattens fulla kontroll.
+
+Backendstatus visar dessutom cutover-bevisen som en separat fail-closed grind:
+antal sammanhangande felfria helkontroller av sju, om en verifierad backup/restore
+repetition finns och om API-/bokforingsfloden ar minor-unit-auktoritativa. Dessa
+tre signaler maste alla vara uppfyllda innan `readyForAuthoritativeCutover` kan
+bli sant. `APP_MONEY_MIGRATION_AUTHORITATIVE` ar fortsatt `false` i bada env-mallarna
+och far inte slas pa bara for att skuggkontrollen ar gron.
+
+Varje kontrollkorning far ett eget `run_id`. Avvikelser i
+`money_migration_issues` ar append-only sa att nya avvikelser kan skiljas fran
+historiska och granskas over tid. Om kontrollen inte kan genomforas markeras
+status som blockerad och produktionskonfigurationen tillater inte att
+startup-verifieringen stangs av.
+
+Detta ar ett verifierat databasunderlag for nasta cutover, inte ett produktionsgodkannande.
+Legacy-kolumnerna ar fortfarande auktoritativa och API-kontrakt, entiteter, importer,
+rapporter och betalningsfloden ar inte fullt migrerade till minor units annu. Droppa
+darfor inte gamla kolumner och lagg inte in riktig bokforingsdata innan den fullstandiga
+cutovern, backup/restore-repetition och extern bokforingskontroll ar godkanda.
+
+## Exakt API-kontrakt i steg 2
+
+Faktura-, tjanste-, betalnings-, verifikations-, kostnads-, kortkop-, bankavstamnings-,
+leverantorsfaktura-, Stripe-utbetalnings- och momsunderlagssvar exponerar nu dessutom
+`*Minor`-falt och `currencyCode`, till exempel `totalAmountMinor: 125050` och
+`currencyCode: "SEK"`. De gamla kronfalten finns kvar for kompatibilitet med den
+befintliga klienten, men nya klientfloden ska lasa minor-faltet for berakningar och
+visa valutakoden i stallet for att sjalva multiplicera ett kronbelopp med 100.
+
+Detta kontrakt ar nu testat for alla dessa kärnobjekt i
+`MoneyApiContractTest`. Ett synligt minor-falt betyder dock inte att objektet far
+skrivas med ore ännu; backendens bokforings- och rapportfloden stoppar fortfarande
+ore dar den gamla heltalsmodellen inte kan bevara beloppet exakt.
+
+Detta ar ett API-forberedande steg, inte ett cutover: skrivvagarna och den gamla
+lagringen ar fortfarande kronauktoritativa, och systemet stoppar fortfarande ett
+orebelopp innan det kan bokforas genom den gamla kronbaserade journalmodellen.
+
+## Uttradeskriterier for auktoritativ minor-unit-modell
+
+Minor-unit-kolumnerna far bli auktoritativa for produktion forst nar alla punkter
+nedan ar uppfyllda och dokumenterade:
+
+1. Sju fullstandiga kontrollkorningar i rad har `issue_count = 0` och inga
+   kontrollkorningar saknas i perioden.
+2. En restore-repetition fran verifierad backup ar genomford och samma kontroller
+   passerar efter restore.
+3. Alla skrivvagar for belopp gar via minor units med vald valutakod och samma
+   avrundningsregel; legacy-falt ar inte langre en separat skrivauktoritet.
+4. API, entiteter, rapporter, importer, betalningar, moms och exporter anvander
+   minor units utan att konvertera tillbaka till flyttal eller kapa oren.
+5. Hela testsviten, periodkontrollerna och en manuell bokforingsgranskning ar
+   godkanda. Forst darefter planeras borttagning av legacy-kolumner i en separat
+   migrering.
+
 ## Rattat
 
 ## Skuggmigrering 2026-09-20
@@ -119,6 +203,9 @@ stället för att beloppet avrundas tyst.
   och moms fran minor-unit-skuggor innan verifikationsnummer eller journalrader
   skapas. Ett orebelopp stoppas med HTTP 422 i stallet for att det gamla
   kronofaltet bokfors.
+- Den nattliga migreringskontrollen blockerar ocksa asymmetriska historiska rader:
+  en rad dar bara legacy-beloppet eller bara minor-unit-skuggan finns ar ett
+  dataproblem och sparas med eget avvikelse-id i den append-only kontrollhistoriken.
 - Exempel pa tidigare felrisk: 25 000 kr moms multiplicerat med 100 000 kr betalt
   overskrider int-gransen redan innan divisionen med fakturatotalen.
 - Fakturapris multiplicerat med antal och netto plus moms kontrolleras for overflow.

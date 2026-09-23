@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -220,7 +221,15 @@ public class SupplierController {
     if ("booked".equals(status)) {
       accountingService.createSupplierInvoiceEntries(invoice);
     }
-    SupplierInvoice savedInvoice = supplierInvoiceRepository.save(invoice);
+    SupplierInvoice savedInvoice;
+    try {
+      // Flush here so a concurrent duplicate payment becomes a controlled 409,
+      // not a late transaction error after the HTTP response has been built.
+      savedInvoice = supplierInvoiceRepository.saveAndFlush(invoice);
+    } catch (DataIntegrityViolationException exception) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "This supplier payment is already registered on the invoice.", exception);
+    }
     auditService.record("supplier_invoice", "supplier_invoice", savedInvoice.getId(), "status_updated", status, "Supplier invoice status updated",
         accountingWholeKrona(savedInvoice.getTotalAmountMinor(), savedInvoice.getTotalAmount(), "leverantörsfakturans totalbelopp"), authorizationHeader);
     return savedInvoice;

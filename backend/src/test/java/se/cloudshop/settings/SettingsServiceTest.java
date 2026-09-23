@@ -157,4 +157,20 @@ class SettingsServiceTest {
 
     assertThat(updated.getVatPercent()).isEqualTo(25);
   }
+
+  @Test
+  void rejectsKeepingAnUnsupportedLegacyVatSetting() {
+    AppSettings current = AppSettings.defaults();
+    current.setVatPercent(12);
+    AppSettings requested = AppSettings.defaults();
+    requested.setVatPercent(12);
+    when(appSettingsRepository.findById(1L)).thenReturn(Optional.of(current));
+
+    assertThatThrownBy(() -> settingsService.updateSettings(requested))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("supports 25% VAT only");
+
+    org.mockito.Mockito.verify(appSettingsRepository, org.mockito.Mockito.never())
+        .save(org.mockito.ArgumentMatchers.any(AppSettings.class));
+  }
 }

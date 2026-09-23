@@ -107,8 +107,13 @@ public class PayablesReportService {
         || ("cancelled".equals(status) != (invoice.getCancelledAt() != null))) {
       throw SettlementSnapshot.incomplete();
     }
+    List<SettlementSnapshot.Payment> payments = invoice.getPaymentRows().isEmpty()
+        ? SupplierPaymentHistory.read(invoice.getPaymentHistory())
+        : invoice.getPaymentRows().stream()
+            .map(payment -> new SettlementSnapshot.Payment(payment.getPaymentDate(), payment.getAmount()))
+            .toList();
     SettlementSnapshot.MinorSettlement balance = SettlementSnapshot.atMinor(totalAmountMinor, savedPaidAmountMinor,
-        invoice.getInvoiceDate(), invoice.getCancelledAt(), SupplierPaymentHistory.read(invoice.getPaymentHistory()).stream()
+        invoice.getInvoiceDate(), invoice.getCancelledAt(), payments.stream()
             .map(payment -> new SettlementSnapshot.MinorPayment(payment.date(), Math.multiplyExact((long) payment.amount(), 100L))).toList(), asOf);
     long daysOverdue = invoice.getDueDate() == null ? 0 : ChronoUnit.DAYS.between(invoice.getDueDate(), asOf);
     String bucketKey = bucketKey(invoice.getDueDate(), daysOverdue);

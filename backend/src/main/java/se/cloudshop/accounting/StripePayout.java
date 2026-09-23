@@ -30,6 +30,8 @@ public class StripePayout {
   private Long feeAmountMinor;
   @Column(name = "net_amount_minor")
   private Long netAmountMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String reference;
   private String voucherNumber;
   private Instant createdAt;
@@ -92,19 +94,20 @@ public class StripePayout {
     return netAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getGrossAmountMinor() {
     return grossAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getFeeAmountMinor() {
     return feeAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getNetAmountMinor() {
     return netAmountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public String getReference() {

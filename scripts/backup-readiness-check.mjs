@@ -26,6 +26,7 @@ const shellBackup = exists("scripts/backup-postgres.sh") ? read("scripts/backup-
 const psBackup = exists("scripts/backup-postgres.ps1") ? read("scripts/backup-postgres.ps1") : "";
 const shellRestore = exists("scripts/restore-postgres.sh") ? read("scripts/restore-postgres.sh") : "";
 const psRestore = exists("scripts/restore-postgres.ps1") ? read("scripts/restore-postgres.ps1") : "";
+const restoreVerifier = exists("scripts/backup-restore-verify.mjs") ? read("scripts/backup-restore-verify.mjs") : "";
 const runbook = exists("docs/backup-restore-runbook.md") ? read("docs/backup-restore-runbook.md") : "";
 const gitignore = read(".gitignore");
 const releaseEvidence = read("docs/release-evidence.md");
@@ -76,6 +77,11 @@ check(
   "PowerShell restore blocks production-looking targets",
   includesAll(psRestore, ["^alibooks_(restore|drill)_", "Refusing restore", "separate database"]),
   "PowerShell restore should default to separate test/restore/drill databases."
+);
+check(
+  "Isolated restore verifies the minor-unit money model",
+  includesAll(restoreVerifier, ["MONEY_COLUMNS", "minorUnitExponent", "money_migration_runs", "debit_minor", "credit_minor"]),
+  "Restore verification should prove currency exponent, shadow columns and voucher balance in minor units."
 );
 check(
   "Backup files are ignored by git",

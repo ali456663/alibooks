@@ -27,6 +27,7 @@ const compose = read("docker-compose.yml");
 const composeProd = read("docker-compose.prod.yml");
 const nginx = read("frontend/nginx.conf");
 const entrypoint = read("frontend/docker-entrypoint.sh");
+const ec2Deploy = read("scripts/ec2-deploy.sh");
 
 requireIncludes(frontendDockerfile, "FROM node:24-alpine", "frontend/Dockerfile");
 requireIncludes(frontendProdDockerfile, "FROM node:24-alpine", "frontend/Dockerfile.prod");
@@ -40,6 +41,10 @@ requireIncludes(frontendProdDockerfile, "COPY vite.config.js ./", "frontend/Dock
 requireIncludes(backendDockerfile, "maven:3.9.9-eclipse-temurin-21", "backend/Dockerfile");
 requireIncludes(backendDockerfile, "eclipse-temurin:21-jre", "backend/Dockerfile");
 requireIncludes(backendDockerfile, "EXPOSE 3000", "backend/Dockerfile");
+requireIncludes(backendDockerfile, "HEALTHCHECK", "backend/Dockerfile");
+requireIncludes(backendDockerfile, "curl --fail --silent http://localhost:3000/health", "backend/Dockerfile");
+requireIncludes(frontendProdDockerfile, "HEALTHCHECK", "frontend/Dockerfile.prod");
+requireIncludes(frontendProdDockerfile, "wget --quiet --spider http://localhost/", "frontend/Dockerfile.prod");
 
 requireIncludes(compose, "5157:5157", "docker-compose.yml");
 requireIncludes(compose, "SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshop", "docker-compose.yml");
@@ -54,6 +59,13 @@ requireIncludes(composeProd, "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}", "
 requireIncludes(composeProd, "SPRING_JPA_HIBERNATE_DDL_AUTO=${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}", "docker-compose.prod.yml");
 requireIncludes(composeProd, "APP_SCHEMA_PATCH_ENABLED=${APP_SCHEMA_PATCH_ENABLED:-false}", "docker-compose.prod.yml");
 requireIncludes(composeProd, "APP_CORS_LOCAL_DEV_ENABLED=${APP_CORS_LOCAL_DEV_ENABLED:-false}", "docker-compose.prod.yml");
+requireIncludes(composeProd, "condition: service_healthy", "docker-compose.prod.yml");
+requireIncludes(composeProd, "init: true", "docker-compose.prod.yml");
+requireIncludes(ec2Deploy, "up -d --wait --wait-timeout 120", "scripts/ec2-deploy.sh");
+requireIncludes(ec2Deploy, "REQUIRE_IMMUTABLE_TAG", "scripts/ec2-deploy.sh");
+requireIncludes(ec2Deploy, "APP_SCHEMA_PATCH_ENABLED", "scripts/ec2-deploy.sh");
+requireIncludes(ec2Deploy, "APP_CORS_LOCAL_DEV_ENABLED", "scripts/ec2-deploy.sh");
+requireIncludes(ec2Deploy, "docker compose --env-file \"$ENV_FILE\" -p \"$PROJECT_NAME\" -f \"$COMPOSE_FILE\" config --quiet", "scripts/ec2-deploy.sh");
 
 requireIncludes(nginx, "proxy_pass http://backend:3000/;", "frontend/nginx.conf");
 requireIncludes(entrypoint, "window.__ALIBOOKS_CONFIG__", "frontend/docker-entrypoint.sh");

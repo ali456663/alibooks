@@ -3,7 +3,10 @@ param(
   [string] $FrontendUrl,
 
   [Parameter(Mandatory = $true)]
-  [string] $BackendUrl
+  [string] $BackendUrl,
+
+  [Parameter(Mandatory = $false)]
+  [string] $AuthToken = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,11 +25,30 @@ if ($health.status -ne "ok") {
 }
 Write-Host "Backend health OK"
 
-Write-Host "Checking system status: $BackendUrl/system/status"
-$systemStatus = Invoke-RestMethod -Uri "$BackendUrl/system/status"
-if (-not $systemStatus.database.ok) {
-  throw "Database check failed or database is not reachable."
+Write-Host "Checking protected system status: $BackendUrl/system/status"
+if ([string]::IsNullOrWhiteSpace($AuthToken)) {
+  try {
+    Invoke-WebRequest -Uri "$BackendUrl/system/status" -UseBasicParsing | Out-Null
+    throw "System status protection check failed. Expected HTTP 401 without AuthToken."
+  } catch {
+    if ($_.Exception.Response.StatusCode.value__ -ne 401) {
+      throw
+    }
+  }
+  Write-Host "System status protected (HTTP 401 without AuthToken)"
+  Write-Host "Pass -AuthToken to verify database.ok in the protected status response."
+} else {
+  if ($AuthToken.StartsWith("Bearer ")) {
+    $authHeader = $AuthToken
+  } else {
+    $authHeader = "Bearer $AuthToken"
+  }
+  $headers = @{ Authorization = $authHeader }
+  $systemStatus = Invoke-RestMethod -Uri "$BackendUrl/system/status" -Headers $headers
+  if (-not $systemStatus.database.ok) {
+    throw "Database check failed or database is not reachable."
+  }
+  Write-Host "Authenticated system status and database OK"
 }
-Write-Host "Database OK"
 
 Write-Host "Production smoke test passed."

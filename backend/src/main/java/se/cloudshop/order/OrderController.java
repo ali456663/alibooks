@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import se.cloudshop.audit.AuditService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -237,7 +238,16 @@ public class OrderController {
 
     var bankEntry = accountingService.createPaymentEntries(order, paymentDate, paidAmount);
     order.registerPayment(paymentDate, paidAmount, paymentReference);
-    Order savedOrder = orderRepository.save(order);
+    Order savedOrder;
+    try {
+      savedOrder = orderRepository.saveAndFlush(order);
+    } catch (DataIntegrityViolationException exception) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "This payment is already registered on the invoice.",
+          exception
+      );
+    }
     auditService.record("payment", "invoice", savedOrder.getId(), "payment_registered", savedOrder.getInvoiceNumber(), "Invoice payment registered", paidAmount, authorizationHeader);
     if (request != null && request.bankRow() != null) {
       bankImport.record(request.bankRow(), "invoice_payment", "Invoice " + savedOrder.getId(), bankEntry, authorizationHeader);

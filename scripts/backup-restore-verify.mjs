@@ -61,6 +61,114 @@ export function tableRowCounts(query) {
   }));
 }
 
+const MONEY_COLUMNS = [
+  ["products", "price", "price_minor"],
+  ["products", "discount_price", "discount_price_minor"],
+  ["customer_orders", "ordinary_price", "ordinary_price_minor"],
+  ["customer_orders", "discount_amount", "discount_amount_minor"],
+  ["customer_orders", "net_amount", "net_amount_minor"],
+  ["customer_orders", "vat_amount", "vat_amount_minor"],
+  ["customer_orders", "total_amount", "total_amount_minor"],
+  ["customer_orders", "paid_amount", "paid_amount_minor"],
+  ["customer_orders", "refunded_amount", "refunded_amount_minor"],
+  ["invoice_payments", "amount", "amount_minor"],
+  ["supplier_invoices", "total_amount", "total_amount_minor"],
+  ["supplier_invoices", "vat_amount", "vat_amount_minor"],
+  ["supplier_invoices", "net_amount", "net_amount_minor"],
+  ["supplier_invoices", "paid_amount", "paid_amount_minor"],
+  ["expenses", "net_amount", "net_amount_minor"],
+  ["expenses", "vat_amount", "vat_amount_minor"],
+  ["expenses", "total_amount", "total_amount_minor"],
+  ["card_purchases", "net_amount", "net_amount_minor"],
+  ["card_purchases", "vat_amount", "vat_amount_minor"],
+  ["card_purchases", "total_amount", "total_amount_minor"],
+  ["stripe_payouts", "gross_amount", "gross_amount_minor"],
+  ["stripe_payouts", "fee_amount", "fee_amount_minor"],
+  ["stripe_payouts", "net_amount", "net_amount_minor"],
+  ["bank_reconciliation_entries", "amount", "amount_minor"],
+  ["vat_filings", "output_vat", "output_vat_minor"],
+  ["vat_filings", "input_vat", "input_vat_minor"],
+  ["vat_filings", "vat_to_pay", "vat_to_pay_minor"],
+  ["journal_entries", "debit", "debit_minor"],
+  ["journal_entries", "credit", "credit_minor"],
+  ["owner_transactions", "amount", "amount_minor"],
+  ["audit_events", "amount", "amount_minor"],
+];
+
+function hasTable(query, table) {
+  return Number(query(`SELECT count(*) FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = '${table}';`)) === 1;
+}
+
+function hasColumn(query, table, column) {
+  return Number(query(`SELECT count(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = '${table}' AND column_name = '${column}';`)) === 1;
+}
+
+function verifyMoneyModel(query) {
+  const requiredTables = [...new Set(MONEY_COLUMNS.map(([table]) => table)), "currencies", "money_migration_runs"];
+  const missingTables = requiredTables.filter(table => !hasTable(query, table));
+  if (missingTables.length > 0) {
+    throw new Error(`Restored database lacks the money migration schema: ${missingTables.join(", ")}.`);
+  }
+
+  const missingColumns = MONEY_COLUMNS.flatMap(([table, legacy, minor]) =>
+    [legacy, minor].filter(column => !hasColumn(query, table, column)).map(column => `${table}.${column}`));
+  const moneyTables = [...new Set(MONEY_COLUMNS.map(([table]) => table))];
+  const missingCurrencyColumns = moneyTables
+    .filter(table => !hasColumn(query, table, "currency_code"))
+    .map(table => `${table}.currency_code`);
+  if (missingColumns.length > 0 || missingCurrencyColumns.length > 0) {
+    throw new Error(`Restored database lacks money columns: ${[...missingColumns, ...missingCurrencyColumns].join(", ")}.`);
+  }
+
+  const currency = JSON.parse(query(`SELECT row_to_json(r) FROM
+    (SELECT currency_code, minor_unit_exponent FROM public.currencies WHERE currency_code = 'SEK') r;`));
+  if (!currency || currency.minor_unit_exponent !== 2) {
+    throw new Error("Restored database has no valid SEK minor-unit exponent of 2.");
+  }
+
+  const mismatches = MONEY_COLUMNS.flatMap(([table, legacy, minor]) => {
+    const count = Number(query(`SELECT count(*) FROM public."${table}"
+      WHERE "${legacy}" IS NOT NULL AND ("${minor}" IS NULL OR "${minor}" <> ROUND(CAST("${legacy}" AS numeric) * 100, 0));`));
+    return count === 0 ? [] : [`${table}.${legacy} has ${count} legacy/minor mismatch(es)`];
+  });
+  if (mismatches.length > 0) {
+    throw new Error(`Restored money model is inconsistent: ${mismatches.join("; ")}.`);
+  }
+
+  const wrongCurrency = moneyTables
+    .map(table => [table, Number(query(`SELECT count(*) FROM public."${table}"
+      WHERE currency_code IS NULL OR currency_code <> 'SEK';`))])
+    .filter(([, count]) => count > 0);
+  if (wrongCurrency.length > 0) {
+    throw new Error(`Restored database has invalid currency codes: ${wrongCurrency.map(([table, count]) => `${table}=${count}`).join(", ")}.`);
+  }
+
+  const unverifiedRuns = Number(query(`SELECT count(*) FROM public.money_migration_runs
+    WHERE mode = 'full' AND state = 'VERIFIED' AND issue_count = 0;`));
+  if (unverifiedRuns === 0) {
+    throw new Error("Restored database has no verified zero-issue money migration run.");
+  }
+
+  const unbalancedVouchers = Number(query(`SELECT count(*) FROM
+    (SELECT voucher_number FROM public.journal_entries GROUP BY voucher_number
+     HAVING COALESCE(sum(debit_minor), 0) <> COALESCE(sum(credit_minor), 0)
+        OR bool_or(debit_minor IS NULL OR credit_minor IS NULL OR debit_minor < 0 OR credit_minor < 0)
+        OR voucher_number IS NULL OR btrim(voucher_number) = '') invalid;`));
+  if (unbalancedVouchers !== 0) {
+    throw new Error("Restored journal is invalid or unbalanced in minor units.");
+  }
+
+  return {
+    currency: currency.currency_code,
+    minorUnitExponent: currency.minor_unit_exponent,
+    moneyColumnsVerified: MONEY_COLUMNS.length,
+    moneyMigrationRunsVerified: unverifiedRuns,
+    unbalancedVouchers,
+  };
+}
+
 export async function verifyBackup(dumpFile, receiptsDirectory) {
   const dump = realpathSync(dumpFile);
   const receipts = realpathSync(receiptsDirectory);
@@ -117,16 +225,12 @@ export async function verifyBackup(dumpFile, receiptsDirectory) {
       if (copied.get(basename) !== row.hash.toLowerCase()) throw new Error("Restored receipt checksum mismatch.");
       if (row.location !== restoredPath) relocatedPaths++;
     }
-    const invalidVouchers = Number(sql(name, `SELECT count(*) FROM
-      (SELECT voucher_number FROM public.journal_entries GROUP BY voucher_number
-       HAVING sum(debit::bigint) <> sum(credit::bigint)
-          OR bool_or(debit IS NULL OR credit IS NULL OR debit < 0 OR credit < 0)
-          OR voucher_number IS NULL OR btrim(voucher_number) = '') invalid;`));
-    if (invalidVouchers !== 0) throw new Error("Restored journal contains invalid or unbalanced vouchers.");
+    const moneyModel = verifyMoneyModel(query => sql(name, query));
     const journalRows = Number(sql(name, "SELECT count(*) FROM public.journal_entries;"));
     return { receiptsVerified: rows.length, journalRows, relocatedPaths, tableRowCounts: tableRowCounts(query => sql(name, query)),
       archiveFilesVerified: copied.size, unreferencedFiles: copied.size - seen.size, expensesWithoutReceipts,
-      scope: "Isolated database restore, receipt hashes and voucher balance only; not application or legal approval." };
+      moneyModel,
+      scope: "Isolated database restore, receipt hashes, minor-unit integrity and voucher balance only; not application or legal approval." };
   });
 }
 

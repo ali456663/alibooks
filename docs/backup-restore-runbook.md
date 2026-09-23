@@ -76,7 +76,14 @@ SHA-256 aven med databasen. Verifikationer
 kontrolleras for balans och negativa eller saknade debet/kreditvarden. Containern
 tas bort aven vid fel; ursprungliga backupfiler andras aldrig.
 
-Saknade filer/hashar, felaktiga hashvarden, skadad dump och obalans ger exitkod 1.
+Restore-verifieringen kraver dessutom den versionssatta beloppsmodellen: SEK med
+minor-unit-exponent 2, alla definierade legacy/minor-skalarpar utan avvikelse,
+verifierad noll-avvikelse-korning och balanserade verifikat i `debit_minor` och
+`credit_minor`. En aldre dump utan detta migreringsschema ska darfor stoppas i
+stallet for att godkannas som en komplett aterstallningskandidat.
+
+Saknade filer/hashar, felaktiga hashvarden, skadad dump, beloppsavvikelse och
+obalans ger exitkod 1.
 `relocatedPaths` over noll betyder att lagrade sokvagar inte matchar containerplatsen:
 filernas innehall ar kontrollerat men appens nedladdning ar INTE verifierad. Flytt fran
 Windows till Linux kraver separat kontrollerad sokvagsmigrering. Verktyget andrar

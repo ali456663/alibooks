@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test:reports": "node --test scripts/report-response.test.mjs scripts/import-money.test.mjs scripts/bank-booking.test.mjs",
+    "test:reports": "node --test scripts/report-response.test.mjs scripts/import-money.test.mjs scripts/bank-booking.test.mjs scripts/release-traceability.test.mjs",
     "dev": "npm --prefix frontend run dev --",
     "doctor": "npm --prefix frontend run doctor --",
     "generate:jwt-secret": "npm --prefix frontend run generate:jwt-secret --",

@@ -71,6 +71,8 @@ public class Order {
   private int totalAmount;
   @Column(name = "total_amount_minor")
   private Long totalAmountMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   @jakarta.persistence.Column(nullable = false, columnDefinition = "integer default 25")
   private int vatPercent = 25;
   private int quantity = 1;
@@ -429,39 +431,36 @@ public class Order {
     return discountAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getNetAmountMinor() {
     return netAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getVatAmountMinor() {
     return vatAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getTotalAmountMinor() {
     return totalAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getPaidAmountMinor() {
     return paidAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getRefundedAmountMinor() {
     return refundedAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getOrdinaryPriceMinor() {
     return ordinaryPriceMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getDiscountAmountMinor() {
     return discountAmountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public String getDiscountLabel() {

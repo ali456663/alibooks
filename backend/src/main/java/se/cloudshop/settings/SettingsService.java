@@ -44,9 +44,9 @@ public class SettingsService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Settings payload is required.");
     }
     AppSettings settings = lockSettingsForAccounting();
-    if (updatedSettings.getVatPercent() != settings.getVatPercent()) {
-      InvoiceVatPolicy.requireSupportedRate(updatedSettings.getVatPercent());
-    }
+    // Validate every update, including a legacy row that already contains an unsupported rate.
+    // A bad stored value must never be accepted merely because it was not changed in this request.
+    InvoiceVatPolicy.requireSupportedRate(updatedSettings.getVatPercent());
     LocalDate currentLockedThroughDate = settings.getAccountingLockedThroughDate();
     validateAccountingLockChange(currentLockedThroughDate, updatedSettings.getAccountingLockedThroughDate());
     validateAccountingPolicyChange(settings, updatedSettings);

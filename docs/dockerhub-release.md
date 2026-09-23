@@ -60,6 +60,15 @@ The workflow file is:
 .github/workflows/dockerhub.yml
 ```
 
+Before images are published, the workflow now runs the release validation job:
+
+- CI and report-contract checks
+- pinned headless frontend smoke/release gate
+- the same traceability checks used by the local release gate
+
+The image publish job starts only when that validation job is green. Dockerhub
+credentials are still read only from GitHub Actions secrets.
+
 This publishes:
 
 ```text
@@ -124,6 +133,17 @@ Then deploy:
 ```bash
 FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/ec2-deploy.sh
 ```
+
+The deploy script waits up to 120 seconds for the backend and frontend
+container healthchecks before it runs the public smoke test. A failed health
+check stops the deployment proof instead of presenting a partially started
+release as healthy.
+
+For real production deployment the script also requires a fixed `sha-*` or
+`v*` image tag, a public origin, RDS settings, distinct strong JWT/owner keys,
+and safe schema/CORS/reset flags. It validates the Compose file before pulling
+images. `REQUIRE_IMMUTABLE_TAG=false` is reserved for an explicitly temporary
+non-production demo.
 
 ## If The Workflow Fails
 

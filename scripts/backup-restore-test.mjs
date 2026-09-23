@@ -17,10 +17,33 @@ writeFileSync(file, content);
 let passed = 0;
 try {
   await isolatedDatabase(async (source) => {
-    sql(source, `CREATE TABLE expenses (id bigint PRIMARY KEY, receipt_storage_path text, receipt_sha256 text);
-      CREATE TABLE journal_entries (voucher_number text, debit integer, credit integer);
-      INSERT INTO expenses VALUES (1, '/app/uploads/receipts/1-test-receipt.pdf', '${hash}');
-      INSERT INTO journal_entries VALUES ('V-1', 125, 0), ('V-1', 0, 125);`);
+    sql(source, `CREATE TABLE currencies (currency_code text PRIMARY KEY, minor_unit_exponent integer);
+      INSERT INTO currencies VALUES ('SEK', 2);
+      CREATE TABLE money_migration_runs (run_id uuid PRIMARY KEY, mode text, state text, issue_count bigint);
+      INSERT INTO money_migration_runs VALUES ('00000000-0000-0000-0000-000000000001', 'full', 'VERIFIED', 0);
+      CREATE TABLE expenses (id bigint PRIMARY KEY, receipt_storage_path text, receipt_sha256 text,
+        net_amount integer, net_amount_minor bigint, vat_amount integer, vat_amount_minor bigint,
+        total_amount integer, total_amount_minor bigint, currency_code text);
+      CREATE TABLE journal_entries (id bigint, voucher_number text, debit integer, debit_minor bigint,
+        credit integer, credit_minor bigint, currency_code text);
+      CREATE TABLE products (id bigint, price integer, price_minor bigint, discount_price integer, discount_price_minor bigint, currency_code text);
+      CREATE TABLE customer_orders (id bigint, ordinary_price integer, ordinary_price_minor bigint, discount_amount integer, discount_amount_minor bigint,
+        net_amount integer, net_amount_minor bigint, vat_amount integer, vat_amount_minor bigint, total_amount integer, total_amount_minor bigint,
+        paid_amount integer, paid_amount_minor bigint, refunded_amount integer, refunded_amount_minor bigint, currency_code text);
+      CREATE TABLE invoice_payments (id bigint, amount integer, amount_minor bigint, currency_code text);
+      CREATE TABLE supplier_invoices (id bigint, total_amount integer, total_amount_minor bigint, vat_amount integer, vat_amount_minor bigint,
+        net_amount integer, net_amount_minor bigint, paid_amount integer, paid_amount_minor bigint, currency_code text);
+      CREATE TABLE card_purchases (id bigint, net_amount integer, net_amount_minor bigint, vat_amount integer, vat_amount_minor bigint,
+        total_amount integer, total_amount_minor bigint, currency_code text);
+      CREATE TABLE stripe_payouts (id bigint, gross_amount integer, gross_amount_minor bigint, fee_amount integer, fee_amount_minor bigint,
+        net_amount integer, net_amount_minor bigint, currency_code text);
+      CREATE TABLE bank_reconciliation_entries (id bigint, amount integer, amount_minor bigint, currency_code text);
+      CREATE TABLE vat_filings (id bigint, output_vat integer, output_vat_minor bigint, input_vat integer, input_vat_minor bigint,
+        vat_to_pay integer, vat_to_pay_minor bigint, currency_code text);
+      CREATE TABLE owner_transactions (id bigint, amount integer, amount_minor bigint, currency_code text);
+      CREATE TABLE audit_events (id bigint, amount integer, amount_minor bigint, currency_code text);
+      INSERT INTO expenses VALUES (1, '/app/uploads/receipts/1-test-receipt.pdf', '${hash}', 125, 12500, 0, 0, 125, 12500, 'SEK');
+      INSERT INTO journal_entries VALUES (1, 'V-1', 125, 12500, 0, 0, 'SEK'), (2, 'V-1', 0, 0, 125, 12500, 'SEK');`);
     const dump = path.join(root, "fixture.dump");
     function backup() {
       docker(["exec", source, "pg_dump", "-U", "postgres", "-d", "alibooks_restore_test", "-Fc", "-f", "/tmp/fixture.dump"]);
@@ -31,6 +54,9 @@ try {
     assert.equal(good.receiptsVerified, 1);
     assert.equal(good.journalRows, 2);
     assert.equal(good.relocatedPaths, 0);
+    assert.equal(good.moneyModel.currency, "SEK");
+    assert.equal(good.moneyModel.minorUnitExponent, 2);
+    assert.equal(good.moneyModel.moneyColumnsVerified, 31);
     console.log("PASS: real pg_dump/pg_restore, receipt copy and journal verification"); passed++;
 
     writeFileSync(path.join(receipts, "unlinked.pdf"), "Unlinked synthetic file");
@@ -46,14 +72,14 @@ try {
     assert.equal(manifest.files.length, 2);
     assert.equal(manifest.databaseSha256.length, 64);
     assert.equal(manifest.verification.journalRows, 2);
-    assert.deepEqual(manifest.sourceTableRowCounts, { expenses: 1, journal_entries: 2 });
+    assert.equal(manifest.verification.moneyModel.moneyColumnsVerified, 31);
     assert.deepEqual(manifest.verification.tableRowCounts, manifest.sourceTableRowCounts);
     console.log("PASS: combined backup copies and restores every file, including unlinked documents"); passed++;
     await assert.rejects(createLocalBundle(bundleOptions), /EEXIST/);
     console.log("PASS: existing backup directory is never overwritten"); passed++;
     rmSync(path.join(receipts, "unlinked.pdf"));
 
-    sql(source, "INSERT INTO expenses VALUES (2, NULL, NULL);"); backup();
+    sql(source, "INSERT INTO expenses (id, receipt_storage_path, receipt_sha256, net_amount, net_amount_minor, vat_amount, vat_amount_minor, total_amount, total_amount_minor, currency_code) VALUES (2, NULL, NULL, 0, 0, 0, 0, 0, 0, 'SEK');"); backup();
     assert.equal((await verifyBackup(dump, receipts)).expensesWithoutReceipts, 1);
     console.log("PASS: missing expense evidence is explicitly reported"); passed++;
     sql(source, `UPDATE expenses SET receipt_sha256 = '${hash}' WHERE id = 2;`); backup();
@@ -79,8 +105,8 @@ try {
     sql(source, "UPDATE expenses SET receipt_storage_path = '/outside/../receipt.pdf';"); backup();
     await assert.rejects(verifyBackup(dump, receipts), /receipt is missing/);
     console.log("PASS: database path cannot read outside backup directory"); passed++;
-    sql(source, "UPDATE expenses SET receipt_storage_path = '/app/uploads/receipts/1-test-receipt.pdf'; UPDATE journal_entries SET credit = 124 WHERE credit = 125;"); backup();
-    await assert.rejects(verifyBackup(dump, receipts), /unbalanced vouchers/);
+    sql(source, "UPDATE expenses SET receipt_storage_path = '/app/uploads/receipts/1-test-receipt.pdf'; UPDATE journal_entries SET credit = 124, credit_minor = 12400 WHERE credit = 125;"); backup();
+    await assert.rejects(verifyBackup(dump, receipts), /invalid or unbalanced/);
     console.log("PASS: unbalanced journal blocks verification"); passed++;
     writeFileSync(dump, "not a PostgreSQL dump");
     await assert.rejects(verifyBackup(dump, receipts), /Docker exec failed/);

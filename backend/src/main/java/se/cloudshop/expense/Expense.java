@@ -30,6 +30,8 @@ public class Expense {
   private Long vatAmountMinor;
   @jakarta.persistence.Column(name = "total_amount_minor")
   private Long totalAmountMinor;
+  @jakarta.persistence.Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String category;
   private String paidFrom;
   private String receiptFileName;
@@ -80,19 +82,20 @@ public class Expense {
     return totalAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getNetAmountMinor() {
     return netAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getVatAmountMinor() {
     return vatAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getTotalAmountMinor() {
     return totalAmountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   @com.fasterxml.jackson.annotation.JsonIgnore

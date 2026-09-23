@@ -86,7 +86,7 @@ If AliBooks does not start or shows a blank page, run the local doctor:
 npm run doctor
 ```
 
-It checks PostgreSQL on `5432`, backend `/health`, backend `/system/status`, the frontend on `5157` and Docker Compose status.
+It checks PostgreSQL on `5432`, public backend `/health`, protected backend `/system/status`, the frontend on `5157` and Docker Compose status. Set `ALIBOOKS_AUTH_TOKEN` (or pass `--auth-token`) when you want the doctor to inspect database and security details from `/system/status`.
 
 Before push or release, include backend tests:
 
@@ -317,11 +317,15 @@ After deployment, run a smoke test:
 FRONTEND_URL=http://your-ec2-public-ip BACKEND_URL=http://your-ec2-public-ip/api sh ./scripts/prod-smoke-test.sh
 ```
 
+The smoke test always verifies that `/system/status` rejects unauthenticated requests. To also verify the database details, provide a short-lived test token through `AUTH_TOKEN`; never put that token in source control or command history used for production evidence.
+
 From Windows PowerShell:
 
 ```powershell
 .\scripts\prod-smoke-test.ps1 -FrontendUrl http://your-ec2-public-ip -BackendUrl http://your-ec2-public-ip/api
 ```
+
+Use `-AuthToken` for the authenticated database-status check; without it the script verifies the expected HTTP 401 protection.
 
 Before starting production containers on EC2, validate the real `.env` without printing secrets:
 

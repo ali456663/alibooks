@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -395,13 +396,21 @@ public class AccountingService {
     ));
     entries.add(stripeEntry);
 
-    stripePayoutRepository.save(new StripePayout(
-        voucherDate,
-        request.grossAmount(),
-        request.feeAmount(),
-        reference,
-        voucherNumber
-    ));
+    try {
+      stripePayoutRepository.saveAndFlush(new StripePayout(
+          voucherDate,
+          request.grossAmount(),
+          request.feeAmount(),
+          reference,
+          voucherNumber
+      ));
+    } catch (DataIntegrityViolationException exception) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "This Stripe payout reference is already registered.",
+          exception
+      );
+    }
 
     return entries;
   }

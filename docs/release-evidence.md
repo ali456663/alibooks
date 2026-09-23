@@ -1,5 +1,100 @@
 # AliBooks release evidence
 
+## Produktionscontainrar och releasevalidering 2026-09-23
+
+Produktionsimagesen har nu healthchecks for backend och frontend. EC2-deployen
+kor `docker compose up -d --wait --wait-timeout 120` och startar inte publikt
+smoke-test innan containrarna ar friska. Dockerhub-workflowen har dessutom en
+separat releasevalidering som maste passera fore image-publicering.
+
+Verifierat lokalt med `npm.cmd run check:release:full`:
+
+- frontendbygge och runtime smoke: godkanda;
+- backend: 495 tester, 0 fel;
+- PostgreSQL-integration: 216 tester, 0 fel;
+- backend- och frontend-production images: byggda utan fel;
+- slutlig release gate: godkand.
+
+Detta ar lokalt releasebevis. GitHub Actions, Dockerhub, EC2/RDS, extern
+backup-restore, Stripe, SMTP och redovisningsgranskning maste fortfarande
+verifieras externt fore riktig produktionsdata.
+
+## Fakturamejl: bestandig leveranssparning 2026-09-23
+
+Varje fakturamejl skapar nu ett separat leveransforsok i databasen fore SMTP.
+Forsoket innehaller mottagare, rubrik, renderad text och kontrollsumma for
+PDF-bilagan. Efter transport markeras det `SENT`; vid SMTP-fel eller timeout
+markeras det `UNCERTAIN` och det ursprungliga felet kastas vidare. Sparningen
+sker i en separat transaktion, sa posten finns kvar aven om den omgivande
+fakturatransaktionen rullas tillbaka.
+
+`GET /system/status` visar `email.uncertainDeliveryCount` efter autentisering.
+Detta ar en revisions- och avstamningskontroll, inte ett bevis pa att SMTP ar
+konfigurerad eller att en mottagare faktiskt har oppnat mejlet. Automatisk
+outbox, kontrollerad aterforsokshantering och riktig SMTP-verifiering aterstar
+fore skarp drift.
+
+Riktade tester for leveransforsok, systemstatus och schema-patch passerade.
+Schema-migreringen speglar nu **456/456** startup-SQL-steg.
+
+## Kundbetalningars dubblettskydd 2026-09-23
+
+Kundbetalningar skyddas nu av både fakturans radlåsning och en partiell unik
+databasidentitet på faktura, betalningsdatum, belopp och referens. Om två
+samtidiga anrop ändå försöker spara samma betalning stoppas det andra med HTTP
+409 i stället för att skapa en extra betalningsrad eller revisionshändelse.
+
+Riktade tester för `OrderController` och `DatabaseSchemaPatch` passerade efter
+ändringen. Skyddet gäller identiska betalningar med referens; separata
+betalningar utan referens eller med annan referens kan fortfarande registreras.
+
+## Stripe-utbetalningars dubblettskydd 2026-09-23
+
+Stripe-utbetalningar skyddas av en partiell unik databasidentitet på referensen.
+Tjänsten flushar nu utbetalningen innan den lämnar betalningsflödet och översätter
+en samtidig unikhetskonflikt till HTTP 409. Då skapas inte ett andra godkänt
+utbetalningsflöde och klienten får ett tydligt svar i stället för ett sent
+transaktionsfel.
+
+Detta gäller referenser som inte är tomma. Utbetalningar utan referens tillåts
+fortfarande, men bör användas sparsamt eftersom de inte kan idempotensskyddas
+av referens.
+
+## Strukturerade leverantorsbetalningar 2026-09-23
+
+Nya leverantorsbetalningar sparas nu som separata, daterade rader med
+referens, skapandetid, valuta och minor-unit-skugga i
+`supplier_invoice_payments`. Den äldre textkolumnen finns kvar for export och
+aldre importer, men nya rapporter anvander strukturerade rader nar de finns.
+En databas-trigger synkroniserar minor-unit-skuggan aven om en skrivning sker
+utanfor JPA.
+
+Riktade backendtester for betalningsfloden, historisk reskontra och
+schema-patch passerade. Schema-migreringen speglar nu
+**438/438** startup-SQL-steg. Aldre textposter migreras inte automatiskt; de
+maste fortfarande kontrolleras mot verkliga underlag innan skarp drift.
+
+Hela backendsviten kordes efter andringen: **489 tester, 0 fel och 0 errors**.
+
+Betalningsidentiteten skyddas dessutom med ett unikt databasuttryck och
+flush-tidpunkt i statusflodet. En samtidig dubblett blir HTTP 409 och
+bokforingsskrivningen rullas tillbaka.
+
+Leverantorsfakturans API/UI visar nu strukturerade betalningsrader med
+minor-unit-belopp och valuta; den gamla betalningstexten ar endast fallback for
+aldre poster.
+
+## Användningsgaten stoppar riktig bokföring utan örestöd 2026-09-21
+
+Startklar visar nu den saknade minor-unit-migreringen som stoppande för riktig
+bokföring. Avskild testdata är fortfarande tillåten. Detta ändrar inte lagrade
+belopp eller färdiga bokföringsflöden; det gör bara lokalens beslut konsekvent
+med `productionBookkeepingReady=false` och riskregistret.
+
+Samma första-datagat stoppar nu också när verifierad backup/restore saknas.
+Det följer go-live-riskregistret och innebär inte att en lokal syntetisk backup
+är ett godkännande av användarens riktiga återställning.
+
 ## Momsbevis använder minor-unit-summor 2026-09-21
 
 Momsens settlement- och payment-bevis summerar nu verifikatradernas exakta
@@ -488,6 +583,30 @@ Detta godkanner inte anvandarens riktiga backup eller produktionsaterstallning.
 Krypterad separat kopia, fullstandig data- och filinventering samt appflod efter
 restore maste fortfarande provas i en separat aterstallningsmiljo.
 
+## Isolerad backup- och restoretest upprepad 2026-09-23
+
+`npm run test:backup` passerade igen med **16/16** syntetiska kontroller. Den
+andra korningen bekraftar att backupverktyget fortfarande aterstaller dump,
+underlag och den versionssatta pengamodellen atomart, och att verifieringen
+stoppar saknade eller andrade kvitton, obalanserade verifikat, ogiltig dump och
+otillaten deployvolym. Den tillfalliga Docker-containern togs bort efter provet.
+
+Detta ar ett regressionsbevis for restore-koden, inte ett godkannande av riktig
+kunddata. En faktisk krypterad backup, separat lagringsplats och appens klickflode
+mot aterstalld verksamhetsdata maste fortfarande provas och signeras manuellt.
+
+## Bankavstamning och manuell journalmatchning 2026-09-23
+
+Bankkontrollerna passerade **25/25** riktade testfall: bank- och journalbelopp
+summeras i minor units, dubblett- och identitetsfel blir kritiska avvikelser,
+periodlas respekteras och en manuellt vald journalrad med fel datum eller belopp
+kan inte kopplas till bankraden. Det nya regressionsprovet skyddar sarskilt
+matchningsvagen fran att kringga datum- och beloppskontrollen.
+
+Detta bevisar kontrollkedjan med testdata. Verkliga kontoutdrag, historiska
+ingangsbalanser och fullstandig aldre bankhistorik maste fortfarande stammas av
+manuellt fore skarp drift.
+
 Den lokala `npm run doctor` passerade 8/8 mot aktuell utvecklingsmiljo, och
 `npm run smoke:runtime` passerade i en separat headless Chrome-profil. Smoken
 verifierade oversiktens rendering, inloggningskontroller och aterhamtning fran
@@ -705,7 +824,7 @@ skapades automatiskt. Filernas affarsmassiga tillhorighet maste granskas separat
 
 Slutversionens `npm run test:backup` passerade 16/16 syntetiska tester, inklusive
 samlad backup, radantalsjamforelse, okopplade filer, saknade referenser och
-avvisning av ateranvand backupmapp. `npm run check:backup` passerade 18/18.
+avvisning av ateranvand backupmapp. `npm run check:backup` passerade 19/19.
 Ingen ny backend- eller frontendtestkorning ingar i detta steg.
 
 Backupen ar lokal, Git-ignorerad och inte krypterad av verktyget. En skyddad
@@ -1150,7 +1269,7 @@ Detta bevisar lokalt att:
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
 - `check:use-today`: 35/36
-- `check:first-real-data`: 36/36
+- `check:first-real-data`: 37/37
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46
 - `check:retention`: 23/23
@@ -1159,7 +1278,7 @@ Detta bevisar lokalt att:
 - `check:handoff`: 29/29
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
-- `npm run check:backup`: passed, 18/18
+- `npm run check:backup`: passed, 19/19
 - `check:finish-line`: 21/21
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`

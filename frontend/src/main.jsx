@@ -433,6 +433,70 @@ function invoiceNetAmount(item) {
   return item.netAmount || item.product?.price || 0;
 }
 
+const CURRENCY_MINOR_EXPONENTS = {
+  SEK: 2,
+  JPY: 0,
+  KWD: 3,
+  TND: 3
+};
+
+function currencyMinorExponent(currencyCode = "SEK") {
+  return CURRENCY_MINOR_EXPONENTS[String(currencyCode || "SEK").toUpperCase()] ?? 2;
+}
+
+function readMinorAmount(item, minorKey, legacyKey) {
+  if (!item) {
+    return null;
+  }
+
+  const currencyCode = String(item.currencyCode || "SEK").toUpperCase();
+  const exponent = currencyMinorExponent(currencyCode);
+  const minorValue = item[minorKey];
+  const minorText = minorValue === null || minorValue === undefined ? "" : String(minorValue).trim();
+
+  if (/^-?\d+$/.test(minorText)) {
+    try {
+      return { value: BigInt(minorText), currencyCode, exponent };
+    } catch {
+      return null;
+    }
+  }
+
+  const legacyValue = item[legacyKey];
+  const legacyText = legacyValue === null || legacyValue === undefined ? "" : String(legacyValue).trim();
+  if (!/^-?\d+$/.test(legacyText)) {
+    return null;
+  }
+
+  try {
+    return {
+      value: BigInt(legacyText) * (10n ** BigInt(exponent)),
+      currencyCode,
+      exponent
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatMinorMoney(item, minorKey, legacyKey, language) {
+  const amount = readMinorAmount(item, minorKey, legacyKey);
+  if (!amount) {
+    return "-";
+  }
+
+  const negative = amount.value < 0n;
+  const absoluteValue = negative ? -amount.value : amount.value;
+  const digits = absoluteValue.toString().padStart(amount.exponent + 1, "0");
+  const wholeDigits = amount.exponent === 0 ? digits : digits.slice(0, -amount.exponent);
+  const fractionDigits = amount.exponent === 0 ? "" : digits.slice(-amount.exponent);
+  const groupedWhole = wholeDigits.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const decimalSeparator = language === "sv" ? "," : ".";
+  const formatted = fractionDigits ? `${groupedWhole}${decimalSeparator}${fractionDigits}` : groupedWhole;
+
+  return `${negative ? "-" : ""}${formatted} ${amount.currencyCode}`;
+}
+
 function servicePriceLabel(service, language) {
   const effectivePrice = serviceEffectivePrice(service);
   const vatSuffix = language === "sv"
@@ -445,11 +509,11 @@ function servicePriceLabel(service, language) {
 
   if (service.discountPrice > 0) {
     return language === "sv"
-      ? `${service.discountPrice} SEK (ord. ${service.price} SEK)${vatSuffix}`
-      : `${service.discountPrice} SEK (regular ${service.price} SEK)${vatSuffix}`;
+      ? `${formatMinorMoney(service, "discountPriceMinor", "discountPrice", language)} (ord. ${formatMinorMoney(service, "priceMinor", "price", language)})${vatSuffix}`
+      : `${formatMinorMoney(service, "discountPriceMinor", "discountPrice", language)} (regular ${formatMinorMoney(service, "priceMinor", "price", language)})${vatSuffix}`;
   }
 
-  return `${effectivePrice} SEK${vatSuffix}`;
+  return `${formatMinorMoney(service, "priceMinor", "price", language)}${vatSuffix}`;
 }
 
 function serviceEffectivePrice(service) {
@@ -3154,7 +3218,9 @@ function App() {
 
   async function loadSystemStatus() {
     try {
-      const response = await fetch(`${apiUrl}/system/status`);
+      const response = await fetch(`${apiUrl}/system/status`, {
+        headers: authHeaders()
+      });
       if (!response.ok) {
         setSystemStatus({
           backend: { ok: false },
@@ -18287,18 +18353,30 @@ function App() {
     }));
   });
   const duplicateSupplierPaymentRows = supplierInvoices.flatMap((invoice) => {
-    const duplicatePayments = Object.entries(String(invoice.paymentHistory || "").split(/\r?\n/).reduce((groups, historyLine) => {
-      const match = historyLine.match(/^(\d{4}-\d{2}-\d{2}) - (\d+) SEK(?: - (.+))?$/);
-      if (!match) return groups;
-
-      const reference = String(match[3] || "").trim().toLowerCase();
+    const structuredPayments = Array.isArray(invoice.payments) && invoice.payments.length > 0
+      ? invoice.payments.map((payment) => ({
+        paymentDate: payment.paymentDate || "",
+        amountMinor: Number(payment.amountMinor ?? (Number(payment.amount || 0) * 100)),
+        reference: payment.reference || ""
+      }))
+      : String(invoice.paymentHistory || "").split(/\r?\n/).flatMap((historyLine) => {
+        const match = historyLine.match(/^(\d{4}-\d{2}-\d{2}) - (\d+) SEK(?: - (.+))?$/);
+        return match ? [{
+          paymentDate: match[1],
+          amountMinor: Number(match[2] || 0) * 100,
+          reference: match[3] || ""
+        }] : [];
+      });
+    const duplicatePayments = Object.entries(structuredPayments.reduce((groups, payment) => {
+      const reference = String(payment.reference || "").trim().toLowerCase();
       if (!reference) return groups;
 
-      const key = `${match[1]}::${match[2]}::${reference}`;
+      const key = `${payment.paymentDate}::${payment.amountMinor}::${reference}`;
       groups[key] = [...(groups[key] || []), {
-        paymentDate: match[1],
-        amount: Number(match[2] || 0),
-        reference: match[3] || ""
+        paymentDate: payment.paymentDate,
+        amountMinor: payment.amountMinor,
+        amount: payment.amountMinor / 100,
+        reference: payment.reference
       }];
       return groups;
     }, {})).filter(([, group]) => group.length > 1);
@@ -20300,6 +20378,11 @@ function App() {
   const maintenanceBankResetEnabled = Boolean(systemStatus?.maintenance?.bankReconciliationResetEnabled);
   const maintenanceSafeForProduction = Boolean(systemStatus?.maintenance?.safeForProduction);
   const minorUnitSupport = systemStatus?.moneyModel?.supportsMinorUnits === true;
+  const moneyMigration = systemStatus?.moneyModel?.migration || {};
+  const moneyMigrationCheckStreak = Number(moneyMigration?.zeroIssueFullCheckStreak || 0);
+  const moneyMigrationRequiredChecks = Number(moneyMigration?.requiredZeroIssueFullChecks || 7);
+  const moneyMigrationRestoreVerified = moneyMigration?.verifiedBackupRestore === true;
+  const moneyMigrationApiAuthoritative = moneyMigration?.apiMinorUnitAuthoritative === true;
   const securityPrivacyControlRows = [
     {
       key: "bookkeeping-precision",
@@ -20309,7 +20392,9 @@ function App() {
       score: minorUnitSupport ? 100 : 20,
       detail: minorUnitSupport
         ? (language === "sv" ? "Systemstatus bekraftar stod for kronor och oren." : "System status confirms support for major and minor currency units.")
-        : (language === "sv" ? "Belopp lagras i hela kronor. Oren bevaras inte genom hela bokforingsflodet." : "Amounts are stored as whole kronor. Minor units are not preserved through the full bookkeeping flow."),
+        : (language === "sv"
+          ? `Belopp lagras i hela kronor. Kontrollkorningar: ${moneyMigrationCheckStreak}/${moneyMigrationRequiredChecks}, restore: ${moneyMigrationRestoreVerified ? "OK" : "saknas"}, API: ${moneyMigrationApiAuthoritative ? "oren" : "legacy"}.`
+          : `Amounts are stored as whole kronor. Full checks: ${moneyMigrationCheckStreak}/${moneyMigrationRequiredChecks}, restore: ${moneyMigrationRestoreVerified ? "OK" : "missing"}, API: ${moneyMigrationApiAuthoritative ? "minor units" : "legacy"}.`),
       recommendation: language === "sv"
         ? "Anvand inte AliBooks som enda system for skarp bokforing forran ore-stod och migrering ar verifierade."
         : "Do not use AliBooks as the sole live bookkeeping system until minor-unit support and migration are verified."
@@ -20808,8 +20893,8 @@ function App() {
       statusLabel: systemStatus?.email?.configured ? "OK" : (language === "sv" ? "SMTP saknas" : "SMTP missing"),
       score: systemStatus?.email?.configured ? 100 : 70,
       detail: language === "sv"
-        ? `SMTP: ${systemStatus?.email?.configured ? "OK" : "saknas"}, automatisk paminnelse: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "kontrollera"}`
-        : `SMTP: ${systemStatus?.email?.configured ? "OK" : "missing"}, automatic reminder: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "check"}`,
+        ? `SMTP: ${systemStatus?.email?.configured ? "OK" : "saknas"}, automatisk paminnelse: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "kontrollera"}, osakra leveranser: ${systemStatus?.email?.uncertainDeliveryCount ?? 0}`
+        : `SMTP: ${systemStatus?.email?.configured ? "OK" : "missing"}, automatic reminder: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "check"}, uncertain deliveries: ${systemStatus?.email?.uncertainDeliveryCount ?? 0}`,
       recommendation: language === "sv"
         ? "For riktig kundkommunikation: konfigurera SMTP i miljo variabler eller IntelliJ Run Configuration."
         : "For real customer communication: configure SMTP in environment variables or IntelliJ Run Configuration.",
@@ -21417,9 +21502,9 @@ function App() {
     },
     {
       key: "backup-restore",
-      status: backupValidation?.ok && archivePackageWarnings === 0 ? "ok" : "warning",
-      statusLabel: backupValidation?.ok && archivePackageWarnings === 0 ? "OK" : (language === "sv" ? "Verifiera" : "Verify"),
-      score: backupValidation?.ok && archivePackageWarnings === 0 ? 100 : 65,
+      status: backupValidation?.ok && archivePackageWarnings === 0 ? "ok" : "critical",
+      statusLabel: backupValidation?.ok && archivePackageWarnings === 0 ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: backupValidation?.ok && archivePackageWarnings === 0 ? 100 : 0,
       title: language === "sv" ? "Backup och restore drill finns" : "Backup and restore drill exist",
       detail: language === "sv"
         ? "Riktig data ska inte borja utan verifierad backup och planerad aterlasning i testdatabas."
@@ -21513,13 +21598,13 @@ function App() {
     },
     {
       key: "money-support",
-      status: minorUnitSupport ? "ok" : "warning",
-      statusLabel: minorUnitSupport ? "OK" : (language === "sv" ? "Begransat" : "Limited"),
+      status: minorUnitSupport ? "ok" : "critical",
+      statusLabel: minorUnitSupport ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
       title: language === "sv" ? "Lokal testning, inte skarp bokforing" : "Local testing, not live bookkeeping",
       detail: minorUnitSupport
         ? (language === "sv" ? "Backendens pengamodell bekraftar kronor och oren." : "The backend money model confirms support for kronor and minor units.")
         : (language === "sv" ? "Fortsatt bara med avskild testdata. For inte in verkliga bokforingsposter forran ore-stod och migrering ar verifierade." : "Continue only with isolated test data. Do not enter real bookkeeping entries until minor-unit support and migration are verified."),
-      score: minorUnitSupport ? 100 : 40,
+      score: minorUnitSupport ? 100 : 0,
       actionLabel: t.security,
       action: () => setActiveView("security")
     },
@@ -30506,7 +30591,7 @@ function App() {
                     <strong>{selectedCustomerLatestInvoice ? invoiceNumber(selectedCustomerLatestInvoice) : "-"}</strong>
                     <small>
                       {selectedCustomerLatestInvoice
-                        ? `${formatDateOnly(selectedCustomerLatestInvoice.invoiceDate || selectedCustomerLatestInvoice.createdAt)} - ${invoiceTotalAmount(selectedCustomerLatestInvoice)} SEK`
+                        ? `${formatDateOnly(selectedCustomerLatestInvoice.invoiceDate || selectedCustomerLatestInvoice.createdAt)} - ${formatMinorMoney(selectedCustomerLatestInvoice, "totalAmountMinor", "totalAmount", language)}`
                         : (language === "sv" ? "Ingen faktura annu" : "No invoice yet")}
                     </small>
                   </article>
@@ -30567,8 +30652,8 @@ function App() {
                             </span>
                           </span>
                           <span className="mini-list-amount">
-                            <strong>{invoiceRemainingAmount(item)} SEK</strong>
-                            <span>{language === "sv" ? "kvar av" : "left of"} {invoiceTotalAmount(item)} SEK</span>
+                            <strong>{formatMinorMoney({ ...item, remainingAmount: invoiceRemainingAmount(item) }, "remainingAmountMinor", "remainingAmount", language)}</strong>
+                            <span>{language === "sv" ? "kvar av" : "left of"} {formatMinorMoney(item, "totalAmountMinor", "totalAmount", language)}</span>
                           </span>
                           <span className={`due-status ${dueStatus.className}`}>{dueStatus.label}</span>
                         </button>
@@ -31103,7 +31188,15 @@ function App() {
                       <strong>{invoice.totalAmount} SEK</strong>
                       <small>{t.net}: {invoice.netAmount} SEK | {t.vat}: {invoice.vatAmount} SEK</small>
                       <small>{language === "sv" ? "Betalt" : "Paid"}: {paidAmount} SEK | {language === "sv" ? "Kvar" : "Remaining"}: {remainingAmount} SEK</small>
-                      {invoice.paymentHistory && <small>{language === "sv" ? "Historik" : "History"}: {invoice.paymentHistory}</small>}
+                      {invoice.payments?.length > 0 ? (
+                        <small>
+                          {language === "sv" ? "Historik" : "History"}: {invoice.payments.map((payment) =>
+                            `${payment.paymentDate || "-"} - ${formatMinorMoney(payment, "amountMinor", "amount", language)} - ${payment.reference || "-"}`
+                          ).join("; ")}
+                        </small>
+                      ) : invoice.paymentHistory && (
+                        <small>{language === "sv" ? "Historik" : "History"}: {invoice.paymentHistory}</small>
+                      )}
                       {invoice.status === "cancelled" && (
                         <small>
                           {language === "sv" ? "Makulerad" : "Cancelled"}: {formatDateOnly(invoice.cancelledAt)}
@@ -35680,16 +35773,16 @@ function App() {
                     <span>{t.quantity}: {item.quantity || 1}</span>
                     {invoiceDiscountAmount(item) > 0 && (
                       <>
-                        <span>{language === "sv" ? "Ordinarie pris" : "Regular price"}: {invoiceOrdinaryPrice(item)} SEK</span>
+                        <span>{language === "sv" ? "Ordinarie pris" : "Regular price"}: {formatMinorMoney({ ...item, ordinaryAmount: invoiceOrdinaryPrice(item) }, "ordinaryAmountMinor", "ordinaryAmount", language)}</span>
                         <span className="discount-line">
                           {language === "sv" ? "Rabatt" : "Discount"}
-                          {item.discountLabel ? ` (${item.discountLabel})` : ""}: -{invoiceDiscountAmount(item)} SEK
+                          {item.discountLabel ? ` (${item.discountLabel})` : ""}: -{formatMinorMoney({ ...item, discountAmountValue: invoiceDiscountAmount(item) }, "discountAmountMinor", "discountAmountValue", language)}
                         </span>
                       </>
                     )}
-                    <span>{t.net}: {invoiceNetAmount(item)} SEK</span>
-                    <span>{t.vat} {Number(item.vatPercent ?? item.product?.vatPercent ?? 25)}%: {invoiceVatAmount(item)} SEK</span>
-                    <span>{t.total}: {invoiceTotalAmount(item)} SEK</span>
+                    <span>{t.net}: {formatMinorMoney(item, "netAmountMinor", "netAmount", language)}</span>
+                    <span>{t.vat} {Number(item.vatPercent ?? item.product?.vatPercent ?? 25)}%: {formatMinorMoney(item, "vatAmountMinor", "vatAmount", language)}</span>
+                    <span>{t.total}: {formatMinorMoney(item, "totalAmountMinor", "totalAmount", language)}</span>
                     <div className="payment-info">
                       <strong>{t.payment}</strong>
                       <span>PlusGiro: {item.plusGiro || "-"}</span>
@@ -35698,8 +35791,8 @@ function App() {
                       {(item.status === "PAID" || item.status === "PARTIALLY_PAID") && (
                         <>
                           <span>{language === "sv" ? "Betaldatum" : "Payment date"}: {item.paidDate || "-"}</span>
-                          <span>{language === "sv" ? "Betalt belopp" : "Paid amount"}: {invoicePaidAmount(item)} SEK</span>
-                          <span>{language === "sv" ? "Kvar att betala" : "Remaining"}: {invoiceRemainingAmount(item)} SEK</span>
+                          <span>{language === "sv" ? "Betalt belopp" : "Paid amount"}: {formatMinorMoney(item, "paidAmountMinor", "paidAmount", language)}</span>
+                          <span>{language === "sv" ? "Kvar att betala" : "Remaining"}: {formatMinorMoney({ ...item, remainingAmount: invoiceRemainingAmount(item) }, "remainingAmountMinor", "remainingAmount", language)}</span>
                           <span>{language === "sv" ? "Referens" : "Reference"}: {item.paymentReference || "-"}</span>
                         </>
                       )}
@@ -35708,7 +35801,7 @@ function App() {
                           <strong>{language === "sv" ? "Betalningshistorik" : "Payment history"}</strong>
                           {item.payments.map((payment) => (
                             <span key={payment.id}>
-                              {payment.paymentDate || "-"} - {payment.amount} SEK - {payment.reference || "-"}
+                              {payment.paymentDate || "-"} - {formatMinorMoney(payment, "amountMinor", "amount", language)} - {payment.reference || "-"}
                             </span>
                           ))}
                         </div>
@@ -35752,8 +35845,8 @@ function App() {
                           <strong>{language === "sv" ? "Aterbetalning till kund" : "Customer refund"}</strong>
                           <span>
                             {language === "sv"
-                              ? `Betalt: ${invoicePaidAmount(item)} SEK. Aterbetalt: ${invoiceRefundedAmount(item)} SEK. Kvar att aterbetala: ${invoiceRefundableAmount(item)} SEK.`
-                              : `Paid: ${invoicePaidAmount(item)} SEK. Refunded: ${invoiceRefundedAmount(item)} SEK. Refundable left: ${invoiceRefundableAmount(item)} SEK.`}
+                              ? `Betalt: ${formatMinorMoney(item, "paidAmountMinor", "paidAmount", language)}. Aterbetalt: ${formatMinorMoney(item, "refundedAmountMinor", "refundedAmount", language)}. Kvar att aterbetala: ${formatMinorMoney({ ...item, refundableAmount: invoiceRefundableAmount(item) }, "refundableAmountMinor", "refundableAmount", language)}.`
+                              : `Paid: ${formatMinorMoney(item, "paidAmountMinor", "paidAmount", language)}. Refunded: ${formatMinorMoney(item, "refundedAmountMinor", "refundedAmount", language)}. Refundable left: ${formatMinorMoney({ ...item, refundableAmount: invoiceRefundableAmount(item) }, "refundableAmountMinor", "refundableAmount", language)}.`}
                           </span>
                           {item.refundDate && (
                             <span>
@@ -36935,9 +37028,9 @@ function App() {
                     )}
                   </div>
                   <div>
-                    <span>{language === "sv" ? "Totalt" : "Total"}: {invoiceTotalAmount(item)} SEK</span>
-                    <span>{language === "sv" ? "Betalt" : "Paid"}: {invoicePaidAmount(item)} SEK</span>
-                    <strong>{language === "sv" ? "Kvar" : "Remaining"}: {invoiceRemainingAmount(item)} SEK</strong>
+                    <span>{language === "sv" ? "Totalt" : "Total"}: {formatMinorMoney(item, "totalAmountMinor", "totalAmount", language)}</span>
+                    <span>{language === "sv" ? "Betalt" : "Paid"}: {formatMinorMoney(item, "paidAmountMinor", "paidAmount", language)}</span>
+                    <strong>{language === "sv" ? "Kvar" : "Remaining"}: {formatMinorMoney({ ...item, remainingAmount: invoiceRemainingAmount(item) }, "remainingAmountMinor", "remainingAmount", language)}</strong>
                     <span>{language === "sv" ? "OCR" : "OCR"}: {item.ocrNumber || "-"}</span>
                     <span>{language === "sv" ? "Referens" : "Reference"}: {item.paymentReference || "-"}</span>
                     <button type="button" className="secondary-button" onClick={() => copyPaymentInfo(item)}>
@@ -41162,7 +41255,7 @@ function App() {
                               <small>{item.customerName || item.customer?.name || "-"}</small>
                             </span>
                             <span>
-                              <strong>{invoiceRemainingAmount(item)} SEK</strong>
+                              <strong>{formatMinorMoney({ ...item, remainingAmount: invoiceRemainingAmount(item) }, "remainingAmountMinor", "remainingAmount", language)}</strong>
                               <small>{language === "sv" ? "Forfallodatum" : "Due"}: {formatDateOnly(item.dueDate)}</small>
                             </span>
                             <span className={`due-status ${dueStatus.className}`}>{dueStatus.label}</span>

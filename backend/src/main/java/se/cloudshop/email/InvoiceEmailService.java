@@ -20,21 +20,36 @@ public class InvoiceEmailService {
   private final JavaMailSender mailSender;
   private final SettingsService settingsService;
   private final InvoiceOriginalService invoiceOriginalService;
+  private final EmailDeliveryLedger deliveryLedger;
   private final String mailHost;
   private final String mailUsername;
 
+  @org.springframework.beans.factory.annotation.Autowired
   public InvoiceEmailService(
       JavaMailSender mailSender,
       SettingsService settingsService,
       InvoiceOriginalService invoiceOriginalService,
+      EmailDeliveryLedger deliveryLedger,
       @Value("${spring.mail.host:}") String mailHost,
       @Value("${spring.mail.username:}") String mailUsername
   ) {
     this.mailSender = mailSender;
     this.settingsService = settingsService;
     this.invoiceOriginalService = invoiceOriginalService;
+    this.deliveryLedger = deliveryLedger;
     this.mailHost = mailHost;
     this.mailUsername = mailUsername;
+  }
+
+  // Kept for focused unit tests that exercise the SMTP renderer without persistence.
+  public InvoiceEmailService(
+      JavaMailSender mailSender,
+      SettingsService settingsService,
+      InvoiceOriginalService invoiceOriginalService,
+      String mailHost,
+      String mailUsername
+  ) {
+    this(mailSender, settingsService, invoiceOriginalService, null, mailHost, mailUsername);
   }
 
   public void sendInvoice(Order invoice) {
@@ -48,6 +63,9 @@ public class InvoiceEmailService {
     requireInvoicePaymentDetails(invoice);
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
     byte[] pdf = invoiceOriginalService.read(invoice).pdf();
+    String subject = "Faktura " + invoice.getInvoiceNumber();
+    String body = createInvoiceText(invoice, settings);
+    Long deliveryAttemptId = startDeliveryAttempt(invoice, subject, body, filename, pdf);
 
     try {
       MimeMessage message = mailSender.createMimeMessage();
@@ -57,12 +75,49 @@ public class InvoiceEmailService {
       if (hasText(settings.getContactEmail())) {
         helper.setReplyTo(settings.getContactEmail());
       }
-      helper.setSubject("Faktura " + invoice.getInvoiceNumber());
-      helper.setText(createInvoiceText(invoice, settings));
+      helper.setSubject(subject);
+      helper.setText(body);
       helper.addAttachment(filename, new ByteArrayResource(pdf), "application/pdf");
       mailSender.send(message);
+      markDeliverySent(deliveryAttemptId);
     } catch (MessagingException exception) {
+      markDeliveryUncertain(deliveryAttemptId, exception);
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not create invoice email.");
+    } catch (RuntimeException exception) {
+      markDeliveryUncertain(deliveryAttemptId, exception);
+      throw exception;
+    }
+  }
+
+  private Long startDeliveryAttempt(Order invoice, String subject, String body, String filename, byte[] pdf) {
+    if (deliveryLedger == null) {
+      return null;
+    }
+    return deliveryLedger.startInvoiceAttempt(
+        invoice.getId(), invoice.getCustomer().getEmail(), subject, body, filename, pdf
+    );
+  }
+
+  private void markDeliverySent(Long attemptId) {
+    if (attemptId == null) {
+      return;
+    }
+    try {
+      deliveryLedger.markSent(attemptId);
+    } catch (RuntimeException ignored) {
+      // SMTP already accepted the message. Keep the original success result and expose the
+      // pending ledger row through system status rather than sending a duplicate message.
+    }
+  }
+
+  private void markDeliveryUncertain(Long attemptId, Throwable exception) {
+    if (attemptId == null) {
+      return;
+    }
+    try {
+      deliveryLedger.markUncertain(attemptId, exception);
+    } catch (RuntimeException ignored) {
+      // Never mask the original transport failure with a secondary ledger failure.
     }
   }
 

@@ -57,6 +57,7 @@ class ProductionConfigurationGuardTest {
         "https://books.alibooks.se",
         false,
         false,
+        true,
         "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks",
         "alibooks_prod",
         "a-production-database-password"
@@ -76,6 +77,7 @@ class ProductionConfigurationGuardTest {
         true,
         true,
         "http://localhost:5157,*",
+        true,
         true,
         true,
         "jdbc:postgresql://localhost:5432/cloudshop",
@@ -102,6 +104,7 @@ class ProductionConfigurationGuardTest {
         "https://books.alibooks.se",
         false,
         false,
+        true,
         "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks",
         "alibooks_prod",
         "replace_with_rds_password"
@@ -123,6 +126,7 @@ class ProductionConfigurationGuardTest {
         "http://your-ec2-public-ip",
         false,
         false,
+        true,
         "jdbc:postgresql://your-rds-endpoint.eu-north-1.rds.amazonaws.com:5432/cloudshop",
         "alibooks_prod",
         "a-production-database-password"
@@ -144,6 +148,7 @@ class ProductionConfigurationGuardTest {
         "https://books.alibooks.se",
         false,
         false,
+        true,
         "jdbc:postgresql://db:5432/cloudshop",
         "alibooks_prod",
         "a-production-database-password"

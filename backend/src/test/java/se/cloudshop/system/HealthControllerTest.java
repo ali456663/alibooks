@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import se.cloudshop.config.MoneyMigrationVerifier;
+import se.cloudshop.auth.AuthHeader;
 
 class HealthControllerTest {
 
@@ -19,7 +21,7 @@ class HealthControllerTest {
 
     HealthController controller = controller("", true);
 
-    Map<String, Object> status = controller.systemStatus();
+    Map<String, Object> status = controller.systemStatus("Bearer test-token");
     Map<String, Object> cors = nested(status, "cors");
 
     assertThat(cors.get("configured")).isEqualTo(false);
@@ -36,7 +38,7 @@ class HealthControllerTest {
 
     HealthController controller = controller("https://app.alibooks.example", false);
 
-    Map<String, Object> status = controller.systemStatus();
+    Map<String, Object> status = controller.systemStatus("Bearer test-token");
     Map<String, Object> cors = nested(status, "cors");
 
     assertThat(cors.get("configured")).isEqualTo(true);
@@ -53,7 +55,7 @@ class HealthControllerTest {
 
     HealthController controller = controller("https://app.alibooks.example", false, true, false);
 
-    Map<String, Object> status = controller.systemStatus();
+    Map<String, Object> status = controller.systemStatus("Bearer test-token");
     Map<String, Object> maintenance = nested(status, "maintenance");
 
     assertThat(maintenance.get("testDataResetEnabled")).isEqualTo(true);
@@ -65,12 +67,15 @@ class HealthControllerTest {
   void systemStatusDoesNotOverclaimMinorUnitSupport() {
     when(jdbcTemplate.queryForObject("select 1", Integer.class)).thenReturn(1);
 
-    Map<String, Object> moneyModel = nested(controller("", true).systemStatus(), "moneyModel");
+    Map<String, Object> moneyModel = nested(controller("", true).systemStatus("Bearer test-token"), "moneyModel");
 
     assertThat(moneyModel.get("currency")).isEqualTo("SEK");
     assertThat(moneyModel.get("unit")).isEqualTo("whole-krona");
     assertThat(moneyModel.get("supportsMinorUnits")).isEqualTo(false);
     assertThat(moneyModel.get("productionBookkeepingReady")).isEqualTo(false);
+    Map<String, Object> migration = nested(moneyModel, "migration");
+    assertThat(migration.get("state")).isEqualTo("verified-shadow");
+    assertThat(migration.get("readyForAuthoritativeCutover")).isEqualTo(false);
   }
 
   private HealthController controller(String corsAllowedOrigins, boolean corsLocalDevEnabled) {
@@ -83,6 +88,14 @@ class HealthControllerTest {
       boolean testDataResetEnabled,
       boolean bankReconciliationResetEnabled
   ) {
+    MoneyMigrationVerifier moneyMigrationVerifier = mock(MoneyMigrationVerifier.class);
+    AuthHeader authHeader = mock(AuthHeader.class);
+    when(moneyMigrationVerifier.status()).thenReturn(Map.of(
+        "state", "verified-shadow",
+        "currency", "SEK",
+        "verified", true,
+        "readyForAuthoritativeCutover", false
+    ));
     return new HealthController(
         jdbcTemplate,
         "",
@@ -105,7 +118,9 @@ class HealthControllerTest {
         5,
         15,
         testDataResetEnabled,
-        bankReconciliationResetEnabled
+        bankReconciliationResetEnabled,
+        moneyMigrationVerifier,
+        authHeader
     );
   }
 

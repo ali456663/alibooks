@@ -32,6 +32,8 @@ public class BankReconciliationEntry {
   private int amount;
   @Column(name = "amount_minor")
   private Long amountMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String entryType;
   private String status;
   private String matchLabel;
@@ -107,9 +109,12 @@ public class BankReconciliationEntry {
     return amount;
   }
 
-  @JsonIgnore
   public Long getAmountMinor() {
     return amountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   @JsonIgnore

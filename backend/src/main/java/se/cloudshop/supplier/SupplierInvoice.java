@@ -1,6 +1,8 @@
 package se.cloudshop.supplier;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -13,6 +15,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "supplier_invoices")
@@ -48,6 +52,8 @@ public class SupplierInvoice {
   private int paidAmount;
   @Column(name = "paid_amount_minor")
   private Long paidAmountMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String paymentReference;
   private String paymentHistory;
   private LocalDate cancelledAt;
@@ -58,6 +64,10 @@ public class SupplierInvoice {
   private String buyerReference;
   private String approvalReference;
   private Instant createdAt;
+
+  @jakarta.persistence.OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  private List<SupplierPayment> paymentRows = new ArrayList<>();
 
   public SupplierInvoice() {
   }
@@ -177,17 +187,14 @@ public class SupplierInvoice {
     return netAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getTotalAmountMinor() {
     return totalAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getVatAmountMinor() {
     return vatAmountMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getNetAmountMinor() {
     return netAmountMinor;
   }
@@ -208,9 +215,12 @@ public class SupplierInvoice {
     return paidAmount;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getPaidAmountMinor() {
     return paidAmountMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public int getRemainingAmount() {
@@ -290,6 +300,7 @@ public class SupplierInvoice {
     this.paymentHistory = (paymentHistory == null || paymentHistory.isBlank())
         ? historyLine
         : paymentHistory + "\n" + historyLine;
+    this.paymentRows.add(new SupplierPayment(this, paymentDate, amount, this.paymentReference));
   }
 
   public boolean hasPayment(LocalDate paidAt, int amount, String reference) {
@@ -300,6 +311,15 @@ public class SupplierInvoice {
 
     LocalDate paymentDate = paidAt == null ? LocalDate.now() : paidAt;
     String expectedPrefix = paymentDate + " - " + amount + " SEK";
+
+    if (this.paymentRows.stream()
+        .anyMatch(payment -> payment.getPaymentDate() != null
+            && payment.getPaymentDate().equals(paymentDate)
+            && payment.getAmountMinorValue() == toMinorUnits(amount, "paymentAmount")
+            && normalizeReference(payment.getReference()).equals(normalizedReference))) {
+      return true;
+    }
+
     String[] historyLines = paymentHistory == null ? new String[0] : paymentHistory.split("\\R");
 
     for (String historyLine : historyLines) {
@@ -316,6 +336,17 @@ public class SupplierInvoice {
     }
 
     return false;
+  }
+
+  /** Structured rows are authoritative for new payments; legacy text remains read-only fallback. */
+  List<SupplierPayment> getPaymentRows() {
+    return paymentRows;
+  }
+
+  /** Public read model for the structured payment history; legacy text remains for compatibility. */
+  @com.fasterxml.jackson.annotation.JsonProperty("payments")
+  public List<SupplierPayment> getPayments() {
+    return List.copyOf(paymentRows);
   }
 
   private String paymentHistoryLine(LocalDate paymentDate, int amount, String reference) {

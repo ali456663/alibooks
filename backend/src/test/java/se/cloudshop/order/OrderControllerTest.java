@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.accounting.AccountingService;
 import se.cloudshop.audit.AuditService;
@@ -251,6 +252,35 @@ class OrderControllerTest {
 
     verify(accountingService, never()).createPaymentEntries(sentInvoice, sentInvoice.getInvoiceDate(), 100);
     verify(orderRepository, never()).save(sentInvoice);
+  }
+
+  @Test
+  void markInvoicePaidConvertsDatabaseDuplicateIntoConflict() {
+    Order sentInvoice = new Order("Ali", new Product("PT", "Training", 1000), java.time.Instant.now());
+    sentInvoice.setStatus("SENT");
+    when(orderRepository.findById(1L)).thenReturn(Optional.of(sentInvoice));
+    when(orderRepository.saveAndFlush(sentInvoice))
+        .thenThrow(new DataIntegrityViolationException("invoice_payments_identity_unique"));
+
+    assertThatThrownBy(() -> orderController.markInvoiceAsPaid(
+        "Bearer " + authHeaderToken(),
+        1L,
+        new MarkInvoicePaidRequest(sentInvoice.getInvoiceDate(), 100, "SWISH-123")
+    ))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("payment is already registered");
+
+    verify(accountingService).createPaymentEntries(sentInvoice, sentInvoice.getInvoiceDate(), 100);
+    verify(auditService, never()).record(
+        org.mockito.ArgumentMatchers.eq("payment"),
+        org.mockito.ArgumentMatchers.eq("invoice"),
+        org.mockito.ArgumentMatchers.any(),
+        org.mockito.ArgumentMatchers.eq("payment_registered"),
+        org.mockito.ArgumentMatchers.any(),
+        org.mockito.ArgumentMatchers.any(),
+        org.mockito.ArgumentMatchers.anyInt(),
+        org.mockito.ArgumentMatchers.any()
+    );
   }
 
   @Test

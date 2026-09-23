@@ -24,13 +24,14 @@ public class ProductionConfigurationGuard {
       @Value("${app.cors.allowed-origins:}") String corsAllowedOrigins,
       @Value("${app.test-data-reset.enabled:false}") boolean testDataResetEnabled,
       @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled,
+      @Value("${app.money-migration.verify-on-startup:true}") boolean moneyMigrationVerifyOnStartup,
       @Value("${spring.datasource.url:}") String datasourceUrl,
       @Value("${spring.datasource.username:}") String datasourceUsername,
       @Value("${spring.datasource.password:}") String datasourcePassword
   ) {
     List<String> violations = violations(
         jwtSecret, registrationBootstrapKey, jwtExpirationMinutes, ddlAuto, schemaPatchEnabled, corsLocalDevEnabled,
-        corsAllowedOrigins, testDataResetEnabled, bankReconciliationResetEnabled,
+        corsAllowedOrigins, testDataResetEnabled, bankReconciliationResetEnabled, moneyMigrationVerifyOnStartup,
         datasourceUrl, datasourceUsername, datasourcePassword);
     if (!violations.isEmpty()) {
       throw new IllegalStateException("Unsafe production configuration: " + String.join(", ", violations));
@@ -47,6 +48,7 @@ public class ProductionConfigurationGuard {
       String corsAllowedOrigins,
       boolean testDataResetEnabled,
       boolean bankReconciliationResetEnabled,
+      boolean moneyMigrationVerifyOnStartup,
       String datasourceUrl,
       String datasourceUsername,
       String datasourcePassword
@@ -78,6 +80,9 @@ public class ProductionConfigurationGuard {
     }
     if (testDataResetEnabled || bankReconciliationResetEnabled) {
       errors.add("test-data and bank-reconciliation reset features must be disabled");
+    }
+    if (!moneyMigrationVerifyOnStartup) {
+      errors.add("APP_MONEY_MIGRATION_VERIFY_ON_STARTUP must be true");
     }
     errors.add("Accounting amounts are stored as whole SEK; production is blocked until exact ore-based accounting and historical reconciliation are implemented and verified");
     if (!hasRemotePostgresHost(datasourceUrl)) {

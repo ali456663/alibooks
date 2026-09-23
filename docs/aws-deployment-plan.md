@@ -161,7 +161,7 @@ HTTPS encrypts login data, JWT tokens and order information.
 6. Install Docker on EC2.
 7. Copy `.env.production.example` to `.env` on EC2.
 8. Fill in Dockerhub username, image tag, RDS URL, JWT secret, Stripe and SMTP values.
-9. Run `scripts/ec2-deploy.sh` to pull Docker images and start production containers.
+9. Run `scripts/ec2-deploy.sh` to validate the production `.env`, pull a fixed Docker image tag, wait for healthy containers and start the public smoke test.
 10. Check container status and backend logs from the deploy script output.
 11. Configure HTTPS/public URL.
 12. Run the production smoke test.

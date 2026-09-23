@@ -235,7 +235,7 @@ class SupplierControllerTest {
     );
     setSupplierInvoiceId(invoice, 10L);
     when(supplierInvoiceRepository.findById(10L)).thenReturn(Optional.of(invoice));
-    when(supplierInvoiceRepository.save(any(SupplierInvoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(supplierInvoiceRepository.saveAndFlush(any(SupplierInvoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     SupplierInvoice updatedInvoice = supplierController.updateSupplierInvoiceStatus(
         "Bearer " + authHeaderToken(),

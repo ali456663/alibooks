@@ -23,6 +23,8 @@ public class Product {
   private Long priceMinor;
   @Column(name = "discount_price_minor")
   private Long discountPriceMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   @Column(nullable = false, columnDefinition = "integer default 25")
   private int vatPercent = 25;
   private String discountLabel;
@@ -76,14 +78,16 @@ public class Product {
     this.discountPriceMinor = toMinorUnits(discountPrice, "discountPrice");
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getPriceMinor() {
     return priceMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getDiscountPriceMinor() {
     return discountPriceMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public int getVatPercent() {

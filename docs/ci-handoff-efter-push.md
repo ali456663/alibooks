@@ -27,6 +27,8 @@ origin https://github.com/ali456663/alibooks.git
 10. Kor `npm run check:post-push -- --require-pushed`.
 11. Kor `npm run check:release-traceability`.
 
+Release-gaten kraver upstream nar den kor lokalt. GitHub Actions kan kora detached HEAD; dar verifieras i stallet `GITHUB_SHA` mot checkoutad commit och `GITHUB_REF`, sa Dependabot- och pull request-korningar inte stoppas av att en lokal branch inte finns.
+
 ## Dockerhub efter CI
 
 Dockerhub workflow kan koras manuellt eller via en versionstagg.

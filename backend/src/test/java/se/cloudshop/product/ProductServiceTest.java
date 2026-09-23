@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,6 +20,19 @@ class ProductServiceTest {
 
     assertThat(product.getName()).isEqualTo("Cloud Keyboard");
     assertThat(product.getPrice()).isEqualTo(799);
+    assertThat(product.getPriceMinor()).isEqualTo(79_900L);
+    assertThat(product.getCurrencyCode()).isEqualTo("SEK");
+  }
+
+  @Test
+  void exposesExactMinorUnitContractAlongsideLegacyWholeKronaFields() throws Exception {
+    Product product = new Product("Cloud Keyboard", "Test", 799);
+
+    var json = new ObjectMapper().valueToTree(product);
+
+    assertThat(json.path("price").asInt()).isEqualTo(799);
+    assertThat(json.path("priceMinor").asLong()).isEqualTo(79_900L);
+    assertThat(json.path("currencyCode").asText()).isEqualTo("SEK");
   }
 
   @Test

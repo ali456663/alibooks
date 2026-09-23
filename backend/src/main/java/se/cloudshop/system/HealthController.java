@@ -5,10 +5,14 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import se.cloudshop.auth.AuthHeader;
+import se.cloudshop.config.MoneyMigrationVerifier;
+import se.cloudshop.email.EmailDeliveryLedger;
 
 @RestController
 public class HealthController {
@@ -35,7 +39,11 @@ public class HealthController {
   private final int authLoginLockMinutes;
   private final boolean testDataResetEnabled;
   private final boolean bankReconciliationResetEnabled;
+  private final MoneyMigrationVerifier moneyMigrationVerifier;
+  private final AuthHeader authHeader;
+  private final EmailDeliveryLedger emailDeliveryLedger;
 
+  @Autowired
   public HealthController(
       JdbcTemplate jdbcTemplate,
       @Value("${spring.mail.host:}") String mailHost,
@@ -58,7 +66,10 @@ public class HealthController {
       @Value("${app.auth.max-failed-login-attempts:5}") int authMaxFailedLoginAttempts,
       @Value("${app.auth.login-lock-minutes:15}") int authLoginLockMinutes,
       @Value("${app.test-data-reset.enabled:false}") boolean testDataResetEnabled,
-      @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled
+      @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled,
+      MoneyMigrationVerifier moneyMigrationVerifier,
+      AuthHeader authHeader,
+      EmailDeliveryLedger emailDeliveryLedger
   ) {
     this.jdbcTemplate = jdbcTemplate;
     this.mailHost = mailHost;
@@ -82,6 +93,45 @@ public class HealthController {
     this.authLoginLockMinutes = authLoginLockMinutes;
     this.testDataResetEnabled = testDataResetEnabled;
     this.bankReconciliationResetEnabled = bankReconciliationResetEnabled;
+    this.moneyMigrationVerifier = moneyMigrationVerifier;
+    this.authHeader = authHeader;
+    this.emailDeliveryLedger = emailDeliveryLedger;
+  }
+
+  // Keeps focused controller tests independent from the persistence-backed delivery ledger.
+  public HealthController(
+      JdbcTemplate jdbcTemplate,
+      String mailHost,
+      String mailUsername,
+      String stripeSecretKey,
+      String stripeWebhookSecret,
+      String geminiApiKey,
+      String hfToken,
+      String openAiCompatibleApiKey,
+      String openAiCompatibleModel,
+      String openAiCompatibleBaseUrl,
+      String openAiCompatibleProviderName,
+      String frontendUrl,
+      String jwtSecret,
+      int jwtExpirationMinutes,
+      String reminderCron,
+      String timeZone,
+      String corsAllowedOrigins,
+      boolean corsLocalDevEnabled,
+      int authMaxFailedLoginAttempts,
+      int authLoginLockMinutes,
+      boolean testDataResetEnabled,
+      boolean bankReconciliationResetEnabled,
+      MoneyMigrationVerifier moneyMigrationVerifier,
+      AuthHeader authHeader
+  ) {
+    this(
+        jdbcTemplate, mailHost, mailUsername, stripeSecretKey, stripeWebhookSecret, geminiApiKey, hfToken,
+        openAiCompatibleApiKey, openAiCompatibleModel, openAiCompatibleBaseUrl, openAiCompatibleProviderName,
+        frontendUrl, jwtSecret, jwtExpirationMinutes, reminderCron, timeZone, corsAllowedOrigins,
+        corsLocalDevEnabled, authMaxFailedLoginAttempts, authLoginLockMinutes, testDataResetEnabled,
+        bankReconciliationResetEnabled, moneyMigrationVerifier, authHeader, null
+    );
   }
 
   @GetMapping("/health")
@@ -93,7 +143,11 @@ public class HealthController {
   }
 
   @GetMapping("/system/status")
-  public Map<String, Object> systemStatus() {
+  public Map<String, Object> systemStatus(
+      @org.springframework.web.bind.annotation.RequestHeader(value = "Authorization", required = false)
+      String authorizationHeader
+  ) {
+    authHeader.requireValidToken(authorizationHeader);
     Map<String, Object> status = new LinkedHashMap<>();
     status.put("service", "cloudshop-backend");
     status.put("backend", Map.of("ok", true));
@@ -101,7 +155,9 @@ public class HealthController {
     status.put("email", Map.of(
         "configured", hasText(mailHost) && hasText(mailUsername),
         "hostConfigured", hasText(mailHost),
-        "usernameConfigured", hasText(mailUsername)
+        "usernameConfigured", hasText(mailUsername),
+        "deliveryLedgerEnabled", emailDeliveryLedger != null,
+        "uncertainDeliveryCount", emailDeliveryLedger == null ? 0L : emailDeliveryLedger.countUncertain()
     ));
     status.put("stripe", Map.of(
         "configured", hasText(stripeSecretKey),
@@ -140,7 +196,8 @@ public class HealthController {
         "currency", "SEK",
         "unit", "whole-krona",
         "supportsMinorUnits", false,
-        "productionBookkeepingReady", false
+        "productionBookkeepingReady", false,
+        "migration", moneyMigrationVerifier.status()
     ));
     status.put("auth", Map.of(
         "loginAttemptLockEnabled", authMaxFailedLoginAttempts > 0 && authLoginLockMinutes > 0,

@@ -31,6 +31,8 @@ public class VatFiling {
   private Long inputVatMinor;
   @Column(name = "vat_to_pay_minor")
   private Long vatToPayMinor;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String status;
   private String submissionReference;
   private String paymentReference;
@@ -108,19 +110,20 @@ public class VatFiling {
     return vatToPay;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getOutputVatMinor() {
     return outputVatMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getInputVatMinor() {
     return inputVatMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getVatToPayMinor() {
     return vatToPayMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   public String getStatus() {

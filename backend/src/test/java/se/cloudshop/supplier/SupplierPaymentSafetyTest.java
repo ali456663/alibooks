@@ -18,6 +18,11 @@ class SupplierPaymentSafetyTest {
     assertThat(invoice.getPaidAmountMinor()).isEqualTo(0L);
     invoice.registerPayment(LocalDate.now(), 50, "first");
     assertThat(invoice.getPaidAmountMinor()).isEqualTo(5000L);
+    assertThat(invoice.getPaymentRows()).hasSize(1);
+    assertThat(invoice.getPayments()).hasSize(1);
+    assertThat(invoice.getPayments().get(0).getAmountMinor()).isEqualTo(5000L);
+    assertThat(invoice.getPayments().get(0).getCurrencyCode()).isEqualTo("SEK");
+    assertThat(invoice.getPaymentRows().get(0).getAmountMinorValue()).isEqualTo(5000L);
     String history = invoice.getPaymentHistory();
     assertThatThrownBy(() -> invoice.registerPayment(LocalDate.now(), amount, "bad")).isInstanceOf(IllegalArgumentException.class);
     assertThat(invoice.getPaidAmount()).isEqualTo(50);
@@ -33,6 +38,7 @@ class SupplierPaymentSafetyTest {
     invoice.registerPayment(LocalDate.now(), 100, "first");
 
     assertThat(invoice.getPaidAmountMinor()).isEqualTo(10_000L);
+    assertThat(invoice.getPaymentRows()).hasSize(1);
     assertThat(invoice.getRemainingAmountMinor()).isEqualTo(2_500L);
     assertThat(invoice.getRemainingAmount()).isEqualTo(25);
     assertThatThrownBy(() -> invoice.registerPayment(LocalDate.now(), 26, "too-much"))

@@ -47,6 +47,8 @@ public class JournalEntry {
   private Long debitMinor;
   @jakarta.persistence.Column(name = "credit_minor")
   private Long creditMinor;
+  @jakarta.persistence.Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode = "SEK";
   private String description;
   private LocalDate voucherDate;
   private String correctionOfVoucherNumber;
@@ -149,14 +151,16 @@ public class JournalEntry {
     return credit;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getDebitMinor() {
     return debitMinor;
   }
 
-  @com.fasterxml.jackson.annotation.JsonIgnore
   public Long getCreditMinor() {
     return creditMinor;
+  }
+
+  public String getCurrencyCode() {
+    return currencyCode;
   }
 
   @com.fasterxml.jackson.annotation.JsonIgnore

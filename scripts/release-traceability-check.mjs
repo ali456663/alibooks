@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isTraceableCheckout } from "./lib/release-traceability.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -130,17 +131,30 @@ check(
 );
 
 const head = git(["rev-parse", "--short=12", "HEAD"]);
+const fullHead = git(["rev-parse", "HEAD"]);
 const branch = git(["branch", "--show-current"]);
 const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+const githubActions = process.env.GITHUB_ACTIONS || "";
+const githubSha = process.env.GITHUB_SHA || "";
+const githubRef = process.env.GITHUB_REF || process.env.GITHUB_REF_NAME || "";
+const traceableCheckout = isTraceableCheckout({
+  upstream,
+  githubActions,
+  githubSha,
+  headSha: fullHead,
+  githubRef
+});
 const aheadBehind = upstream ? git(["rev-list", "--left-right", "--count", `${upstream}...HEAD`]) : "";
 const [behindText = "0", aheadText = "0"] = aheadBehind.split(/\s+/);
 const behind = Number(behindText || 0);
 const ahead = Number(aheadText || 0);
 
 check(
-  "Git branch has upstream",
-  Boolean(upstream),
-  "A release candidate should know which GitHub branch it will be compared with."
+  "Git branch has upstream or CI ref is traceable",
+  traceableCheckout,
+  upstream
+    ? "A release candidate has an upstream branch for local ahead/behind checks."
+    : "GitHub Actions may use detached HEAD, but GITHUB_SHA must match HEAD and GITHUB_REF must be present."
 );
 
 check(
@@ -172,6 +186,8 @@ console.log("");
 console.log(`Current release candidate: ${version} ${branch || "unknown-branch"} ${head || "unknown-commit"}`);
 if (upstream) {
   console.log(`Upstream: ${upstream}, ahead ${ahead}, behind ${behind}`);
+} else if (traceableCheckout) {
+  console.log(`GitHub Actions checkout: detached HEAD is traceable via ${githubRef} and GITHUB_SHA.`);
 }
 console.log(`AliBooks release traceability check: ${checks.length - failures.length}/${checks.length} required checks passed.`);
 

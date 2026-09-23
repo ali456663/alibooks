@@ -58,7 +58,7 @@ Fran projektets rotmapp kan du kora:
 npm run doctor
 ```
 
-Den kontrollerar PostgreSQL pa `5432`, backend `/health`, backend `/system/status`, frontend pa `5157` och Docker Compose-status. Om nagot inte ar igang visar den forslag pa vad du ska starta.
+Den kontrollerar PostgreSQL pa `5432`, offentlig backend `/health`, skyddad backend `/system/status`, frontend pa `5157` och Docker Compose-status. Utan token verifierar den att systemstatus ger `401`; satt `ALIBOOKS_AUTH_TOKEN` eller anvand `--auth-token` for att dessutom lasa databas- och sakerhetsstatus. Om nagot inte ar igang visar den forslag pa vad du ska starta.
 
 I AliBooks:
 

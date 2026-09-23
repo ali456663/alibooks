@@ -8,6 +8,10 @@ const frontendUrl = readArg("--frontend-url") || process.env.ALIBOOKS_FRONTEND_U
 const databaseHost = readArg("--db-host") || process.env.ALIBOOKS_DB_HOST || "127.0.0.1";
 const databasePort = Number(readArg("--db-port") || process.env.ALIBOOKS_DB_PORT || 5432);
 const skipFrontend = args.has("--skip-frontend");
+const configuredAuthToken = readArg("--auth-token") || process.env.ALIBOOKS_AUTH_TOKEN || "";
+const authHeader = configuredAuthToken
+  ? (configuredAuthToken.startsWith("Bearer ") ? configuredAuthToken : `Bearer ${configuredAuthToken}`)
+  : "";
 
 const results = [];
 
@@ -38,11 +42,11 @@ async function portOpen(host, port, timeoutMs = 1500) {
   });
 }
 
-async function fetchText(url, timeoutMs = 4000) {
+async function fetchText(url, timeoutMs = 4000, headers = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { signal: controller.signal, headers });
     const text = await response.text();
     return { ok: response.ok, status: response.status, text };
   } catch (error) {
@@ -95,34 +99,39 @@ async function main() {
     "Starta CloudShopApplication i IntelliJ eller kontrollera att port 3000 ar ledig."
   );
 
-  const systemStatus = await fetchText(`${backendUrl}/system/status`);
+  const systemStatus = await fetchText(
+    `${backendUrl}/system/status`,
+    4000,
+    authHeader ? { Authorization: authHeader } : {}
+  );
   const systemJson = parseJson(systemStatus.text);
+  const statusProtected = systemStatus.status === 401 && !authHeader;
   record(
-    "Backend /system/status",
-    systemStatus.ok && systemJson?.backend?.ok === true,
-    systemStatus.ok ? "backend status endpoint svarar" : (systemStatus.error || `HTTP ${systemStatus.status}`),
+    "Backend /system/status protection",
+    (systemStatus.ok && systemJson?.backend?.ok === true) || statusProtected,
+    statusProtected ? "detaljerad status ar skyddad (401 utan token)" : (systemStatus.ok ? "backend status endpoint svarar" : (systemStatus.error || `HTTP ${systemStatus.status}`)),
     "fail",
-    "Starta om backend efter kod- eller miljoandringar."
+    "Satt ALIBOOKS_AUTH_TOKEN eller anvand --auth-token for detaljerad status."
   );
   record(
     "Backend database connection",
     systemStatus.ok && systemJson?.database?.ok === true,
-    systemStatus.ok ? `database.ok=${String(systemJson?.database?.ok)}` : "systemstatus saknas",
-    "fail",
-    "Kontrollera SPRING_DATASOURCE_URL och att PostgreSQL lyssnar pa 5432."
+    systemStatus.ok ? `database.ok=${String(systemJson?.database?.ok)}` : (statusProtected ? "kraver auth-token for detaljkontroll" : "systemstatus saknas"),
+    statusProtected ? "info" : "fail",
+    statusProtected ? "Satt ALIBOOKS_AUTH_TOKEN eller anvand --auth-token for databasdiagnostik." : "Kontrollera SPRING_DATASOURCE_URL och att PostgreSQL lyssnar pa 5432."
   );
   record(
     "JWT configuration",
     systemStatus.ok && systemJson?.security?.jwtConfigured === true,
-    systemStatus.ok ? `jwtConfigured=${String(systemJson?.security?.jwtConfigured)}, strong=${String(systemJson?.security?.jwtStrong)}` : "systemstatus saknas",
-    "warn",
+    systemStatus.ok ? `jwtConfigured=${String(systemJson?.security?.jwtConfigured)}, strong=${String(systemJson?.security?.jwtStrong)}` : (statusProtected ? "kraver auth-token for konfigurationskontroll" : "systemstatus saknas"),
+    statusProtected ? "info" : "warn",
     "Satt en lang JWT_SECRET i IntelliJ Run Configuration innan skarp anvandning."
   );
   record(
     "Login protection",
     systemStatus.ok && systemJson?.auth?.loginAttemptLockEnabled === true,
-    systemStatus.ok ? `loginAttemptLockEnabled=${String(systemJson?.auth?.loginAttemptLockEnabled)}` : "systemstatus saknas",
-    "warn",
+    systemStatus.ok ? `loginAttemptLockEnabled=${String(systemJson?.auth?.loginAttemptLockEnabled)}` : (statusProtected ? "kraver auth-token for konfigurationskontroll" : "systemstatus saknas"),
+    statusProtected ? "info" : "warn",
     "Kontrollera app.auth.* om inloggningsskyddet ar avstangt."
   );
 
@@ -147,19 +156,24 @@ async function main() {
   );
 
   for (const result of results) {
-    const marker = result.ok ? "OK" : result.severity === "warn" ? "WARN" : "FAIL";
+    const marker = result.ok ? "OK" : result.severity === "info" ? "INFO" : result.severity === "warn" ? "WARN" : "FAIL";
     console.log(`${marker} - ${result.name}: ${result.detail}`);
-    if (!result.ok && result.fix) {
+    if (!result.ok && result.fix && result.severity !== "info") {
       console.log(`      Fix: ${result.fix}`);
     }
   }
 
   const failures = results.filter((result) => !result.ok && result.severity === "fail");
   const warnings = results.filter((result) => !result.ok && result.severity === "warn");
+  const informational = results.filter((result) => !result.ok && result.severity === "info");
+  const passed = results.filter((result) => result.ok);
   console.log("");
-  console.log(`AliBooks local doctor: ${results.length - failures.length - warnings.length}/${results.length} checks passed.`);
+  console.log(`AliBooks local doctor: ${passed.length}/${results.length} checks passed.`);
   if (warnings.length > 0) {
     console.log(`${warnings.length} warning(s) need review.`);
+  }
+  if (informational.length > 0) {
+    console.log(`${informational.length} auth-gated check(s) skipped without ALIBOOKS_AUTH_TOKEN.`);
   }
   if (failures.length > 0 && !soft) {
     console.error(`${failures.length} local startup check(s) failed.`);
