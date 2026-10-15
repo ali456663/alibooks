@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.config.MoneyMigrationVerifier;
+import se.cloudshop.config.ProductionConfigurationGuard;
 import se.cloudshop.email.EmailDeliveryLedger;
 
 @RestController
@@ -37,6 +38,8 @@ public class HealthController {
   private final boolean corsLocalDevEnabled;
   private final int authMaxFailedLoginAttempts;
   private final int authLoginLockMinutes;
+  private final boolean mfaRequired;
+  private final String mfaEncryptionKey;
   private final boolean testDataResetEnabled;
   private final boolean bankReconciliationResetEnabled;
   private final MoneyMigrationVerifier moneyMigrationVerifier;
@@ -65,6 +68,8 @@ public class HealthController {
       @Value("${app.cors.local-dev-enabled:true}") boolean corsLocalDevEnabled,
       @Value("${app.auth.max-failed-login-attempts:5}") int authMaxFailedLoginAttempts,
       @Value("${app.auth.login-lock-minutes:15}") int authLoginLockMinutes,
+      @Value("${app.auth.require-mfa:false}") boolean mfaRequired,
+      @Value("${app.auth.mfa-encryption-key:}") String mfaEncryptionKey,
       @Value("${app.test-data-reset.enabled:false}") boolean testDataResetEnabled,
       @Value("${app.bank-reconciliation-reset.enabled:false}") boolean bankReconciliationResetEnabled,
       MoneyMigrationVerifier moneyMigrationVerifier,
@@ -91,6 +96,8 @@ public class HealthController {
     this.corsLocalDevEnabled = corsLocalDevEnabled;
     this.authMaxFailedLoginAttempts = authMaxFailedLoginAttempts;
     this.authLoginLockMinutes = authLoginLockMinutes;
+    this.mfaRequired = mfaRequired;
+    this.mfaEncryptionKey = mfaEncryptionKey;
     this.testDataResetEnabled = testDataResetEnabled;
     this.bankReconciliationResetEnabled = bankReconciliationResetEnabled;
     this.moneyMigrationVerifier = moneyMigrationVerifier;
@@ -129,7 +136,7 @@ public class HealthController {
         jdbcTemplate, mailHost, mailUsername, stripeSecretKey, stripeWebhookSecret, geminiApiKey, hfToken,
         openAiCompatibleApiKey, openAiCompatibleModel, openAiCompatibleBaseUrl, openAiCompatibleProviderName,
         frontendUrl, jwtSecret, jwtExpirationMinutes, reminderCron, timeZone, corsAllowedOrigins,
-        corsLocalDevEnabled, authMaxFailedLoginAttempts, authLoginLockMinutes, testDataResetEnabled,
+        corsLocalDevEnabled, authMaxFailedLoginAttempts, authLoginLockMinutes, false, "", testDataResetEnabled,
         bankReconciliationResetEnabled, moneyMigrationVerifier, authHeader, null
     );
   }
@@ -157,7 +164,9 @@ public class HealthController {
         "hostConfigured", hasText(mailHost),
         "usernameConfigured", hasText(mailUsername),
         "deliveryLedgerEnabled", emailDeliveryLedger != null,
-        "uncertainDeliveryCount", emailDeliveryLedger == null ? 0L : emailDeliveryLedger.countUncertain()
+        "uncertainDeliveryCount", emailDeliveryLedger == null ? 0L : emailDeliveryLedger.countUncertain(),
+        "pendingDeliveryCount", emailDeliveryLedger == null ? 0L : emailDeliveryLedger.countPending(),
+        "unresolvedDeliveryCount", emailDeliveryLedger == null ? 0L : emailDeliveryLedger.countUnresolved()
     ));
     status.put("stripe", Map.of(
         "configured", hasText(stripeSecretKey),
@@ -202,7 +211,10 @@ public class HealthController {
     status.put("auth", Map.of(
         "loginAttemptLockEnabled", authMaxFailedLoginAttempts > 0 && authLoginLockMinutes > 0,
         "maxFailedLoginAttempts", authMaxFailedLoginAttempts,
-        "loginLockMinutes", authLoginLockMinutes
+        "loginLockMinutes", authLoginLockMinutes,
+        "mfaRequired", mfaRequired,
+        "mfaKeyStrong", ProductionConfigurationGuard.isStrongAesKey(mfaEncryptionKey),
+        "ownerMfaEnabled", ownerMfaEnabled()
     ));
     status.put("automation", Map.of(
         "invoiceRemindersConfigured", hasText(reminderCron),
@@ -221,6 +233,18 @@ public class HealthController {
     try {
       Integer result = jdbcTemplate.queryForObject("select 1", Integer.class);
       return result != null && result == 1;
+    } catch (Exception exception) {
+      return false;
+    }
+  }
+
+  private boolean ownerMfaEnabled() {
+    try {
+      Boolean ready = jdbcTemplate.queryForObject(
+          "SELECT count(*) = 1 AND coalesce(bool_and(mfa_enabled AND mfa_secret_enc IS NOT NULL "
+              + "AND mfa_recovery_hashes IS NOT NULL AND btrim(mfa_recovery_hashes) <> ''), false) FROM app_users",
+          Boolean.class);
+      return Boolean.TRUE.equals(ready);
     } catch (Exception exception) {
       return false;
     }

@@ -74,11 +74,14 @@ Backend needs:
 
 ```text
 SERVER_PORT=3000
-SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop
-SPRING_DATASOURCE_USERNAME=cloudshop
+RDS_CA_CERT_HOST_PATH=/opt/alibooks/certs/global-bundle.pem
+SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem
+SPRING_DATASOURCE_USERNAME=alibooks_app
 SPRING_DATASOURCE_PASSWORD=<production-password>
 JWT_SECRET=<strong-secret>
 ```
+
+Install the current [AWS RDS global CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) on EC2 at `RDS_CA_CERT_HOST_PATH` before Compose starts. It is mounted read-only into the backend so pgJDBC `verify-full` can authenticate the certificate chain and endpoint hostname; `sslmode=require` does not verify the server certificate.
 
 Frontend needs:
 
@@ -109,30 +112,30 @@ frontend/nginx.conf
 docs/dockerhub-release.md
 ```
 
-On EC2:
+On EC2, after DNS and a valid HTTPS certificate are configured:
 
 ```bash
 cp .env.production.example .env
 nano .env
-FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/ec2-deploy.sh
+FRONTEND_URL=https://<your-domain> BACKEND_URL=https://<your-domain>/api sh ./scripts/ec2-deploy.sh
 ```
+
+Set `ALIBOOKS_AUTH_TOKEN` in the shell without putting its value in command
+history before this deploy. The script requires authenticated database smoke
+proof; the explicit first-owner bootstrap exception is not go-live approval.
+See [Dockerhub release](dockerhub-release.md).
 
 The production compose file does not include a local `db` service because the database is AWS RDS.
-The production frontend runs through Nginx on port `80`.
+The production frontend redirects port `80` to Nginx HTTPS on port `443`; it must have a valid domain certificate and key mounted read-only.
 The backend runs on port `3000` inside Docker and is reached publicly through `/api`.
 
-For a first demo without a domain, these values can use the EC2 public IP:
-
-```text
-VITE_API_URL=/api
-APP_FRONTEND_URL=http://<ec2-public-ip>
-```
-
-Later, when you add HTTPS/domain, change them to:
+Do not use an EC2 HTTP URL or send real bookkeeping data before DNS and TLS are configured. Production uses:
 
 ```text
 VITE_API_URL=/api
 APP_FRONTEND_URL=https://your-domain.com
+TLS_CERT_HOST_PATH=/etc/letsencrypt/live/your-domain.com/fullchain.pem
+TLS_KEY_HOST_PATH=/etc/letsencrypt/live/your-domain.com/privkey.pem
 ```
 
 ## HTTPS
@@ -170,13 +173,13 @@ HTTPS encrypts login data, JWT tokens and order information.
 Smoke test from EC2/Linux:
 
 ```bash
-FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/prod-smoke-test.sh
+FRONTEND_URL=https://<your-domain> BACKEND_URL=https://<your-domain>/api sh ./scripts/prod-smoke-test.sh
 ```
 
 Smoke test from Windows PowerShell:
 
 ```powershell
-.\scripts\prod-smoke-test.ps1 -FrontendUrl http://<ec2-public-ip> -BackendUrl http://<ec2-public-ip>/api
+ .\scripts\prod-smoke-test.ps1 -FrontendUrl https://<your-domain> -BackendUrl https://<your-domain>/api
 ```
 
 ## What To Show In The Presentation

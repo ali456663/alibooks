@@ -39,6 +39,19 @@ class InvoiceIssueValidatorTest {
         });
   }
 
+  @Test
+  void refusesIssuanceOfZeroTotalInvoice() {
+    Order invoice = invoiceWithCompleteSnapshot();
+    when(invoice.getVatAmountMinor()).thenReturn(0L);
+    when(invoice.getTotalAmountMinor()).thenReturn(0L);
+
+    assertThatThrownBy(() -> InvoiceIssueValidator.requireIssuable(invoice))
+        .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+          org.assertj.core.api.Assertions.assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+          org.assertj.core.api.Assertions.assertThat(exception.getReason()).contains("greater than zero");
+        });
+  }
+
   private Order invoiceWithCompleteSnapshot() {
     Order invoice = mock(Order.class);
     when(invoice.getDocumentSnapshot()).thenReturn(new InvoiceDocumentSnapshot(

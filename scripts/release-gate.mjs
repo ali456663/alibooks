@@ -91,13 +91,13 @@ function run(command, commandArgs, cwd, label) {
   }
 }
 
-function runNpmScript(script, label) {
+function runNpmScript(script, label, cwd = frontendDir) {
   if (npmExecPath) {
-    run(process.execPath, [npmExecPath, "run", script], frontendDir, label);
+    run(process.execPath, [npmExecPath, "run", script], cwd, label);
     return;
   }
 
-  run(npmCommand, ["run", script], frontendDir, label);
+  run(npmCommand, ["run", script], cwd, label);
 }
 
 for (const [script, label] of frontendSteps) {
@@ -106,6 +106,7 @@ for (const [script, label] of frontendSteps) {
 
 if (withBackend) {
   runNpmScript("test:integration", "Run backend unit and PostgreSQL integration tests");
+  runNpmScript("test:backup", "Verify isolated PostgreSQL backup and restore", repoRoot);
 } else {
   console.log("");
   console.log("Skipping backend tests. Add --with-backend before push or release if you want the full local gate.");

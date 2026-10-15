@@ -1,5 +1,10 @@
 package se.cloudshop.accounting;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
@@ -9,6 +14,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,7 +26,10 @@ import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.export.CsvEscaper;
 
 @RestController
+@Transactional(isolation = Isolation.REPEATABLE_READ)
 public class AccountingExportController {
+
+  private static final Charset SIE_CHARSET = Charset.forName("IBM437");
 
   private final AuthHeader authHeader;
   private final AccountingService accountingService;
@@ -537,7 +547,7 @@ public class AccountingExportController {
   ) {
     authHeader.requireValidToken(authorizationHeader);
 
-    String sie = accountingService.createSieExport(from, to);
+    byte[] sie = encodeSie(accountingService.createSieExport(from, to));
     SieExportReceipt receipt = accountingService.createSieExportReceipt(from, to);
     auditService.record(
         "export",
@@ -551,8 +561,26 @@ public class AccountingExportController {
     );
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=alibooks-sie.se")
-        .contentType(new MediaType("text", "plain", StandardCharsets.UTF_8))
-        .body(sie.getBytes(StandardCharsets.UTF_8));
+        .contentType(new MediaType("text", "plain", SIE_CHARSET))
+        .body(sie);
+  }
+
+  private byte[] encodeSie(String sie) {
+    try {
+      ByteBuffer encoded = SIE_CHARSET.newEncoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT)
+          .encode(CharBuffer.wrap(sie));
+      byte[] bytes = new byte[encoded.remaining()];
+      encoded.get(bytes);
+      return bytes;
+    } catch (CharacterCodingException exception) {
+      throw new ResponseStatusException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export contains characters that cannot be represented in PC8.",
+          exception
+      );
+    }
   }
 
   @GetMapping("/sie/receipt/export")

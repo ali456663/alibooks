@@ -2,6 +2,7 @@ package se.cloudshop.accounting;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class AccountSeeder implements CommandLineRunner {
@@ -13,6 +14,7 @@ public class AccountSeeder implements CommandLineRunner {
   }
 
   @Override
+  @Transactional
   public void run(String... args) {
     upsert("1930", "Foretagskonto", "BOTH");
     upsert("1630", "Skattekonto", "BOTH");
@@ -60,9 +62,8 @@ public class AccountSeeder implements CommandLineRunner {
   }
 
   private void upsert(String number, String name, String companyType) {
-    Account account = accountRepository.findByNumber(number)
-        .orElseGet(() -> new Account(number, name, companyType));
-    account.update(name, companyType);
-    accountRepository.save(account);
+    if (accountRepository.findByNumber(number).isEmpty()) {
+      accountRepository.save(new Account(number, name, companyType));
+    }
   }
 }

@@ -5,6 +5,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 @Entity
@@ -22,7 +25,7 @@ public class Product {
   @Column(name = "price_minor")
   private Long priceMinor;
   @Column(name = "discount_price_minor")
-  private Long discountPriceMinor;
+  private Long discountPriceMinor = 0L;
   @Column(name = "currency_code", nullable = false, length = 3)
   private String currencyCode = "SEK";
   @Column(nullable = false, columnDefinition = "integer default 25")
@@ -116,6 +119,17 @@ public class Product {
 
   public void setActive(boolean active) {
     this.active = active;
+  }
+
+  @PostLoad
+  @PrePersist
+  @PreUpdate
+  void validateMoneyShadow() {
+    if (!"SEK".equals(currencyCode)
+        || priceMinor == null || priceMinor != toMinorUnits(price, "price")
+        || discountPriceMinor == null || discountPriceMinor != toMinorUnits(discountPrice, "discountPrice")) {
+      throw new ProductMoneyIntegrityException();
+    }
   }
 
   private static long toMinorUnits(int amount, String field) {

@@ -245,7 +245,8 @@ const gitignore = read(".gitignore");
 const secretCheck = read("scripts/secret-placeholder-check.mjs");
 check(
   "Secret scan skips local caches and backups",
-  includesAll(gitignore, [".m2-cache/", "backups/"]) && includesAll(secretCheck, ['".m2-cache"', '"backups"']),
+  includesAll(gitignore, [".m2-cache/", "backups/"])
+    && includesAll(secretCheck, ['"ls-files"', '"--cached"', '"--others"', '"--exclude-standard"']),
   "Secret scan and gitignore should agree that local Maven cache and database backups are not release artifacts."
 );
 check(

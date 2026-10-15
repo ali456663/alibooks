@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -32,14 +31,12 @@ public class EmailDeliveryAttempt {
   @Column(nullable = false, length = 512)
   private String subject;
 
-  @Lob
   @Column(nullable = false, columnDefinition = "text")
   private String body;
 
   @Column(name = "attachment_name", length = 255)
   private String attachmentName;
 
-  @Lob
   @Column(name = "attachment_content", columnDefinition = "bytea")
   private byte[] attachmentContent;
 
@@ -100,6 +97,25 @@ public class EmailDeliveryAttempt {
     this.status = "UNCERTAIN";
     this.updatedAt = Instant.now();
     this.lastError = shorten(exception == null ? "Unknown email delivery failure." : exception.getMessage());
+  }
+
+  public void confirmDelivered() {
+    requireUnresolved();
+    this.status = "SENT";
+    this.sentAt = Instant.now();
+    this.updatedAt = this.sentAt;
+  }
+
+  public void confirmNotDelivered() {
+    requireUnresolved();
+    this.status = "NOT_DELIVERED";
+    this.updatedAt = Instant.now();
+  }
+
+  private void requireUnresolved() {
+    if (!"PENDING".equals(status) && !"UNCERTAIN".equals(status)) {
+      throw new IllegalStateException("Only an unresolved email attempt can be reconciled.");
+    }
   }
 
   public Long getId() { return id; }

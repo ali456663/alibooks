@@ -39,6 +39,27 @@ import se.cloudshop.supplier.SupplierInvoice;
 
 class AccountingServiceTest {
 
+  @Test
+  void invoiceWithoutJournalEntriesNeedsNoLedgerDeletion() {
+    Order invoice = mock(Order.class);
+    when(journalEntryRepository.findByInvoice(invoice)).thenReturn(List.of());
+
+    accountingService.deleteEntriesForInvoice(invoice);
+
+    verify(journalEntryRepository, never()).deleteByInvoice(invoice);
+  }
+
+  @Test
+  void invoiceWithPostedJournalEntriesCannotDeleteItsLedger() {
+    Order invoice = mock(Order.class);
+    when(journalEntryRepository.findByInvoice(invoice)).thenReturn(List.of(mock(JournalEntry.class)));
+
+    assertThatThrownBy(() -> accountingService.deleteEntriesForInvoice(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("cannot be deleted");
+    verify(journalEntryRepository, never()).deleteByInvoice(invoice);
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"balance", "trial", "ledger", "sign", "integrity", "voucher", "sie"})
   void stopsReportsWhenAccumulatedAmountsExceedSupportedRange(String report) {
@@ -374,6 +395,18 @@ class AccountingServiceTest {
   }
 
   @Test
+  void zeroTotalInvoiceCannotCreateVoucher() {
+    Order invoice = testInvoice(4);
+    invoice.setAmounts(0, 0, 0);
+
+    assertThatThrownBy(() -> accountingService.createInvoiceEntries(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("positive and balanced");
+    verify(voucherNumberService, never()).nextVoucherNumber("F");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
   void invoiceBookingStopsWhenInvoiceMinorShadowContainsOre() {
     Order invoice = testInvoice(1000);
     ReflectionTestUtils.setField(invoice, "totalAmountMinor", 125_050L);
@@ -593,6 +626,22 @@ class AccountingServiceTest {
   }
 
   @Test
+  void cashMethodSmallPartialPaymentSkipsZeroVatLine() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    when(voucherNumberService.nextVoucherNumber("B")).thenReturn("B-1");
+    Order invoice = testInvoice(1000);
+    invoice.setStatus("SENT");
+
+    accountingService.createPaymentEntries(invoice, invoice.getInvoiceDate(), 1);
+
+    List<JournalEntry> entries = savedJournalEntries();
+    assertThat(entries).hasSize(2);
+    assertThat(entries).extracting(JournalEntry::getAccountNumber).containsExactly("1930", "3041");
+    assertThat(entries.stream().mapToInt(JournalEntry::getDebit).sum()).isEqualTo(1);
+    assertThat(entries.stream().mapToInt(JournalEntry::getCredit).sum()).isEqualTo(1);
+  }
+
+  @Test
   void cashMethodFinalPartialPaymentBooksRemainingVatRoundingDifference() {
     when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
     when(voucherNumberService.nextVoucherNumber("B")).thenReturn("B-2");
@@ -684,6 +733,23 @@ class AccountingServiceTest {
       assertThat(entry.getVoucherNumber()).isEqualTo("AR-1");
       assertThat(entry.getVoucherDate()).isEqualTo(invoice.getInvoiceDate());
     });
+  }
+
+  @Test
+  void cashMethodSmallPartialRefundSkipsZeroVatLine() {
+    when(settingsService.getSettings()).thenReturn(settingsWithAccountingMethod("CASH_METHOD"));
+    when(voucherNumberService.nextVoucherNumber("AR")).thenReturn("AR-1");
+    Order invoice = testInvoice(1000);
+    invoice.registerPayment(invoice.getInvoiceDate(), 1250, "Bank");
+    invoice.setStatus("CREDITED");
+
+    accountingService.createRefundEntries(invoice, invoice.getInvoiceDate(), 1);
+
+    List<JournalEntry> entries = savedJournalEntries();
+    assertThat(entries).hasSize(2);
+    assertThat(entries).extracting(JournalEntry::getAccountNumber).containsExactly("3041", "1930");
+    assertThat(entries.stream().mapToInt(JournalEntry::getDebit).sum()).isEqualTo(1);
+    assertThat(entries.stream().mapToInt(JournalEntry::getCredit).sum()).isEqualTo(1);
   }
 
   @Test
@@ -1400,6 +1466,53 @@ class AccountingServiceTest {
   }
 
   @Test
+  void balanceReportBeforeAnnualResultVoucherKeepsCurrentProfitInEquity() {
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Sales");
+    Account yearEnd = new Account("8999", "Annual result");
+    Account resultAccount = new Account("2019", "Annual result");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "B-1", 1000, 0, "Payment", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 1000, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, yearEnd, "BR-1", 1000, 0, "Annual result 2026", LocalDate.of(2026, 12, 31)),
+        new JournalEntry(null, resultAccount, "BR-1", 0, 1000, "Annual result 2026", LocalDate.of(2026, 12, 31))
+    ));
+
+    BalanceReport before = accountingService.createBalanceReport(LocalDate.of(2026, 7, 31));
+    BalanceReport after = accountingService.createBalanceReport(LocalDate.of(2026, 12, 31));
+
+    assertThat(before.totalAssets()).isEqualTo(1000);
+    assertThat(before.totalLiabilitiesAndEquity()).isEqualTo(1000);
+    assertThat(before.difference()).isZero();
+    assertThat(before.liabilitiesAndEquity()).anySatisfy(line -> {
+      assertThat(line.accountNumber()).isEqualTo("2019");
+      assertThat(line.amount()).isEqualTo(1000);
+    });
+    assertThat(after.totalAssets()).isEqualTo(1000);
+    assertThat(after.totalLiabilitiesAndEquity()).isEqualTo(1000);
+    assertThat(after.difference()).isZero();
+  }
+
+  @Test
+  void manualVoucherWithAnnualResultDescriptionDoesNotSuppressProfit() {
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Sales");
+    Account resultAccount = new Account("2019", "Annual result");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "B-1", 1000, 0, "Payment", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 1000, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, bank, "M-1", 200, 0, "Annual result 2026", LocalDate.of(2026, 7, 11)),
+        new JournalEntry(null, resultAccount, "M-1", 0, 200, "Annual result 2026", LocalDate.of(2026, 7, 11))
+    ));
+
+    BalanceReport report = accountingService.createBalanceReport(LocalDate.of(2026, 7, 31));
+
+    assertThat(report.totalAssets()).isEqualTo(1200);
+    assertThat(report.totalLiabilitiesAndEquity()).isEqualTo(1200);
+    assertThat(report.difference()).isZero();
+  }
+
+  @Test
   void createsGeneralLedgerForSelectedAccountAndPeriod() {
     Account bank = new Account("1930", "Foretagskonto");
     Account sales = new Account("3041", "Forsaljning tjanster 25 procent");
@@ -1461,13 +1574,13 @@ class AccountingServiceTest {
         .isInstanceOfSatisfying(ResponseStatusException.class,
             exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
     assertThatThrownBy(() -> accountingService.createSieExport(
-        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
         .isInstanceOfSatisfying(ResponseStatusException.class,
             exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
   }
 
   @Test
-  void createsSieExportForSelectedPeriod() {
+  void createsSieExportForCompleteFiscalYear() {
     Account bank = new Account("1930", "Foretagskonto");
     Account sales = new Account("3041", "Forsaljning tjanster 25 procent");
     Account vat = new Account("2611", "Utgaende moms");
@@ -1476,26 +1589,136 @@ class AccountingServiceTest {
         new JournalEntry(null, bank, "F-1", 1250, 0, "Invoice", LocalDate.of(2026, 7, 10)),
         new JournalEntry(null, sales, "F-1", 0, 1000, "Invoice", LocalDate.of(2026, 7, 10)),
         new JournalEntry(null, vat, "F-1", 0, 250, "Invoice", LocalDate.of(2026, 7, 10)),
-        new JournalEntry(null, bank, "F-FUTURE", 999, 0, "Future", LocalDate.of(2026, 8, 1))
+        new JournalEntry(null, bank, "F-FUTURE", 999, 0, "Future", LocalDate.of(2027, 8, 1))
     ));
 
     String sie = accountingService.createSieExport(
-        LocalDate.of(2026, 7, 1),
-        LocalDate.of(2026, 7, 31)
+        LocalDate.of(2026, 1, 1),
+        LocalDate.of(2026, 12, 31)
     );
 
     assertThat(sie).contains("#SIETYP 4");
     assertThat(sie).contains("#FNAMN \"Muscle&Focus\"");
-    assertThat(sie).contains("#RAR 0 20260701 20260731");
+    assertThat(sie).contains("#RAR 0 20260101 20261231");
     assertThat(sie).contains("#KONTO 1930 \"Foretagskonto\"");
-    assertThat(sie).contains("#VER \"A\" \"F-1\" 20260710 \"Invoice\"");
+    assertThat(sie).contains("#UB 0 1930 1250.00");
+    assertThat(sie).contains("#UB 0 2611 -250.00");
+    assertThat(sie).contains("#RES 0 3041 -1000.00");
+    assertThat(sie).doesNotContain("#IB 0 ");
+    assertThat(sie).contains("#VER \"F\" 1 20260710 \"Invoice\"");
     assertThat(sie).contains("#TRANS 1930 {} 1250.00 \"Invoice\"");
     assertThat(sie).contains("#TRANS 3041 {} -1000.00 \"Invoice\"");
     assertThat(sie).doesNotContain("F-FUTURE");
   }
 
   @Test
-  void createsSieExportReceiptForSelectedPeriod() {
+  void sieExportCarriesPriorYearBalancesAndDeclaresTheirAccounts() {
+    Account bank = new Account("1930", "Bank");
+    Account equity = new Account("2018", "Equity");
+    Account sales = new Account("3041", "Sales");
+    when(accountRepository.findAll()).thenReturn(List.of(sales));
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "IB-1", 1000, 0, "Opening", LocalDate.of(2025, 1, 1)),
+        new JournalEntry(null, equity, "IB-1", 0, 1000, "Opening", LocalDate.of(2025, 1, 1)),
+        new JournalEntry(null, bank, "F-1", 125, 0, "Invoice", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 125, "Invoice", LocalDate.of(2026, 7, 10))
+    ));
+
+    String sie = accountingService.createSieExport(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(sie).contains("#RAR -1 20250101 20251231");
+    assertThat(sie).contains("#KONTO 2018 \"Equity\"");
+    assertThat(sie).contains("#IB 0 1930 1000.00", "#IB 0 2018 -1000.00");
+    assertThat(sie).contains("#UB -1 1930 1000.00", "#UB -1 2018 -1000.00");
+    assertThat(sie).contains("#UB 0 1930 1125.00", "#UB 0 2018 -1000.00");
+    assertThat(sie).contains("#RES 0 3041 -125.00");
+    assertThat(sie).doesNotContain("#RES -1 ", "#IB -1 ");
+  }
+
+  @Test
+  void sieExportIncludesPriorYearResultAndEarlierOpeningBalance() {
+    Account bank = new Account("1930", "Bank");
+    Account equity = new Account("2018", "Equity");
+    Account sales = new Account("3041", "Sales");
+    Account cost = new Account("5410", "Cost");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "IB-1", 1000, 0, "Opening", LocalDate.of(2024, 1, 1)),
+        new JournalEntry(null, equity, "IB-1", 0, 1000, "Opening", LocalDate.of(2024, 1, 1)),
+        new JournalEntry(null, bank, "F-1", 100, 0, "Sale", LocalDate.of(2025, 8, 1)),
+        new JournalEntry(null, sales, "F-1", 0, 100, "Sale", LocalDate.of(2025, 8, 1)),
+        new JournalEntry(null, cost, "K-1", 100, 0, "Cost", LocalDate.of(2025, 8, 2)),
+        new JournalEntry(null, bank, "K-1", 0, 100, "Cost", LocalDate.of(2025, 8, 2)),
+        new JournalEntry(null, bank, "F-2", 1, 0, "Sale", LocalDate.of(2026, 8, 1)),
+        new JournalEntry(null, sales, "F-2", 0, 1, "Sale", LocalDate.of(2026, 8, 1))
+    ));
+
+    String sie = accountingService.createSieExport(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(sie).contains("#IB -1 1930 1000.00", "#IB -1 2018 -1000.00");
+    assertThat(sie).contains("#RES -1 3041 -100.00", "#RES -1 5410 100.00");
+    assertThat(sie).contains("#UB 0 1930 1001.00", "#RES 0 3041 -1.00");
+  }
+
+  @Test
+  void sieExportOrdersVoucherNumbersNumericallyWithinSeries() {
+    Account bank = new Account("1930", "Foretagskonto");
+    Account sales = new Account("3041", "Forsaljning");
+    List<JournalEntry> entries = new ArrayList<>();
+    for (int number = 1; number <= 10; number++) {
+      LocalDate date = LocalDate.of(2026, 7, 11 - number);
+      entries.add(new JournalEntry(null, bank, "F-" + number, 100, 0, "Invoice", date));
+      entries.add(new JournalEntry(null, sales, "F-" + number, 0, 100, "Invoice", date));
+    }
+    when(journalEntryRepository.findAll()).thenReturn(entries);
+    when(accountRepository.findAll()).thenReturn(List.of(bank, sales));
+
+    String sie = accountingService.createSieExport(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(sie.indexOf("#VER \"F\" 1 ")).isLessThan(sie.indexOf("#VER \"F\" 2 "));
+    assertThat(sie.indexOf("#VER \"F\" 2 ")).isLessThan(sie.indexOf("#VER \"F\" 10 "));
+  }
+
+  @Test
+  void sieExportUsesConfiguredFiscalYearRatherThanFirstAndLastVoucherDates() {
+    AppSettings settings = AppSettings.defaults();
+    settings.setFiscalYearStartMonth(7);
+    settings.setFiscalYearEndMonth(6);
+    when(settingsService.getSettings()).thenReturn(settings);
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Sales");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "F-1", 100, 0, "Invoice", LocalDate.of(2026, 9, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 100, "Invoice", LocalDate.of(2026, 9, 10))
+    ));
+
+    String sie = accountingService.createSieExport(null, null);
+
+    assertThat(sie).contains("#RAR 0 20260701 20270630");
+    SieExportReceipt receipt = accountingService.createSieExportReceipt(null, null);
+    assertThat(receipt.periodFrom()).isEqualTo(LocalDate.of(2026, 7, 1));
+    assertThat(receipt.periodTo()).isEqualTo(LocalDate.of(2027, 6, 30));
+  }
+
+  @Test
+  void sieExportRejectsPartialAndAmbiguousMultiYearSelections() {
+    Account bank = new Account("1930", "Bank");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "F-1", 100, 0, "Invoice", LocalDate.of(2025, 7, 10)),
+        new JournalEntry(null, bank, "F-2", 100, 0, "Invoice", LocalDate.of(2026, 7, 10))
+    ));
+
+    assertThatThrownBy(() -> accountingService.createSieExport(null, null))
+        .hasMessageContaining("multiple fiscal years");
+    assertThatThrownBy(() -> accountingService.createSieExport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        .hasMessageContaining("complete fiscal year");
+    assertThatThrownBy(() -> accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+        .hasMessageContaining("complete fiscal year");
+  }
+
+  @Test
+  void createsSieExportReceiptForCompleteFiscalYear() {
     Account bank = new Account("1930", "Foretagskonto");
     Account sales = new Account("3041", "Forsaljning tjanster 25 procent");
     Account vat = new Account("2611", "Utgaende moms");
@@ -1503,17 +1726,17 @@ class AccountingServiceTest {
         new JournalEntry(null, bank, "F-1", 1250, 0, "Invoice", LocalDate.of(2026, 7, 10)),
         new JournalEntry(null, sales, "F-1", 0, 1000, "Invoice", LocalDate.of(2026, 7, 10)),
         new JournalEntry(null, vat, "F-1", 0, 250, "Invoice", LocalDate.of(2026, 7, 10)),
-        new JournalEntry(null, bank, "F-FUTURE", 999, 0, "Future", LocalDate.of(2026, 8, 1))
+        new JournalEntry(null, bank, "F-FUTURE", 999, 0, "Future", LocalDate.of(2027, 8, 1))
     ));
 
     SieExportReceipt receipt = accountingService.createSieExportReceipt(
-        LocalDate.of(2026, 7, 1),
-        LocalDate.of(2026, 7, 31)
+        LocalDate.of(2026, 1, 1),
+        LocalDate.of(2026, 12, 31)
     );
 
     assertThat(receipt.exportReady()).isTrue();
-    assertThat(receipt.periodFrom()).isEqualTo(LocalDate.of(2026, 7, 1));
-    assertThat(receipt.periodTo()).isEqualTo(LocalDate.of(2026, 7, 31));
+    assertThat(receipt.periodFrom()).isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(receipt.periodTo()).isEqualTo(LocalDate.of(2026, 12, 31));
     assertThat(receipt.voucherCount()).isEqualTo(1);
     assertThat(receipt.entryCount()).isEqualTo(3);
     assertThat(receipt.accountCount()).isEqualTo(3);
@@ -1526,6 +1749,120 @@ class AccountingServiceTest {
   }
 
   @Test
+  void sieReceiptDoesNotClaimReadyForVoucherNumberRejectedByExport() {
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Sales");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "LEGACY", 100, 0, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "LEGACY", 0, 100, "Sale", LocalDate.of(2026, 7, 10))
+    ));
+
+    SieExportReceipt receipt = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(receipt.exportReady()).isFalse();
+    assertThat(receipt.message()).contains("numeric sequence number");
+    assertThatThrownBy(() -> accountingService.createSieExport(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+        .hasMessageContaining("numeric sequence number");
+  }
+
+  @Test
+  void sieReceiptDoesNotClaimReadyForAccountRejectedByExport() {
+    Account invalid = new Account("0099", "Invalid account");
+    Account sales = new Account("3041", "Sales");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, invalid, "F-1", 100, 0, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 100, "Sale", LocalDate.of(2026, 7, 10))
+    ));
+
+    SieExportReceipt receipt = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(receipt.exportReady()).isFalse();
+    assertThat(receipt.message()).contains("numeric balance or result account");
+    assertThatThrownBy(() -> accountingService.createSieExport(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+        .hasMessageContaining("numeric balance or result account");
+  }
+
+  @Test
+  void sieExportAndReceiptRejectUnbalancedPriorYearOpening() {
+    Account bank = new Account("1930", "Bank");
+    Account sales = new Account("3041", "Sales");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "IB-1", 100, 0, "Opening", LocalDate.of(2025, 1, 1)),
+        new JournalEntry(null, bank, "F-1", 125, 0, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 125, "Sale", LocalDate.of(2026, 7, 10))
+    ));
+
+    SieExportReceipt receipt = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(receipt.exportReady()).isFalse();
+    assertThat(receipt.criticalIssueCount()).isPositive();
+    assertThat(receipt.message()).contains("prior-year vouchers");
+    assertThatThrownBy(() -> accountingService.createSieExport(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+        .hasMessageContaining("prior-year vouchers");
+  }
+
+  @Test
+  void sieReceiptHashChangesWhenPriorYearOpeningChanges() {
+    Account bank = new Account("1930", "Bank");
+    Account equity = new Account("2018", "Equity");
+    Account sales = new Account("3041", "Sales");
+    List<JournalEntry> current = List.of(
+        new JournalEntry(null, bank, "F-1", 125, 0, "Sale", LocalDate.of(2026, 7, 10)),
+        new JournalEntry(null, sales, "F-1", 0, 125, "Sale", LocalDate.of(2026, 7, 10))
+    );
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "IB-1", 100, 0, "Opening", LocalDate.of(2025, 1, 1)),
+        new JournalEntry(null, equity, "IB-1", 0, 100, "Opening", LocalDate.of(2025, 1, 1)),
+        current.get(0), current.get(1)
+    ));
+    SieExportReceipt first = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, bank, "IB-1", 200, 0, "Opening", LocalDate.of(2025, 1, 1)),
+        new JournalEntry(null, equity, "IB-1", 0, 200, "Opening", LocalDate.of(2025, 1, 1)),
+        current.get(0), current.get(1)
+    ));
+    SieExportReceipt second = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(first.periodFingerprint()).isEqualTo(second.periodFingerprint());
+    assertThat(first.exportControlHash()).isNotEqualTo(second.exportControlHash());
+  }
+
+  @Test
+  void sieReceiptDoesNotClaimReadyWhenReceiptHashIsMissing() {
+    Account cost = new Account("5420", "Cost");
+    Account bank = new Account("1930", "Bank");
+    Expense expense = new Expense(LocalDate.of(2026, 7, 11), "Train", 100, 0, "5420", "1930");
+    expense.setReceipt("train.pdf", "application/pdf", "uploads/receipts/train.pdf");
+    when(journalEntryRepository.findAll()).thenReturn(List.of(
+        new JournalEntry(null, expense, cost, "K-1", 100, 0, "Train", LocalDate.of(2026, 7, 11)),
+        new JournalEntry(null, expense, bank, "K-1", 0, 100, "Train", LocalDate.of(2026, 7, 11))
+    ));
+
+    SieExportReceipt receipt = accountingService.createSieExportReceipt(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+
+    assertThat(receipt.difference()).isZero();
+    assertThat(receipt.criticalIssueCount()).isZero();
+    assertThat(receipt.missingEvidenceCount()).isEqualTo(2);
+    assertThat(receipt.exportReady()).isFalse();
+    assertThat(receipt.message()).contains("source evidence is incomplete");
+    assertThat(accountingService.createSieExport(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+        .contains("#VER \"K\" 1 ");
+    AccountantPackageReport packageReport = accountingService.createAccountantPackageReport(
+        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+    assertThat(packageReport.sieExportReady()).isFalse();
+  }
+
+  @Test
   void stopsSieExportWhenCriticalVoucherIssuesRemain() {
     Account bank = new Account("1930", "Foretagskonto");
     when(journalEntryRepository.findAll()).thenReturn(List.of(
@@ -1533,8 +1870,8 @@ class AccountingServiceTest {
     ));
 
     assertThatThrownBy(() -> accountingService.createSieExport(
-        LocalDate.of(2026, 7, 1),
-        LocalDate.of(2026, 7, 31)
+        LocalDate.of(2026, 1, 1),
+        LocalDate.of(2026, 12, 31)
     )).hasMessageContaining("critical voucher control issues");
   }
 
@@ -1648,10 +1985,11 @@ class AccountingServiceTest {
     assertThat(report.gapCount()).isEqualTo(1);
     assertThat(report.dateOrderIssueCount()).isZero();
     assertThat(report.invalidVoucherNumberCount()).isEqualTo(1);
-    assertThat(report.criticalIssueCount()).isEqualTo(2);
+    assertThat(report.criticalIssueCount()).isEqualTo(3);
     assertThat(report.warningIssueCount()).isEqualTo(3);
     assertThat(report.issues()).extracting(VoucherControlIssue::issueType)
-        .contains("unbalanced_voucher", "voucher_gap", "invalid_voucher_number", "evidence_needs_review");
+        .contains("unbalanced_voucher", "voucher_gap", "invalid_voucher_number", "evidence_needs_review",
+            "evidence_missing_voucher_evidence");
   }
 
   @Test
@@ -1888,6 +2226,57 @@ class AccountingServiceTest {
     )).isInstanceOfSatisfying(ResponseStatusException.class,
         exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
 
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void correctionRejectsDateBeforeOriginalVoucher() {
+    LocalDate originalDate = LocalDate.of(2026, 7, 2);
+    when(journalEntryRepository.findByVoucherNumberForCorrection("M-1")).thenReturn(List.of(
+        new JournalEntry(null, new Account("1930", "Bank"), "M-1", 100, 0, "Test", originalDate),
+        new JournalEntry(null, new Account("2018", "Equity"), "M-1", 0, 100, "Test", originalDate)
+    ));
+
+    assertThatThrownBy(() -> accountingService.createCorrectionEntry(
+        "M-1", new CreateCorrectionJournalEntryRequest(originalDate.minusDays(1))))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(400))
+        .hasMessageContaining("before original voucher date");
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void correctionRejectsUnbalancedOriginalVoucher() {
+    LocalDate date = LocalDate.of(2026, 7, 2);
+    when(journalEntryRepository.findByVoucherNumberForCorrection("M-1")).thenReturn(List.of(
+        new JournalEntry(null, new Account("1930", "Bank"), "M-1", 100, 0, "Test", date),
+        new JournalEntry(null, new Account("2018", "Equity"), "M-1", 0, 99, "Test", date)
+    ));
+
+    assertThatThrownBy(() -> accountingService.createCorrectionEntry(
+        "M-1", new CreateCorrectionJournalEntryRequest(date)))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422))
+        .hasMessageContaining("not balanced in minor units");
+    verify(voucherNumberService, never()).nextVoucherNumber("R");
+    verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+  }
+
+  @Test
+  void correctionRejectsInconsistentOriginalVoucherDates() {
+    LocalDate date = LocalDate.of(2026, 7, 2);
+    when(journalEntryRepository.findByVoucherNumberForCorrection("M-1")).thenReturn(List.of(
+        new JournalEntry(null, new Account("1930", "Bank"), "M-1", 100, 0, "Test", date),
+        new JournalEntry(null, new Account("2018", "Equity"), "M-1", 0, 100, "Test", date.plusDays(1))
+    ));
+
+    assertThatThrownBy(() -> accountingService.createCorrectionEntry(
+        "M-1", new CreateCorrectionJournalEntryRequest(date.plusDays(1))))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422))
+        .hasMessageContaining("inconsistent accounting dates");
     verify(voucherNumberService, never()).nextVoucherNumber("R");
     verify(journalEntryRepository, never()).save(any(JournalEntry.class));
   }

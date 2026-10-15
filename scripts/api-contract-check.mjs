@@ -30,8 +30,8 @@ for (const match of backendSource.matchAll(/@(Get|Post|Put|Patch|Delete)Mapping\
 }
 
 const criticalContracts = [
-  ["POST", "/auth/register", "registration", "/auth/${authMode}"],
-  ["POST", "/auth/login", "login", "/auth/${authMode}"],
+  ["POST", "/auth/register", "registration", '"/auth/register"'],
+  ["POST", "/auth/login", "login", '"/auth/login"'],
   ["GET", "/system/status", "system status"],
   ["GET", "/customers", "customer list"],
   ["POST", "/customers", "create customer"],
@@ -39,6 +39,8 @@ const criticalContracts = [
   ["GET", "/invoices", "invoice list"],
   ["POST", "/invoices", "create invoice"],
   ["GET", "/journal-entries", "bookkeeping list"],
+  ["POST", "/journal-entries/manual-with-evidence", "manual voucher with archived document"],
+  ["GET", "/v2/journal-entries/export", "journal in minor units"],
   ["GET", "/vat-report", "VAT report"],
   ["GET", "/profit-and-loss", "profit and loss report"],
   ["GET", "/balance-report", "balance report"],
@@ -59,6 +61,10 @@ const criticalContracts = [
 ];
 
 const failures = [];
+
+if (frontendSource.includes('/journal-entries/manual`')) {
+  failures.push("Frontend still calls the legacy document-free manual voucher endpoint");
+}
 
 for (const [method, endpoint, label, frontendNeedle = endpoint] of criticalContracts) {
   const backendKey = `${method} ${endpoint}`;

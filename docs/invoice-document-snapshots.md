@@ -41,8 +41,16 @@ Original-PDF:en for nya utstallda fakturor sparas separat som bytea med SHA-256
 och kan inte ersattas. Betalningsstatus och restsaldot i fakturapostens levande
 vy uppdateras fortfarande, medan PDF-endpointen och mejlbilagan anvander den
 sparade originalfilen. Bevara anda originalunderlag enligt ordinarie arkivrutin.
+Databasen avvisar nu direkt UPDATE och DELETE av `invoice_originals` via
+`invoice_originals_immutable`. Startverifieringen kraver att triggern ar aktiv,
+och en isolerad backup-aterlasning underkanns om den saknas eller ar avstangd.
+Detta ersatter inte skyddade backupkopior eller granskning av privilegierade
+databasadministrators atkomst. Ett redan skadat original avvisas vid lasning.
 Historiska registeruppgifter eller PDF-bytes for aldre fakturor som redan saknas
 kan inte atervinnas av funktionen.
+Mejlutskick kraver nu ett verifierat arkiverat original. En rekonstruerad
+historisk PDF kan granskas i lasvyn men skickas inte automatiskt som original;
+utred och dokumentera saknat underlag innan vidare hantering.
 
 ## Migration och integritet
 
@@ -79,6 +87,25 @@ behovs for ett robust produktionsflode. Originalarkivet loser inte denna
 distribuerade commit-risk. Fakturamejl skickas fortfarande till
 kundregistrets aktuella e-postadress; snapshoten styr PDF-uppgifterna.
 Paminnelseflodet omfattas inte av denna transaktionsandring.
+
+Manuella paminnelser kraver en utstalld faktura med forfallodatum och obetalt
+saldo. Ett tidigare PENDING eller UNCERTAIN leveransforsok av samma
+paminnelsetyp blockerar omsandning tills utfallet har avstamts manuellt.
+
+Autentiserad operator kan lista hogst 100 olosta forsok med
+`GET /email-delivery/unresolved`. Jamfor forsokets mottagare, rubrik,
+tidpunkt och faktura med SMTP-leveranslogg och mottagarbekraftelse. Avstam
+ett forsok med `POST /email-delivery/{attemptId}/resolve` och JSON
+`{"outcome":"DELIVERED","evidence":"Extern leveransbekraftelse och referens ..."}`
+eller `NOT_DELIVERED` med motsvarande bevis. Underlaget maste vara 20-500
+tecken och hamnar i revisionsloggen; lagg inte hemligheter dar. Atgarden
+skickar inte ett mejl. `DELIVERED` aterstaller saknad skickathistorik,
+`NOT_DELIVERED` tillater nytt manuellt fakturamejlforsok endast om samtliga
+tidigare forsok ar bekraftat ej levererade. Automatiska paminnelser forsoker
+inte igen efter ett leveransforsok. Kan utfallet inte bevisas ska forsoket
+fortsatta vara olost och omsandning stoppas. Denna kontroll loser inte den
+icke-atomiska SMTP/databas-commit-risken eller ersatter ett verkligt
+leveransprov i skarp miljo.
 
 ## Verifiering
 

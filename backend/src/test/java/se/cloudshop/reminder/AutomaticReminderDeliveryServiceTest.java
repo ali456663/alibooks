@@ -41,23 +41,33 @@ class AutomaticReminderDeliveryServiceTest {
   }
 
   @Test
-  void retriesSkippedReminderAndRecoversAPreviouslyMissedRun() throws Exception {
+  void doesNotAutomaticallyRetryAnUncertainReminder() throws Exception {
     LocalDate today = LocalDate.of(2026, 9, 16);
     Order invoice = invoice(today.plusDays(3));
     setId(invoice, 43L);
     when(orders.findById(43L)).thenReturn(Optional.of(invoice));
-    doThrow(new IllegalStateException("SMTP unavailable"))
-        .doNothing()
-        .when(emails).sendReminder(invoice);
+    doThrow(new IllegalStateException("SMTP timeout")).when(emails).sendReminder(invoice);
 
     var skipped = deliver(invoice, today, false);
-    var recovered = deliver(invoice, today, false);
+    var nextRun = deliver(invoice, today, false);
 
     assertThat(skipped).isEqualTo(AutomaticReminderDeliveryService.DeliveryResult.SKIPPED);
-    assertThat(recovered).isEqualTo(AutomaticReminderDeliveryService.DeliveryResult.SENT);
+    assertThat(nextRun).isEqualTo(AutomaticReminderDeliveryService.DeliveryResult.NOT_ELIGIBLE);
     assertThat(invoice.hasReminder("AUTO_EMAIL_5_DAYS", "SKIPPED")).isTrue();
-    assertThat(invoice.hasReminder("AUTO_EMAIL_5_DAYS", "SENT")).isTrue();
-    verify(emails, times(2)).sendReminder(invoice);
+    verify(emails).sendReminder(invoice);
+  }
+
+  @Test
+  void durableAttemptBlocksRetryWhenInvoiceHistoryWasRolledBack() throws Exception {
+    LocalDate today = LocalDate.of(2026, 9, 16);
+    Order invoice = invoice(today.plusDays(3));
+    setId(invoice, 45L);
+    when(orders.findById(45L)).thenReturn(Optional.of(invoice));
+    when(emails.hasDeliveryAttempt(45L, false)).thenReturn(true);
+
+    assertThat(deliver(invoice, today, false))
+        .isEqualTo(AutomaticReminderDeliveryService.DeliveryResult.NOT_ELIGIBLE);
+    verify(emails, times(0)).sendReminder(invoice);
   }
 
   @Test

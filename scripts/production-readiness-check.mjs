@@ -66,10 +66,24 @@ function isPlaceholder(text) {
   return /your-|replace_|<|example|placeholder|sk_test_or_live_key|whsec_from_stripe|AIza\.\.\.|hf_\.\.\./i.test(text);
 }
 
-function isHttpUrl(text) {
+function isHttpsUrl(text) {
   try {
     const parsed = new URL(text);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return parsed.protocol === "https:" && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function hasRequiredPostgresTls(text) {
+  try {
+    const parsed = new URL(text.slice("jdbc:".length));
+    const modes = parsed.searchParams.getAll("sslmode");
+    return text.startsWith("jdbc:postgresql://")
+      && modes.length === 1
+      && modes[0].toLowerCase() === "verify-full"
+      && parsed.searchParams.getAll("sslrootcert").length === 1
+      && parsed.searchParams.get("sslrootcert") === "/run/certs/rds-ca-bundle.pem";
   } catch {
     return false;
   }
@@ -101,6 +115,8 @@ const requiredVars = [
   "IMAGE_TAG",
   "VITE_API_URL",
   "APP_FRONTEND_URL",
+  "TLS_CERT_HOST_PATH",
+  "TLS_KEY_HOST_PATH",
   "APP_CORS_ALLOWED_ORIGINS",
   "APP_CORS_LOCAL_DEV_ENABLED",
   "APP_TEST_DATA_RESET_ENABLED",
@@ -112,7 +128,9 @@ const requiredVars = [
   "APP_SCHEMA_PATCH_ENABLED",
   "JWT_SECRET",
   "JWT_EXPIRATION_MINUTES",
-  "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY"
+  "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY",
+  "APP_AUTH_MFA_ENCRYPTION_KEY",
+  "APP_AUTH_REQUIRE_MFA"
 ];
 
 for (const key of requiredVars) {
@@ -122,9 +140,12 @@ for (const key of requiredVars) {
 check("Production compose uses Dockerhub images", composeProd.includes("${DOCKERHUB_USERNAME}/cloudshop-frontend") && composeProd.includes("${DOCKERHUB_USERNAME}/cloudshop-backend"), "frontend/backend images should come from Dockerhub variables");
 check("Production compose does not start local Postgres", !composeProd.includes("postgres:") && !/^\s+db:/m.test(composeProd), "Production should use RDS, not a local db service");
 check("Production compose does not publish backend port", !composeProd.includes('"3000:3000"') && !composeProd.includes("- 3000:3000"), "Backend should be exposed only inside Docker network");
-check("Production compose exposes frontend on port 80", composeProd.includes('"80:80"'), "Frontend/Nginx should publish HTTP port 80");
+check("Production compose publishes HTTP redirect and HTTPS", composeProd.includes('"80:80"') && composeProd.includes('"443:443"'), "Frontend/Nginx should expose HTTPS and use port 80 only for redirect");
+check("Production compose mounts TLS certificate read-only", composeProd.includes("${TLS_CERT_HOST_PATH}:/etc/nginx/certs/fullchain.pem:ro"), "TLS certificate chain must be mounted read-only into Nginx");
+check("Production compose mounts TLS key read-only", composeProd.includes("${TLS_KEY_HOST_PATH}:/etc/nginx/certs/privkey.pem:ro"), "TLS private key must be mounted read-only into Nginx");
 check("Production compose keeps local CORS disabled by default", composeProd.includes("APP_CORS_LOCAL_DEV_ENABLED=${APP_CORS_LOCAL_DEV_ENABLED:-false}"), "Local development CORS fallback should default to false");
-check("Nginx proxies API internally", nginx.includes("location /api/") && nginx.includes("proxy_pass http://backend:3000/;"), "/api should proxy to backend:3000 internally");
+check("Nginx redirects HTTP and serves HTTPS", nginx.includes("return 301 https://$host$request_uri") && nginx.includes("listen 443 ssl") && nginx.includes("ssl_protocols TLSv1.2 TLSv1.3"), "Nginx should redirect HTTP, negotiate TLS 1.2+, and serve the app over HTTPS");
+check("Nginx proxies API internally", nginx.includes("location /api/") && nginx.includes("proxy_pass http://backend:3000/;"), "/api should proxy to backend:3000 internally after HTTPS termination");
 check("Nginx serves runtime config without cache", nginx.includes("location = /config.js") && nginx.includes("no-store"), "config.js should not be cached");
 check("Shell smoke checks frontend/backend/database", ["FRONTEND_URL", "BACKEND_URL", "/health", "/system/status", '"database":{"ok":true}'].every((item) => smokeSh.includes(item)), "prod-smoke-test.sh should verify frontend, backend and DB");
 check("PowerShell smoke checks frontend/backend/database", ["FrontendUrl", "BackendUrl", "/health", "/system/status", "database.ok"].every((item) => smokePs.includes(item)), "prod-smoke-test.ps1 should verify frontend, backend and DB");
@@ -138,22 +159,31 @@ const corsOrigins = value(env, "APP_CORS_ALLOWED_ORIGINS");
 const datasourceUrl = value(env, "SPRING_DATASOURCE_URL");
 const jwtSecret = value(env, "JWT_SECRET");
 const registrationBootstrapKey = value(env, "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY");
+const mfaEncryptionKey = value(env, "APP_AUTH_MFA_ENCRYPTION_KEY");
 const ddlAuto = value(env, "SPRING_JPA_HIBERNATE_DDL_AUTO");
 const schemaPatchEnabled = value(env, "APP_SCHEMA_PATCH_ENABLED");
 const allowedDdlModes = ["none", "validate", "update", "create", "create-drop"];
 
 check("VITE_API_URL uses same-origin /api", value(env, "VITE_API_URL") === "/api", "For EC2/Nginx deployment, frontend should call /api");
-check("APP_FRONTEND_URL is an HTTP(S) URL", isHttpUrl(frontendUrl), "APP_FRONTEND_URL should be a public URL");
+check("APP_FRONTEND_URL uses HTTPS", isHttpsUrl(frontendUrl), "APP_FRONTEND_URL should be a public HTTPS URL");
+check("CORS origins use HTTPS", corsOrigins.split(",").every((item) => isHttpsUrl(item.trim())), "Every APP_CORS_ALLOWED_ORIGINS value should use HTTPS");
 check("CORS includes frontend origin", corsOrigins.split(",").map((item) => item.trim()).includes(frontendUrl) || corsOrigins.split(",").map((item) => originOf(item.trim())).includes(originOf(frontendUrl)), "APP_CORS_ALLOWED_ORIGINS should include APP_FRONTEND_URL");
 check("Production disables test data reset", value(env, "APP_TEST_DATA_RESET_ENABLED") === "false", "APP_TEST_DATA_RESET_ENABLED should be false");
 check("Production disables bank reset", value(env, "APP_BANK_RECONCILIATION_RESET_ENABLED") === "false", "APP_BANK_RECONCILIATION_RESET_ENABLED should be false");
 check("Production disables local CORS fallback", value(env, "APP_CORS_LOCAL_DEV_ENABLED") === "false", "APP_CORS_LOCAL_DEV_ENABLED should be false");
 check("Datasource uses PostgreSQL JDBC", datasourceUrl.startsWith("jdbc:postgresql://"), "SPRING_DATASOURCE_URL should be PostgreSQL JDBC");
+check("Datasource verifies PostgreSQL server identity", hasRequiredPostgresTls(datasourceUrl), "SPRING_DATASOURCE_URL must use sslmode=verify-full and sslrootcert=/run/certs/rds-ca-bundle.pem exactly once");
+check("RDS CA bundle is mounted read-only", composeProd.includes("${RDS_CA_CERT_HOST_PATH}:/run/certs/rds-ca-bundle.pem:ro"), "Production compose must mount the current AWS RDS CA bundle read-only");
+check("RDS CA bundle path is configured", hasValue(env, "RDS_CA_CERT_HOST_PATH"), "RDS_CA_CERT_HOST_PATH must point to the verified AWS RDS CA bundle on the host");
 check("Hibernate ddl-auto mode is explicit", allowedDdlModes.includes(ddlAuto), "SPRING_JPA_HIBERNATE_DDL_AUTO should be one of none, validate, update, create or create-drop");
 check("Production avoids automatic schema mutation", ["validate", "none"].includes(ddlAuto), "For production/RDS, prefer validate or none. Use update only during controlled migration rehearsal.");
 check("Production disables startup schema patch", schemaPatchEnabled === "false", "APP_SCHEMA_PATCH_ENABLED should be false for production/RDS so startup does not run ALTER TABLE patches.");
 check("JWT expiration is reasonable", Number(value(env, "JWT_EXPIRATION_MINUTES")) >= 15 && Number(value(env, "JWT_EXPIRATION_MINUTES")) <= 1440, "JWT_EXPIRATION_MINUTES should be between 15 and 1440");
 check("Owner setup key is strong", registrationBootstrapKey.length >= 32 && !isPlaceholder(registrationBootstrapKey) && new Set(registrationBootstrapKey).size >= 12 && registrationBootstrapKey !== jwtSecret, "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY should be a unique, non-placeholder secret with at least 32 characters", strict ? "fail" : "warn");
+let decodedMfaKey;
+try { decodedMfaKey = Buffer.from(mfaEncryptionKey, "base64"); } catch { decodedMfaKey = Buffer.alloc(0); }
+check("MFA encryption key is configured", decodedMfaKey.length === 32 && new Set(decodedMfaKey).size >= 12 && !isPlaceholder(mfaEncryptionKey), "APP_AUTH_MFA_ENCRYPTION_KEY must decode from base64 to 32 random bytes", strict ? "fail" : "warn");
+check("Production requires MFA for application data", value(env, "APP_AUTH_REQUIRE_MFA") === "true", "APP_AUTH_REQUIRE_MFA must be true for protected AliBooks API routes", strict ? "fail" : "warn");
 
 const stripeKey = value(env, "STRIPE_SECRET_KEY");
 const stripeWebhook = value(env, "STRIPE_WEBHOOK_SECRET");

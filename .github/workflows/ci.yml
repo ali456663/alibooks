@@ -152,7 +152,7 @@ jobs:
   backup-restore:
     name: Isolated backup and receipt restore
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -165,6 +165,25 @@ jobs:
       - name: Test PowerShell backup failure handling
         shell: pwsh
         run: ./scripts/backup-scripts-test.ps1
+      - name: Test shell backup TLS guards
+        shell: bash
+        run: |
+          sh ./scripts/backup-shell-safety-test.sh
+          if output="$(PGHOST=remote.invalid PGDATABASE=fixture PGUSER=fixture PGPASSWORD=synthetic PGSSLMODE=require sh ./scripts/backup-postgres.sh 2>&1)"; then
+            echo "Remote backup accepted weak TLS"
+            exit 1
+          fi
+          [[ "$output" == *"requires PGSSLMODE=verify-full"* ]]
+          if output="$(PGHOST=remote.invalid PGDATABASE=fixture PGUSER=fixture PGPASSWORD=synthetic sh ./scripts/backup-postgres.sh 2>&1)"; then
+            echo "Remote backup accepted missing CA certificate"
+            exit 1
+          fi
+          [[ "$output" == *"RDS_CA_CERT_HOST_PATH"* ]]
+          if output="$(PGHOST=remote.invalid PGDATABASE=alibooks_restore_test PGUSER=fixture PGPASSWORD=synthetic RESTORE_FILE=synthetic.dump RESTORE_CONFIRM=RESTORE_TO_TEST_DATABASE PGSSLMODE=require sh ./scripts/restore-postgres.sh 2>&1)"; then
+            echo "Remote restore accepted weak TLS"
+            exit 1
+          fi
+          [[ "$output" == *"requires PGSSLMODE=verify-full"* ]]
 
   docker:
     name: Docker build
@@ -184,6 +203,68 @@ jobs:
 
       - name: Build frontend image
         run: docker build -f ./frontend/Dockerfile.prod -t cloudshop-frontend:ci ./frontend
+
+      - name: Verify frontend container API configuration
+        run: |
+          mock_nginx='set -e; mkdir -p /tmp/mock; printf "#!/bin/sh\nexit 0\n" > /tmp/mock/nginx; chmod +x /tmp/mock/nginx; PATH="/tmp/mock:$PATH" /docker-entrypoint.sh'
+          docker run --rm --entrypoint sh -e VITE_API_URL=/api cloudshop-frontend:ci -c "$mock_nginx; grep -F /api /usr/share/nginx/html/config.js"
+          if docker run --rm --entrypoint sh -e VITE_API_URL=http://localhost:3000 cloudshop-frontend:ci -c "$mock_nginx"; then
+            echo "Production frontend accepted a localhost API URL" >&2
+            exit 1
+          fi
+          if docker run --rm --entrypoint sh cloudshop-frontend:ci -c "$mock_nginx"; then
+            echo "Production frontend accepted a missing API URL" >&2
+            exit 1
+          fi
+
+      - name: Smoke test production frontend over HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert_dir="$(mktemp -d)"
+          network="alibooks-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          backend="${network}-backend"
+          container="${network}-frontend"
+          cleanup() {
+            if [ "$?" -ne 0 ]; then
+              docker logs "$container" >&2 || true
+              docker logs "$backend" >&2 || true
+            fi
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            docker rm -f "$backend" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
+            rm -rf "$cert_dir"
+          }
+          trap cleanup EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$cert_dir/privkey.pem" -out "$cert_dir/fullchain.pem" \
+            -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+          docker network create "$network"
+          docker run -d --name "$backend" --network "$network" --network-alias backend \
+            node:24-alpine node -e 'require("node:http").createServer((req, res) => { res.end(JSON.stringify({path: req.url})); }).listen(3000)'
+          docker run -d --name "$container" --network "$network" -e VITE_API_URL=/api \
+            -p 127.0.0.1::443 -v "$cert_dir:/etc/nginx/certs:ro" cloudshop-frontend:ci
+          published_port="$(docker port "$container" 443/tcp)"
+          published_port="${published_port##*:}"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --insecure \
+              "https://127.0.0.1:$published_port/" -o "$cert_dir/index.html" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          grep -F 'id="root"' "$cert_dir/index.html"
+          curl --fail --silent --show-error --insecure \
+            "https://127.0.0.1:$published_port/config.js" -o "$cert_dir/config.js"
+          grep -F 'apiUrl: "/api"' "$cert_dir/config.js"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --insecure \
+              "https://127.0.0.1:$published_port/api/health" -o "$cert_dir/api-health.json" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          grep -F '"path":"/health"' "$cert_dir/api-health.json"
 
       - name: Write Docker summary
         if: always()

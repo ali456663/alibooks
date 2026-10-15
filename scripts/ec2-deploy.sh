@@ -6,6 +6,8 @@ ENV_FILE="${ENV_FILE:-.env}"
 PROJECT_NAME="${PROJECT_NAME:-alibooks}"
 FRONTEND_URL="${FRONTEND_URL:-}"
 BACKEND_URL="${BACKEND_URL:-}"
+AUTH_TOKEN="${AUTH_TOKEN:-${ALIBOOKS_AUTH_TOKEN:-}}"
+ALLOW_UNVERIFIED_BOOTSTRAP="${ALLOW_UNVERIFIED_BOOTSTRAP:-false}"
 REQUIRE_IMMUTABLE_TAG="${REQUIRE_IMMUTABLE_TAG:-true}"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
@@ -47,6 +49,22 @@ require_env "SPRING_DATASOURCE_USERNAME"
 require_env "SPRING_DATASOURCE_PASSWORD"
 require_env "JWT_SECRET"
 require_env "APP_AUTH_REGISTRATION_BOOTSTRAP_KEY"
+require_env "APP_AUTH_MFA_ENCRYPTION_KEY"
+require_env "APP_AUTH_REQUIRE_MFA"
+
+if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
+  echo "Refusing deploy: FRONTEND_URL and BACKEND_URL are required for the public smoke test."
+  exit 1
+fi
+case "$FRONTEND_URL:$BACKEND_URL" in
+  https://*:https://*) ;;
+  *) echo "Refusing deploy: public smoke URLs must use HTTPS."; exit 1 ;;
+esac
+if [ -z "$AUTH_TOKEN" ] && [ "$ALLOW_UNVERIFIED_BOOTSTRAP" != "true" ]; then
+  echo "Refusing deploy: set ALIBOOKS_AUTH_TOKEN to verify protected database status."
+  echo "For the first owner setup only, set ALLOW_UNVERIFIED_BOOTSTRAP=true and rerun with a token afterward."
+  exit 1
+fi
 
 dockerhub_username="$(env_value DOCKERHUB_USERNAME)"
 image_tag="$(env_value IMAGE_TAG)"
@@ -59,6 +77,8 @@ test_reset="$(env_value APP_TEST_DATA_RESET_ENABLED)"
 bank_reset="$(env_value APP_BANK_RECONCILIATION_RESET_ENABLED)"
 jwt_secret="$(env_value JWT_SECRET)"
 bootstrap_key="$(env_value APP_AUTH_REGISTRATION_BOOTSTRAP_KEY)"
+mfa_key="$(env_value APP_AUTH_MFA_ENCRYPTION_KEY)"
+mfa_required="$(env_value APP_AUTH_REQUIRE_MFA)"
 
 case "$dockerhub_username:$frontend_origin:$cors_origins" in
   *your-dockerhub-user*|*replace_*|*localhost*|*127.0.0.1*)
@@ -87,6 +107,16 @@ if [ "${#jwt_secret}" -lt 32 ] || [ "${#bootstrap_key}" -lt 32 ] || [ "$jwt_secr
   exit 1
 fi
 
+mfa_key_bytes="$(printf '%s' "$mfa_key" | base64 -d 2>/dev/null | wc -c | tr -d ' ')"
+if [ "$mfa_key_bytes" != "32" ]; then
+  echo "Refusing deploy: APP_AUTH_MFA_ENCRYPTION_KEY must be base64 for exactly 32 random bytes."
+  exit 1
+fi
+if [ "$mfa_required" != "true" ]; then
+  echo "Refusing deploy: APP_AUTH_REQUIRE_MFA must be true in production."
+  exit 1
+fi
+
 echo "Validating production compose configuration..."
 docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" config --quiet
 echo "Production configuration passed fail-closed checks."
@@ -112,16 +142,14 @@ docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -
 echo "Container status:"
 docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" ps
 
-if [ -n "$FRONTEND_URL" ] && [ -n "$BACKEND_URL" ]; then
-  echo "Running smoke test..."
-  FRONTEND_URL="$FRONTEND_URL" BACKEND_URL="$BACKEND_URL" sh ./scripts/prod-smoke-test.sh
-else
-  echo "Smoke test skipped because FRONTEND_URL or BACKEND_URL is missing."
-  echo "Example:"
-  echo "  FRONTEND_URL=http://your-ec2-public-ip BACKEND_URL=http://your-ec2-public-ip/api sh ./scripts/ec2-deploy.sh"
-fi
+echo "Running public smoke test..."
+FRONTEND_URL="$FRONTEND_URL" BACKEND_URL="$BACKEND_URL" AUTH_TOKEN="$AUTH_TOKEN" sh ./scripts/prod-smoke-test.sh
 
 echo "Recent backend logs:"
 docker compose --env-file "$ENV_FILE" -p "$PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail=40 backend
 
-echo "Deploy finished."
+if [ -z "$AUTH_TOKEN" ]; then
+  echo "Bootstrap deploy finished, but protected database status is unverified. NOT approved for real data."
+else
+  echo "Deploy finished with authenticated database smoke proof."
+fi

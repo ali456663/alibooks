@@ -60,10 +60,12 @@ public class InvoicePayment {
   }
 
   long getAmountMinorValue() {
-    return amountMinor == null ? toMinorUnits(amount) : amountMinor;
+    validateMinorUnitShadow();
+    return amountMinor;
   }
 
   public Long getAmountMinor() {
+    validateMinorUnitShadow();
     return amountMinor;
   }
 
@@ -84,16 +86,11 @@ public class InvoicePayment {
   }
 
   @PostLoad
-  private void validateMinorUnitShadow() {
-    if (amountMinor != null && amountMinor.longValue() != toMinorUnits(amount)) {
-      throw new IllegalStateException("Invoice payment shadow does not match the payment amount.");
-    }
-    amountMinor = toMinorUnits(amount);
-  }
-
   @PrePersist
   @PreUpdate
-  private void synchronizeMinorUnits() {
-    amountMinor = toMinorUnits(amount);
+  void validateMinorUnitShadow() {
+    if (amountMinor == null || amountMinor.longValue() != toMinorUnits(amount) || !"SEK".equals(currencyCode)) {
+      throw new IllegalStateException("Invoice payment minor units or currency do not match the payment amount.");
+    }
   }
 }

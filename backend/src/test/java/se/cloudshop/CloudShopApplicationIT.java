@@ -6,11 +6,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 
 import java.time.LocalDate;
 import java.time.Instant;
+import java.sql.Connection;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -20,6 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,14 +38,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import se.cloudshop.accounting.AccountingService;
 import se.cloudshop.accounting.AccountingController;
+import se.cloudshop.accounting.AccountingExportController;
 import se.cloudshop.accounting.CreateManualJournalEntryRequest;
 import se.cloudshop.accounting.CreateManualJournalEntryLineRequest;
 import se.cloudshop.accounting.CreateManualMultiLineJournalEntryRequest;
@@ -48,7 +61,11 @@ import se.cloudshop.accounting.CreateCorrectionJournalEntryRequest;
 import java.util.List;
 import se.cloudshop.accounting.JournalEntry;
 import se.cloudshop.accounting.JournalEntryRepository;
+import se.cloudshop.config.ProductionDatabasePrivilegeGuard;
+import se.cloudshop.accounting.VoucherEvidenceController;
+import se.cloudshop.accounting.VoucherEvidenceService;
 import se.cloudshop.audit.AuditService;
+import se.cloudshop.email.EmailDeliveryLedger;
 import se.cloudshop.auth.JwtService;
 import se.cloudshop.auth.AuthRequest;
 import se.cloudshop.expense.CreateExpenseRequest;
@@ -82,8 +99,11 @@ class CloudShopApplicationIT {
   @Autowired OrderRepository orders;
   @Autowired ProductRepository products;
   @Autowired JournalEntryRepository journal;
+  @Autowired VoucherEvidenceController voucherEvidenceController;
+  @Autowired VoucherEvidenceService voucherEvidenceService;
   @Autowired AccountingService accounting;
   @Autowired AccountingController accountingController;
+  @Autowired AccountingExportController accountingExports;
   @Autowired se.cloudshop.accounting.AccountingPeriodLockService periodLocks;
   @Autowired SettingsService settings;
   @Autowired se.cloudshop.bank.BankReconciliationController bankController;
@@ -94,10 +114,69 @@ class CloudShopApplicationIT {
   @Autowired SupplierInvoiceRepository supplierInvoices;
   @Autowired SupplierController supplierController;
   @Autowired JwtService jwt;
+  @Autowired se.cloudshop.config.MoneyMigrationVerifier moneyMigrationVerifier;
+  @Autowired se.cloudshop.auth.MfaService mfa;
+  @Autowired EmailDeliveryLedger emailDeliveryLedger;
+  @Autowired se.cloudshop.email.EmailDeliveryReconciliationService emailReconciliation;
+  @Autowired se.cloudshop.audit.VoucherAuditReconciliationController voucherAuditReconciliation;
   @Autowired PlatformTransactionManager transactions;
   @SpyBean AuditService audit;
   private String authorization;
   private Product product;
+
+  @Test
+  void productionDatabaseRoleGuardRejectsTheSchemaOwner() {
+    assertThatThrownBy(() -> new ProductionDatabasePrivilegeGuard(jdbc).afterSingletonsInstantiated())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Unsafe production database role:")
+        .hasMessageContaining("not_relation_owner")
+        .hasMessageContaining("not_function_owner");
+  }
+
+  @Test
+  void productionDatabaseRoleGuardAcceptsASeparateUnprivilegedLogin() {
+    String role = "alibooks_guard_" + java.util.UUID.randomUUID().toString().replace("-", "");
+    jdbc.execute("CREATE ROLE " + role + " LOGIN PASSWORD 'integration_only'");
+    try {
+      jdbc.execute("GRANT CONNECT ON DATABASE alibooks_test TO " + role);
+      jdbc.execute("GRANT USAGE ON SCHEMA public TO " + role);
+      DriverManagerDataSource dataSource = new DriverManagerDataSource(
+          System.getenv("TEST_DATABASE_URL"), role, "integration_only");
+      new ProductionDatabasePrivilegeGuard(new JdbcTemplate(dataSource)).afterSingletonsInstantiated();
+    } finally {
+      jdbc.execute("REVOKE USAGE ON SCHEMA public FROM " + role);
+      jdbc.execute("REVOKE CONNECT ON DATABASE alibooks_test FROM " + role);
+      jdbc.execute("DROP ROLE " + role);
+    }
+  }
+
+  @Test
+  void accountingExportsRunAtRepeatableReadIsolation() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"SIE snapshot test\",\"debitAccountNumber\":\"1930\","
+        + "\"creditAccountNumber\":\"3041\",\"amount\":100}";
+    MockMultipartFile document = new MockMultipartFile("file", "sie.pdf", "application/pdf",
+        "%PDF-1.4\nSIE snapshot test".getBytes(StandardCharsets.UTF_8));
+    voucherEvidenceController.createManualVoucher(authorization, request, document);
+
+    AtomicInteger auditedExports = new AtomicInteger();
+    doAnswer(invocation -> {
+      assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+      assertThat(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel())
+          .isEqualTo(Connection.TRANSACTION_REPEATABLE_READ);
+      auditedExports.incrementAndGet();
+      return invocation.callRealMethod();
+    }).when(audit).record(anyString(), anyString(), any(), anyString(), anyString(), anyString(), anyInt(), anyString());
+
+    var sieResponse = accountingExports.exportSie(authorization, null, null);
+    assertThat(sieResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(new String(sieResponse.getBody(), java.nio.charset.Charset.forName("IBM437")))
+        .contains("#UB 0 1930 100.00", "#RES 0 3041 -100.00");
+    assertThat(accountingExports.exportSieReceipt(authorization, null, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(accountingExports.exportJournalEntries(authorization, null, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(accountingExports.exportGeneralLedger(authorization, null, null, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(auditedExports.get()).isEqualTo(4);
+  }
 
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry registry) {
@@ -122,7 +201,12 @@ class CloudShopApplicationIT {
     reset(audit, invoiceEmails);
     jdbc.execute("DROP TRIGGER IF EXISTS reject_test_credit ON journal_entries");
     jdbc.execute("ALTER TABLE invoice_originals DROP CONSTRAINT IF EXISTS reject_test_original");
-    jdbc.execute("TRUNCATE app_users, invoice_originals, journal_entries, customer_orders, expenses, audit_events, stripe_webhook_events, supplier_invoices, suppliers, bank_reconciliation_entries RESTART IDENTITY CASCADE");
+    jdbc.execute("ALTER TABLE audit_events DISABLE TRIGGER audit_events_no_truncate");
+    try {
+      jdbc.execute("TRUNCATE app_users, invoice_originals, journal_entries, journal_voucher_registry, voucher_evidence_contents, voucher_evidence, customer_orders, expenses, audit_events, stripe_webhook_events, supplier_invoices, suppliers, bank_reconciliation_entries, email_delivery_attempts RESTART IDENTITY CASCADE");
+    } finally {
+      jdbc.execute("ALTER TABLE audit_events ENABLE TRIGGER audit_events_no_truncate");
+    }
     jdbc.update("UPDATE app_settings SET accounting_locked_through_date = NULL, accounting_method = 'INVOICE_METHOD'");
     settings.getSettings();
     jdbc.update("UPDATE app_settings SET company_name = ?, company_address = ?, company_postal_code = ?, company_city = ?, company_organization_number = ?, vat_registration_number = ?",
@@ -132,10 +216,524 @@ class CloudShopApplicationIT {
   }
 
   @Test
+  void auditHistoryRejectsDirectChangesDeletionAndTruncation() {
+    audit.record("security", "test", "audit-immutable", "created", "audit-immutable",
+        "Original event", 0, authorization);
+    Long id = jdbc.queryForObject("SELECT id FROM audit_events WHERE entity_id = 'audit-immutable'", Long.class);
+
+    assertThatThrownBy(() -> jdbc.update("UPDATE audit_events SET message = 'Rewritten' WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("DELETE FROM audit_events WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.execute("TRUNCATE audit_events"))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    assertThat(jdbc.queryForObject("SELECT message FROM audit_events WHERE id = ?", String.class, id))
+        .isEqualTo("Original event");
+  }
+
+  @Test
+  void reminderAttemptSurvivesOuterTransactionRollback() {
+    long invoiceId = 654321L;
+    new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      emailDeliveryLedger.startReminderAttempt(invoiceId, false,
+          "customer@example.invalid", "Reminder", "Synthetic reminder body");
+      status.setRollbackOnly();
+    });
+
+    assertThat(emailDeliveryLedger.hasReminderAttempt(invoiceId, false)).isTrue();
+    assertThat(emailDeliveryLedger.hasReminderAttempt(invoiceId, true)).isFalse();
+    assertThat(emailDeliveryLedger.hasUnresolvedReminderAttempt(invoiceId, false)).isTrue();
+    assertThat(emailDeliveryLedger.hasUnresolvedReminderAttempt(invoiceId, true)).isFalse();
+    assertThat(emailDeliveryLedger.countPending()).isEqualTo(1);
+    assertThat(emailDeliveryLedger.countUnresolved()).isEqualTo(1);
+  }
+
+  @Test
+  void manualReminderRejectsDraftBeforeEmailTransport() {
+    var draft = draft();
+    assertThatThrownBy(() -> invoices.sendInvoiceReminderEmail(authorization, draft.getId()))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Only issued invoices");
+    assertThat(orders.findById(draft.getId()).orElseThrow().hasReminder("EMAIL", "SENT")).isFalse();
+    assertThat(emailDeliveryLedger.countUnresolved()).isZero();
+  }
+
+  @Test
+  void manualReminderRejectsPaidInvoiceBeforeEmailTransport() {
+    var issued = invoices.markInvoiceAsSent(authorization, draft().getId());
+    var paid = invoices.markInvoiceAsPaid(authorization, issued.getId(),
+        new MarkInvoicePaidRequest(LocalDate.now(), 125, "test"));
+
+    assertThatThrownBy(() -> invoices.sendInvoiceReminderEmail(authorization, paid.getId()))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Only issued invoices");
+    assertThat(orders.findById(paid.getId()).orElseThrow().hasReminder("EMAIL", "SENT")).isFalse();
+    assertThat(emailDeliveryLedger.countUnresolved()).isZero();
+  }
+
+  @Test
+  void invoiceEmailAttemptStoresArchivedPdfAndUnresolvedStateInPostgres() {
+    long invoiceId = 654322L;
+    byte[] pdf = "%PDF-1.4 archived invoice".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    Long attemptId = emailDeliveryLedger.startInvoiceAttempt(invoiceId,
+        "customer@example.invalid", "Invoice", "Original invoice", "invoice.pdf", pdf);
+
+    assertThat(emailDeliveryLedger.hasInvoiceAttempt(invoiceId)).isTrue();
+    assertThat(emailDeliveryLedger.hasUnresolvedInvoiceAttempt(invoiceId)).isTrue();
+    assertThat(jdbc.queryForObject("SELECT attachment_content FROM email_delivery_attempts WHERE id = ?",
+        byte[].class, attemptId)).isEqualTo(pdf);
+
+    emailDeliveryLedger.markSent(attemptId);
+    assertThat(emailDeliveryLedger.hasUnresolvedInvoiceAttempt(invoiceId)).isFalse();
+  }
+
+  @Test
+  void emailReconciliationRequiresEvidenceAndDoesNotSendAutomatically() {
+    Order invoice = invoices.markInvoiceAsSent(authorization, draft().getId());
+    Long attemptId = emailDeliveryLedger.startInvoiceAttempt(invoice.getId(),
+        "customer@example.invalid", "Invoice", "Original invoice", "invoice.pdf", new byte[] {1, 2, 3});
+    assertThat(emailReconciliation.unresolved()).extracting(se.cloudshop.email.EmailDeliverySummary::id)
+        .contains(attemptId);
+
+    assertThatThrownBy(() -> emailReconciliation.resolve(attemptId,
+        new se.cloudshop.email.ResolveEmailDeliveryRequest("NOT_DELIVERED", "too short"), authorization))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(emailDeliveryLedger.countUnresolved()).isEqualTo(1);
+
+    emailReconciliation.resolve(attemptId, new se.cloudshop.email.ResolveEmailDeliveryRequest(
+        "NOT_DELIVERED", "SMTP provider confirmed that this message was not accepted."), authorization);
+    assertThat(emailDeliveryLedger.countUnresolved()).isZero();
+    assertThat(emailDeliveryLedger.hasOnlyConfirmedNotDeliveredInvoiceAttempts(invoice.getId())).isTrue();
+    assertThat(orders.findById(invoice.getId()).orElseThrow().hasReminder("INVOICE_EMAIL", "SENT")).isFalse();
+    assertThat(emailReconciliation.unresolved()).extracting(se.cloudshop.email.EmailDeliverySummary::id)
+        .doesNotContain(attemptId);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'delivery_reconciled_not_delivered' "
+        + "AND reference = ?", Long.class, String.valueOf(attemptId))).isEqualTo(1);
+    assertThatThrownBy(() -> emailReconciliation.resolve(attemptId,
+        new se.cloudshop.email.ResolveEmailDeliveryRequest("DELIVERED",
+            "Recipient later confirmed this message was actually received."), authorization))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+  }
+
+  @Test
+  void confirmedDeliveryRestoresMissingInvoiceHistoryWithoutResending() {
+    Order invoice = invoices.markInvoiceAsSent(authorization, draft().getId());
+    Long attemptId = emailDeliveryLedger.startInvoiceAttempt(invoice.getId(),
+        "customer@example.invalid", "Invoice", "Original invoice", "invoice.pdf", new byte[] {1, 2, 3});
+
+    emailReconciliation.resolve(attemptId, new se.cloudshop.email.ResolveEmailDeliveryRequest(
+        "DELIVERED", "Recipient confirmed receipt of the archived invoice message."), authorization);
+
+    assertThat(emailDeliveryLedger.countUnresolved()).isZero();
+    assertThat(orders.findById(invoice.getId()).orElseThrow().hasReminder("INVOICE_EMAIL", "SENT")).isTrue();
+    assertThat(jdbc.queryForObject("SELECT status FROM email_delivery_attempts WHERE id = ?", String.class, attemptId))
+        .isEqualTo("SENT");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'delivery_reconciled_sent' "
+        + "AND reference = ?", Long.class, String.valueOf(attemptId))).isEqualTo(1);
+  }
+
+  @Test
+  void olderEmailAttemptCannotBeResolvedAfterNewerAttemptExists() {
+    Order invoice = invoices.markInvoiceAsSent(authorization, draft().getId());
+    Long first = emailDeliveryLedger.startInvoiceAttempt(invoice.getId(),
+        "customer@example.invalid", "Invoice", "Original invoice", null, null);
+    Long second = emailDeliveryLedger.startInvoiceAttempt(invoice.getId(),
+        "customer@example.invalid", "Invoice retry", "Original invoice", null, null);
+
+    assertThatThrownBy(() -> emailReconciliation.resolve(first,
+        new se.cloudshop.email.ResolveEmailDeliveryRequest("DELIVERED",
+            "Recipient confirmed that the earlier message was received."), authorization))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    assertThat(emailReconciliation.unresolved()).extracting(se.cloudshop.email.EmailDeliverySummary::id)
+        .contains(first, second);
+    assertThat(orders.findById(invoice.getId()).orElseThrow().hasReminder("INVOICE_EMAIL", "SENT")).isFalse();
+  }
+
+  @Test
+  void deliveryReconciliationApiRejectsUnauthenticatedListing() {
+    assertThat(http.getForEntity("/email-delivery/unresolved", String.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
   void applicationStartsWithRealDatabaseAndHttpServer() {
     assertThat(http.getForEntity("/health", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
     assertThat(jdbc.queryForObject("SELECT count(*) FROM accounts", Long.class)).isPositive();
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM money_migration_runs full_run "
+        + "JOIN money_migration_ledger guard ON guard.migration_key = 'journal-money-guard-v1' "
+        + "WHERE full_run.migration_key = 'core-minor-v2-verified' AND full_run.mode = 'full' "
+        + "AND full_run.state = 'VERIFIED' AND full_run.finished_at >= guard.applied_at", Long.class))
+        .isPositive();
+    assertThat(moneyMigrationVerifier.status()).containsEntry("zeroIssueFullCheckStreak", 1);
+  }
+
+  @Test
+  void misorderedMoneyGuardArgumentsBlockCheckpointAndFullVerification() {
+    new TransactionTemplate(transactions).executeWithoutResult(transaction -> {
+      jdbc.execute("DROP TRIGGER a_expenses_money_integrity_guard ON expenses");
+      jdbc.execute("CREATE TRIGGER a_expenses_money_integrity_guard BEFORE INSERT OR UPDATE ON expenses "
+          + "FOR EACH ROW EXECUTE FUNCTION guard_operational_money_integrity("
+          + "'net_amount_minor', 'net_amount', 'vat_amount', 'vat_amount_minor', 'total_amount', 'total_amount_minor')");
+
+      var verifier = new se.cloudshop.config.MoneyMigrationVerifier(jdbc, true, 26L);
+      assertThatThrownBy(verifier::run)
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("money shadow trigger");
+      assertThat(verifier.status()).containsEntry("state", "blocked").containsEntry("verified", false);
+      transaction.setRollbackOnly();
+    });
+  }
+
+  @Test
+  void missingMigrationCheckForcesNewFullRunInsteadOfReusingCheckpoint() {
+    moneyMigrationVerifier.run();
+    String previousRun = jdbc.queryForObject(
+        "SELECT run_id::text FROM money_migration_runs WHERE migration_key = 'core-minor-v2-verified' "
+            + "AND mode = 'full' ORDER BY started_at DESC LIMIT 1", String.class);
+    assertThat(moneyMigrationVerifier.status()).containsEntry("state", "verified-checkpoint");
+
+    jdbc.update("DELETE FROM money_migration_checks WHERE migration_key = ? AND check_name = ?",
+        "core-minor-v2-verified", "currency:audit_events");
+
+    moneyMigrationVerifier.run();
+
+    assertThat(moneyMigrationVerifier.status()).containsEntry("state", "verified-shadow");
+    assertThat(moneyMigrationVerifier.status().get("runId")).isNotEqualTo(previousRun);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM money_migration_checks "
+        + "WHERE migration_key = ? AND check_name = ? AND status = 'PASS'", Long.class,
+        "core-minor-v2-verified", "currency:audit_events")).isEqualTo(1L);
+  }
+
+  @Test
+  void accountNumbersAreUniqueAndNonblankInDatabase() {
+    Long originalCount = jdbc.queryForObject("SELECT count(*) FROM accounts", Long.class);
+    assertThatThrownBy(() -> jdbc.update(
+        "INSERT INTO accounts (number, name, company_type) VALUES (?, ?, ?)",
+        "1930", "Duplicate bank account", "BOTH"))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update(
+        "INSERT INTO accounts (number, name, company_type) VALUES (?, ?, ?)",
+        "  ", "Blank account", "BOTH"))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update(
+        "INSERT INTO accounts (number, name, company_type) VALUES (NULL, ?, ?)",
+        "Null account", "BOTH"))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM accounts", Long.class)).isEqualTo(originalCount);
+  }
+
+  @Test
+  void voucherAuditReconciliationFindsHistoricalAmountErrorsWithoutChangingRecords() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Audit reconciliation\",\"lines\":["
+        + "{\"accountNumber\":\"7010\",\"debit\":100,\"credit\":0},"
+        + "{\"accountNumber\":\"7510\",\"debit\":30,\"credit\":0},"
+        + "{\"accountNumber\":\"1930\",\"debit\":0,\"credit\":130}]}";
+    MockMultipartFile document = new MockMultipartFile("file", "audit-source.pdf", "application/pdf",
+        "%PDF-1.4\nAudit reconciliation source".getBytes(StandardCharsets.UTF_8));
+    String voucherNumber = voucherEvidenceController.createManualMultiVoucher(authorization, request, document)
+        .getFirst().getVoucherNumber();
+
+    assertThatThrownBy(() -> voucherAuditReconciliation.getVoucherAmounts(null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    assertThat(voucherAuditReconciliation.getVoucherAmounts(authorization).discrepantEvents()).isZero();
+
+    audit.record("voucher", "journal_entry", voucherNumber, "manual_multi_created", voucherNumber,
+        "Historical audit amount fixture", 100, authorization);
+    audit.record("voucher", "journal_entry", "M-missing", "manual_created", "M-missing",
+        "Missing journal fixture", 50, authorization);
+    String unauditedVoucher = accounting.createManualEntry(new CreateManualJournalEntryRequest(
+        LocalDate.now(), "Missing audit fixture", "1930", "2018", 75)).getFirst().getVoucherNumber();
+    audit.record("voucher", "other_entity", unauditedVoucher, "manual_created", unauditedVoucher,
+        "Wrong entity type must not satisfy voucher coverage", 75, authorization);
+    var report = voucherAuditReconciliation.getVoucherAmounts(authorization);
+    assertThat(report.examinedEvents()).isEqualTo(4);
+    assertThat(report.examinedVouchers()).isEqualTo(2);
+    assertThat(report.discrepantEvents()).isEqualTo(3);
+    assertThat(report.findings()).anySatisfy(finding -> {
+      assertThat(finding.voucherNumber()).isEqualTo(voucherNumber);
+      assertThat(finding.auditAmountMinor()).isEqualTo(10000L);
+      assertThat(finding.journalDebitMinor()).isEqualTo(new java.math.BigInteger("13000"));
+      assertThat(finding.journalCreditMinor()).isEqualTo(new java.math.BigInteger("13000"));
+      assertThat(finding.issues()).contains("audit_journal_amount_mismatch");
+    }).anySatisfy(finding -> {
+      assertThat(finding.voucherNumber()).isEqualTo("M-missing");
+      assertThat(finding.issues()).contains("missing_journal");
+    }).anySatisfy(finding -> {
+      assertThat(finding.voucherNumber()).isEqualTo(unauditedVoucher);
+      assertThat(finding.auditId()).isNull();
+      assertThat(finding.journalDebitMinor()).isEqualTo(new java.math.BigInteger("7500"));
+      assertThat(finding.issues()).contains("missing_audit_event");
+    });
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action IN "
+        + "('manual_created', 'manual_multi_created')", Long.class)).isEqualTo(4L);
+  }
+
+  @Test
+  void manualVoucherDocumentIsAtomicArchivedAndImmutable() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Evidence integration test\",\"debitAccountNumber\":\"1930\","
+        + "\"creditAccountNumber\":\"2018\",\"amount\":100}";
+    byte[] pdf = "%PDF-1.4\nVoucher test".getBytes(StandardCharsets.UTF_8);
+    MockMultipartFile document = new MockMultipartFile("file", "voucher.pdf", "application/pdf", pdf);
+
+    var entries = voucherEvidenceController.createManualVoucher(authorization, request, document);
+    String voucherNumber = entries.getFirst().getVoucherNumber();
+    assertThat(entries).hasSize(2).allSatisfy(entry -> assertThat(entry.getEvidenceStatus()).isEqualTo("traceable"));
+    assertThat(voucherEvidenceService.download(voucherNumber).content()).isEqualTo(pdf);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_number = ? "
+        + "AND voucher_evidence_id IS NOT NULL", Long.class, voucherNumber)).isEqualTo(2L);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM voucher_evidence_contents", Long.class)).isEqualTo(1L);
+
+    assertThatThrownBy(() -> jdbc.update("UPDATE voucher_evidence_contents SET content = ?", new byte[] {1}))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET voucher_evidence_id = NULL WHERE voucher_number = ?",
+        voucherNumber)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> voucherEvidenceService.attach(voucherNumber, document))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+    long before = jdbc.queryForObject("SELECT count(*) FROM journal_entries", Long.class);
+    MockMultipartFile invalid = new MockMultipartFile("file", "invalid.pdf", "application/pdf",
+        "not a pdf".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(() -> voucherEvidenceController.createManualVoucher(authorization, request, invalid))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries", Long.class)).isEqualTo(before);
+  }
+
+  @Test
+  void legacyManualVoucherEndpointCannotBypassDocumentRequirement() {
+    var request = new CreateManualJournalEntryRequest(LocalDate.now(), "Legacy request", "1930", "2018", 100);
+    assertThatThrownBy(() -> accountingController.createManualJournalEntry(authorization, request))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
+    assertThat(journal.count()).isZero();
+  }
+
+  @Test
+  void openingBalancePostsOnlyWithArchivedEvidence() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Opening balance with evidence\",\"lines\":["
+        + "{\"accountNumber\":\"1930\",\"debit\":125,\"credit\":0},"
+        + "{\"accountNumber\":\"2018\",\"debit\":0,\"credit\":125}]}";
+    byte[] pdf = "%PDF-1.4\nOpening balance source".getBytes(StandardCharsets.UTF_8);
+    MockMultipartFile document = new MockMultipartFile("file", "opening-balance.pdf", "application/pdf", pdf);
+
+    var entries = voucherEvidenceController.createOpeningBalanceVoucher(authorization, request, document);
+    String voucherNumber = entries.getFirst().getVoucherNumber();
+    assertThat(voucherNumber).startsWith("IB");
+    assertThat(entries).hasSize(2).allSatisfy(entry -> {
+      assertThat(entry.getEvidenceStatus()).isEqualTo("traceable");
+      assertThat(entry.getVoucherNumber()).isEqualTo(voucherNumber);
+    });
+    assertThat(voucherEvidenceService.download(voucherNumber).content()).isEqualTo(pdf);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_number = ? "
+        + "AND voucher_evidence_id IS NOT NULL", Long.class, voucherNumber)).isEqualTo(2L);
+
+    long beforeEntries = journal.count();
+    long beforeDocuments = jdbc.queryForObject("SELECT count(*) FROM voucher_evidence", Long.class);
+    MockMultipartFile invalid = new MockMultipartFile("file", "invalid.pdf", "application/pdf",
+        "not a pdf".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(() -> voucherEvidenceController.createOpeningBalanceVoucher(authorization, request, invalid))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(journal.count()).isEqualTo(beforeEntries);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM voucher_evidence", Long.class))
+        .isEqualTo(beforeDocuments);
+  }
+
+  @Test
+  void openingBalanceAuditRecordsTotalWhenDebitIsSplitAcrossAccounts() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Opening balance audit\",\"lines\":["
+        + "{\"accountNumber\":\"1930\",\"debit\":100,\"credit\":0},"
+        + "{\"accountNumber\":\"1630\",\"debit\":25,\"credit\":0},"
+        + "{\"accountNumber\":\"2018\",\"debit\":0,\"credit\":125}]}";
+    MockMultipartFile document = new MockMultipartFile("file", "opening-audit.pdf", "application/pdf",
+        "%PDF-1.4\nOpening audit source".getBytes(StandardCharsets.UTF_8));
+
+    String voucherNumber = voucherEvidenceController.createOpeningBalanceVoucher(authorization, request, document)
+        .getFirst().getVoucherNumber();
+    assertThat(jdbc.queryForObject("SELECT amount FROM audit_events WHERE event_action = 'opening_balance_created' "
+        + "AND entity_id = ?", Integer.class, voucherNumber)).isEqualTo(125);
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM audit_events WHERE event_action = 'opening_balance_created' "
+        + "AND entity_id = ?", Long.class, voucherNumber)).isEqualTo(12500L);
+  }
+
+  @Test
+  void openingBalanceEvidenceEndpointRequiresAuthentication() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Opening balance\",\"lines\":["
+        + "{\"accountNumber\":\"1930\",\"debit\":100,\"credit\":0},"
+        + "{\"accountNumber\":\"2018\",\"debit\":0,\"credit\":100}]}";
+    ByteArrayResource file = new ByteArrayResource("%PDF-1.4\nSource".getBytes(StandardCharsets.UTF_8)) {
+      @Override public String getFilename() { return "opening-balance.pdf"; }
+    };
+    HttpHeaders fileHeaders = new HttpHeaders();
+    fileHeaders.setContentType(MediaType.APPLICATION_PDF);
+    var parts = new LinkedMultiValueMap<String, Object>();
+    parts.add("request", request);
+    parts.add("file", new HttpEntity<>(file, fileHeaders));
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    MockMultipartFile document = new MockMultipartFile("file", "opening-balance.pdf", "application/pdf",
+        "%PDF-1.4\nSource".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(() -> voucherEvidenceController.createOpeningBalanceVoucher(null, request, document))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    assertThat(journal.count()).isZero();
+
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var response = http.postForEntity("/journal-entries/opening-balance-with-evidence",
+        new HttpEntity<>(parts, headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_evidence_id IS NOT NULL",
+        Long.class)).isEqualTo(2L);
+  }
+
+  @Test
+  void legacyOpeningBalanceEndpointCannotBypassDocumentRequirement() {
+    var request = new CreateOpeningBalanceRequest(LocalDate.now(), "Legacy request", List.of(
+        new CreateManualJournalEntryLineRequest("1930", 100, 0),
+        new CreateManualJournalEntryLineRequest("2018", 0, 100)));
+    assertThatThrownBy(() -> accountingController.createOpeningBalanceJournalEntry(authorization, request))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
+    assertThat(journal.count()).isZero();
+  }
+
+  @Test
+  void manualMultiVoucherArchivesEvidenceAtomicallyAndRejectsOldEndpoint() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Payroll evidence test\",\"lines\":["
+        + "{\"accountNumber\":\"7010\",\"debit\":100,\"credit\":0},"
+        + "{\"accountNumber\":\"7510\",\"debit\":30,\"credit\":0},"
+        + "{\"accountNumber\":\"2710\",\"debit\":0,\"credit\":30},"
+        + "{\"accountNumber\":\"1930\",\"debit\":0,\"credit\":100}]}";
+    byte[] pdf = "%PDF-1.4\nPayroll source".getBytes(StandardCharsets.UTF_8);
+    MockMultipartFile document = new MockMultipartFile("file", "payroll.pdf", "application/pdf", pdf);
+
+    assertThatThrownBy(() -> voucherEvidenceController.createManualMultiVoucher(null, request, document))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    assertThat(journal.count()).isZero();
+
+    var entries = voucherEvidenceController.createManualMultiVoucher(authorization, request, document);
+    String voucherNumber = entries.getFirst().getVoucherNumber();
+    assertThat(entries).hasSize(4).allSatisfy(entry -> {
+      assertThat(entry.getVoucherNumber()).isEqualTo(voucherNumber);
+      assertThat(entry.getEvidenceStatus()).isEqualTo("traceable");
+    });
+    assertThat(voucherEvidenceService.download(voucherNumber).content()).isEqualTo(pdf);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_number = ? "
+        + "AND voucher_evidence_id IS NOT NULL", Long.class, voucherNumber)).isEqualTo(4L);
+    assertThat(jdbc.queryForObject("SELECT amount FROM audit_events WHERE event_action = 'manual_multi_created' "
+        + "AND entity_id = ?", Integer.class, voucherNumber)).isEqualTo(130);
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM audit_events WHERE event_action = 'manual_multi_created' "
+        + "AND entity_id = ?", Long.class, voucherNumber)).isEqualTo(13000L);
+
+    long beforeEntries = journal.count();
+    long beforeDocuments = jdbc.queryForObject("SELECT count(*) FROM voucher_evidence", Long.class);
+    MockMultipartFile invalid = new MockMultipartFile("file", "invalid.pdf", "application/pdf",
+        "not a pdf".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(() -> voucherEvidenceController.createManualMultiVoucher(authorization, request, invalid))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(journal.count()).isEqualTo(beforeEntries);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM voucher_evidence", Long.class))
+        .isEqualTo(beforeDocuments);
+
+    var legacyRequest = new CreateManualMultiLineJournalEntryRequest(LocalDate.now(), "Legacy request", List.of(
+        new CreateManualJournalEntryLineRequest("7010", 100, 0),
+        new CreateManualJournalEntryLineRequest("1930", 0, 100)));
+    assertThatThrownBy(() -> accountingController.createManualMultiLineJournalEntry(authorization, legacyRequest))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
+    assertThat(journal.count()).isEqualTo(beforeEntries);
+  }
+
+  @Test
+  void manualMultiVoucherAcceptsAuthenticatedMultipartHttpRequest() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Monthly payroll\",\"lines\":["
+        + "{\"accountNumber\":\"7010\",\"debit\":100,\"credit\":0},"
+        + "{\"accountNumber\":\"1930\",\"debit\":0,\"credit\":100}]}";
+    ByteArrayResource file = new ByteArrayResource("%PDF-1.4\nPayroll report".getBytes(StandardCharsets.UTF_8)) {
+      @Override public String getFilename() { return "payroll.pdf"; }
+    };
+    HttpHeaders fileHeaders = new HttpHeaders();
+    fileHeaders.setContentType(MediaType.APPLICATION_PDF);
+    var parts = new LinkedMultiValueMap<String, Object>();
+    parts.add("request", request);
+    parts.add("file", new HttpEntity<>(file, fileHeaders));
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    var response = http.postForEntity("/journal-entries/manual-multi-with-evidence",
+        new HttpEntity<>(parts, headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_evidence_id IS NOT NULL",
+        Long.class)).isEqualTo(2L);
+  }
+
+  @Test
+  void postedJournalRowsRejectSqlMutationAndDeletionButAcceptLaterEvidence() {
+    var entries = accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(),
+        "Immutable voucher", "1930", "2018", 125));
+    long id = entries.getFirst().getId();
+    String voucherNumber = entries.getFirst().getVoucherNumber();
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET account_number = '1910' WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET description = 'Rewritten' WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("DELETE FROM journal_entries WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(journal.findById(id).orElseThrow().getAccountNumber()).isEqualTo("1930");
+    assertThat(journal.findById(id).orElseThrow().getDescription()).isEqualTo("Immutable voucher");
+
+    MockMultipartFile document = new MockMultipartFile("file", "voucher.pdf", "application/pdf",
+        "%PDF-1.4\nEvidence".getBytes(StandardCharsets.UTF_8));
+    voucherEvidenceService.attach(voucherNumber, document);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_number = ? "
+        + "AND voucher_evidence_id IS NOT NULL", Long.class, voucherNumber)).isEqualTo(2L);
+  }
+
+  @Test
+  void manualVoucherHttpUploadAcceptsDocumentLargerThanSpringDefault() {
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Large evidence test\",\"debitAccountNumber\":\"1930\","
+        + "\"creditAccountNumber\":\"2018\",\"amount\":100}";
+    byte[] pdf = new byte[2 * 1024 * 1024];
+    Arrays.fill(pdf, (byte) 'A');
+    System.arraycopy("%PDF-1.4\n".getBytes(StandardCharsets.UTF_8), 0, pdf, 0, 9);
+    ByteArrayResource file = new ByteArrayResource(pdf) {
+      @Override public String getFilename() { return "large.pdf"; }
+    };
+    HttpHeaders fileHeaders = new HttpHeaders();
+    fileHeaders.setContentType(MediaType.APPLICATION_PDF);
+    var parts = new LinkedMultiValueMap<String, Object>();
+    parts.add("request", request);
+    parts.add("file", new HttpEntity<>(file, fileHeaders));
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    var response = http.postForEntity("/journal-entries/manual-with-evidence",
+        new HttpEntity<>(parts, headers), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(jdbc.queryForObject("SELECT file_size FROM voucher_evidence", Integer.class)).isEqualTo(pdf.length);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM journal_entries WHERE voucher_evidence_id IS NOT NULL",
+        Long.class)).isEqualTo(2L);
   }
 
   @Test
@@ -154,6 +752,28 @@ class CloudShopApplicationIT {
   }
 
   @Test
+  void systemStatusOnlyReportsOwnerMfaWhenExactlyOneOwnerIsEnrolled() throws Exception {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var request = new HttpEntity<>(headers);
+    var mapper = new ObjectMapper();
+
+    var status = http.exchange("/system/status", org.springframework.http.HttpMethod.GET, request, String.class);
+    assertThat(mapper.readTree(status.getBody()).path("auth").path("ownerMfaEnabled").asBoolean()).isFalse();
+
+    jdbc.update("INSERT INTO app_users (email, password, mfa_enabled, mfa_last_counter, mfa_secret_enc, mfa_recovery_hashes) "
+        + "VALUES (?, ?, true, -1, ?, ?)", "owner@example.invalid", "unused-test-password",
+        "v1:encrypted-test-secret", "test-recovery-hash");
+    status = http.exchange("/system/status", org.springframework.http.HttpMethod.GET, request, String.class);
+    assertThat(mapper.readTree(status.getBody()).path("auth").path("ownerMfaEnabled").asBoolean()).isTrue();
+
+    jdbc.update("INSERT INTO app_users (email, password, mfa_last_counter) VALUES (?, ?, -1)",
+        "second@example.invalid", "unused-test-password");
+    status = http.exchange("/system/status", org.springframework.http.HttpMethod.GET, request, String.class);
+    assertThat(mapper.readTree(status.getBody()).path("auth").path("ownerMfaEnabled").asBoolean()).isFalse();
+  }
+
+  @Test
   void productionOwnerRegistrationCanOnlyBeUsedOncePerWorkspace() {
     AuthRequest ownerRequest = new AuthRequest("owner@example.invalid", "StrongTestPassword123");
     var first = http.postForEntity("/auth/register", ownerRequest, String.class);
@@ -162,6 +782,25 @@ class CloudShopApplicationIT {
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(jdbc.queryForObject("SELECT count(*) FROM app_users", Long.class)).isEqualTo(1L);
+    assertThat(jdbc.queryForObject("SELECT auth_version FROM app_users WHERE email = ?", Long.class,
+        "owner@example.invalid")).isZero();
+  }
+
+  @Test
+  void rejectedMfaLoginRetainsSecurityAuditAfterRollback() {
+    String email = "mfa-audit@example.invalid";
+    jdbc.update("INSERT INTO app_users (email, password, mfa_enabled, mfa_last_counter) VALUES (?, ?, true, -1)",
+        email, "unused-test-password");
+    String challenge = mfa.createLoginChallenge(email);
+
+    assertThatThrownBy(() -> mfa.completeLogin(challenge, "invalid"))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED));
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'mfa_login_failed' "
+        + "AND entity_id = ?", Long.class, email)).isEqualTo(1L);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM mfa_login_challenges WHERE user_email = ?",
+        Long.class, email)).isZero();
   }
 
   @ParameterizedTest
@@ -170,11 +809,15 @@ class CloudShopApplicationIT {
       "/profit-and-loss/export", "/balance-report/export", "/trial-balance/export", "/general-ledger/export",
       "/sie/export", "/sie/receipt/export", "/bank-reconciliations/report", "/bank-reconciliations/report/export"})
   void oversizedReportsReturnExplicitErrorWithoutExportOrBookkeepingWrites(String path) throws Exception {
+    MockMultipartFile document = new MockMultipartFile("file", "report-limit.pdf", "application/pdf",
+        "%PDF-1.4\nReport limit".getBytes(StandardCharsets.UTF_8));
     for (int i = 0; i < 2; i++) {
-      accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Report limit test",
+      var report = accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Report limit test",
           "1930", "3041", 1_500_000_000));
-      accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "VAT limit test",
+      voucherEvidenceService.attach(report.getFirst().getVoucherNumber(), document);
+      var vat = accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "VAT limit test",
           "1930", "2611", 1_500_000_000));
+      voucherEvidenceService.attach(vat.getFirst().getVoucherNumber(), document);
     }
     long journalCount = journal.count();
     long auditCount = jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
@@ -201,8 +844,540 @@ class CloudShopApplicationIT {
   }
 
   @Test
+  void minorTrialBalanceReadsActualJournalShadowsWithoutChangingLegacyAmounts() throws Exception {
+    LocalDate date = LocalDate.now();
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(date, "Minor report compatibility",
+        "1930", "3041", 1250));
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    long auditCount = jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
+    var response = http.exchange("/v2/trial-balance?from=" + date + "&to=" + date,
+        org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var body = new ObjectMapper().readTree(response.getBody());
+    assertThat(body.path("periodDebitTotalMinor").asLong()).isEqualTo(125000L);
+    assertThat(body.path("periodCreditTotalMinor").asLong()).isEqualTo(125000L);
+    assertThat(body.path("differenceMinor").asLong()).isZero();
+    assertThat(body.path("currencyCode").asText()).isEqualTo("SEK");
+    assertThat(body.path("lines").size()).isEqualTo(2);
+    assertThat(jdbc.queryForObject("SELECT sum(debit) FROM journal_entries", Long.class)).isEqualTo(1250L);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class)).isEqualTo(auditCount);
+    var export = http.exchange("/v2/trial-balance/export", org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers), String.class);
+    assertThat(export.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(export.getBody()).contains("SEK,2,TOTAL,,0,0,125000,125000,125000,125000,0");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'trial_balance_minor_exported'",
+        Long.class)).isEqualTo(1L);
+    assertThat(journal.count()).isEqualTo(2L);
+    assertThat(http.getForEntity("/v2/trial-balance", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(http.getForEntity("/v2/trial-balance/export", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void minorBalanceReportUsesActualLedgerAndAuditsExport() throws Exception {
+    LocalDate date = LocalDate.now();
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(date, "Minor balance compatibility",
+        "1930", "3041", 1250));
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+
+    var response = http.exchange("/v2/balance-report?to=" + date,
+        org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var body = new ObjectMapper().readTree(response.getBody());
+    assertThat(body.path("currencyCode").asText()).isEqualTo("SEK");
+    assertThat(body.path("totalAssetsMinor").asLong()).isEqualTo(125_000L);
+    assertThat(body.path("totalLiabilitiesAndEquityMinor").asLong()).isEqualTo(125_000L);
+    assertThat(body.path("differenceMinor").asLong()).isZero();
+    assertThat(jdbc.queryForObject("SELECT sum(debit) FROM journal_entries", Long.class)).isEqualTo(1250L);
+
+    var export = http.exchange("/v2/balance-report/export?to=" + date,
+        org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(export.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(export.getBody()).contains("SEK,2,TOTAL_ASSETS,,,125000");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'balance_report_minor_exported'",
+        Long.class)).isEqualTo(1L);
+    assertThat(http.getForEntity("/v2/balance-report", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(http.getForEntity("/v2/balance-report/export", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void minorJournalExportsActualJournalInRegistrationOrder() throws Exception {
+    LocalDate date = LocalDate.now();
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(date, "Minor journal compatibility",
+        "1930", "3041", 1250));
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    long auditCount = jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
+    var response = http.exchange("/v2/journal-entries?from=" + date + "&to=" + date,
+        org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var body = new ObjectMapper().readTree(response.getBody());
+    assertThat(body.path("entries").size()).isEqualTo(2);
+    assertThat(body.path("entries").get(0).path("journalEntryId").asLong())
+        .isLessThan(body.path("entries").get(1).path("journalEntryId").asLong());
+    assertThat(body.path("debitTotalMinor").asLong()).isEqualTo(125000L);
+    assertThat(body.path("creditTotalMinor").asLong()).isEqualTo(125000L);
+    assertThat(body.path("differenceMinor").asLong()).isZero();
+    assertThat(body.path("voucherDifferences").isArray()).isTrue();
+    assertThat(body.path("voucherDifferences").size()).isZero();
+    assertThat(jdbc.queryForObject("SELECT sum(debit) FROM journal_entries", Long.class)).isEqualTo(1250L);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class)).isEqualTo(auditCount);
+
+    var export = http.exchange("/v2/journal-entries/export?from=" + date + "&to=" + date,
+        org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(export.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(export.getBody()).contains("DifferenceMinor").contains("SEK,2,TOTAL").contains(",125000,125000,0");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events WHERE event_action = 'journal_minor_exported'",
+        Long.class)).isEqualTo(1L);
+    assertThat(http.getForEntity("/v2/journal-entries", String.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(http.getForEntity("/v2/journal-entries/export", String.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void minorTrialBalanceSupportsTotalsAboveLegacyReportRange() throws Exception {
+    for (int i = 0; i < 2; i++) {
+      accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Large trial report",
+          "1930", "3041", 1_500_000_000));
+    }
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var response = http.exchange("/v2/trial-balance", org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var body = new ObjectMapper().readTree(response.getBody());
+    assertThat(body.path("periodDebitTotalMinor").asLong()).isEqualTo(300_000_000_000L);
+    assertThat(body.path("differenceMinor").asLong()).isZero();
+  }
+
+  @Test
   void invoicesRequireAuthenticationOverHttp() {
     assertThat(http.getForEntity("/invoices", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"debit_minor = NULL", "credit_minor = NULL", "debit_minor = 125001",
+      "credit_minor = 1", "currency_code = 'EUR'",
+      "debit = -1, debit_minor = -100", "credit = 1, credit_minor = 100"})
+  void persistedMoneyCorruptionIsRejectedWithoutAutomaticRepair(String corruption) throws Exception {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Stored money test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow(corruption);
+    var before = jdbc.queryForMap("SELECT debit, credit, debit_minor, credit_minor, currency_code FROM journal_entries WHERE account_number = '1930'");
+    long auditCount = jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var response = http.exchange("/journal-entries", org.springframework.http.HttpMethod.GET,
+        new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    assertThat(new ObjectMapper().readTree(response.getBody()).path("code").asText()).isEqualTo("LEDGER_MONEY_INTEGRITY");
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+    assertThat(jdbc.queryForMap("SELECT debit, credit, debit_minor, credit_minor, currency_code FROM journal_entries WHERE account_number = '1930'"))
+        .isEqualTo(before);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class)).isEqualTo(auditCount);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"/profit-and-loss", "/balance-report", "/trial-balance", "/journal-integrity",
+      "/general-ledger/export", "/sie/export", "/trial-balance/export"})
+  void corruptJournalMoneyCannotProduceReportsOrSuccessfulExports(String path) throws Exception {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Stored money export test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow("debit_minor = 125001");
+    long auditCount = jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class);
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorization);
+    var response = http.exchange(path, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    assertThat(new ObjectMapper().readTree(response.getBody()).path("code").asText()).isEqualTo("LEDGER_MONEY_INTEGRITY");
+    assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).isNull();
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE account_number = '1930'", Long.class)).isEqualTo(125001L);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_events", Long.class)).isEqualTo(auditCount);
+  }
+
+  @Test
+  void inconsistentNewJournalRowRollsBackEarlierRowsInTheTransaction() {
+    var account = new se.cloudshop.accounting.Account("1930", "Bank");
+    assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      journal.saveAndFlush(new JournalEntry(null, account, "M-integrity", 1250, 0, "Valid first row"));
+      JournalEntry invalid = new JournalEntry(null, account, "M-integrity", 0, 1250, "Invalid second row");
+      org.springframework.test.util.ReflectionTestUtils.setField(invalid, "creditMinor", 125001L);
+      journal.saveAndFlush(invalid);
+    })).isInstanceOf(se.cloudshop.accounting.JournalMoneyIntegrityException.class);
+    assertThat(journal.count()).isZero();
+  }
+
+  @Test
+  void existingJournalShadowCannotBeChangedAndSilentlyResynchronized() {
+    var rows = accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Update test",
+        "1930", "3041", 1250));
+    long id = rows.get(0).getId();
+    assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      JournalEntry row = journal.findById(id).orElseThrow();
+      org.springframework.test.util.ReflectionTestUtils.setField(row, "debitMinor", 125001L);
+      journal.saveAndFlush(row);
+    })).isInstanceOf(se.cloudshop.accounting.JournalMoneyIntegrityException.class);
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE id = ?", Long.class, id)).isEqualTo(125000L);
+    assertThat(journal.count()).isEqualTo(2);
+  }
+
+  @Test
+  void databaseRejectsMissingJournalCurrencyWithoutChangingTheRow() {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Currency constraint test",
+        "1930", "3041", 1250));
+    assertThatThrownBy(() -> corruptTestLedgerRow("currency_code = NULL"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT currency_code FROM journal_entries WHERE account_number = '1930'", String.class))
+        .isEqualTo("SEK");
+    assertThat(journal.findAll()).hasSize(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"debit_minor = 125001", "debit_minor = NULL", "debit = 1251",
+      "currency_code = 'EUR'", "credit = 1, credit_minor = 100"})
+  void databaseRejectsDirectJournalMoneyChangesBeforeShadowSync(String change) {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Database guard test",
+        "1930", "3041", 1250));
+    var before = jdbc.queryForMap("SELECT debit, credit, debit_minor, credit_minor, currency_code FROM journal_entries WHERE account_number = '1930'");
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET " + change + " WHERE account_number = '1930'"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForMap("SELECT debit, credit, debit_minor, credit_minor, currency_code FROM journal_entries WHERE account_number = '1930'"))
+        .isEqualTo(before);
+  }
+
+  @Test
+  void databaseRejectsInconsistentDirectJournalInsert() {
+    assertThatThrownBy(() -> jdbc.update("INSERT INTO journal_entries "
+        + "(account_number, account_name, voucher_number, voucher_date, debit, credit, debit_minor, credit_minor, currency_code) "
+        + "VALUES ('1930', 'Bank', 'M-guard', CURRENT_DATE, 1250, 0, 125001, 0, 'SEK')"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(journal.count()).isZero();
+  }
+
+  @Test
+  void databaseRequiresBalancedVoucherAtCommit() {
+    String columns = "(account_number, account_name, voucher_number, voucher_date, debit, credit, debit_minor, credit_minor, currency_code) ";
+    String insert = "INSERT INTO journal_entries " + columns
+        + "VALUES (?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, 'SEK')";
+
+    assertThatThrownBy(() -> jdbc.update(insert, "1930", "Bank", "M-unbalanced", 1250, 0, 125000, 0))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update(insert, "1930", "Bank", " ", 1250, 0, 125000, 0))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(journal.count()).isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM journal_voucher_registry", Long.class)).isZero();
+
+    new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      jdbc.update(insert, "1930", "Bank", "M-balanced", 1250, 0, 125000, 0);
+      jdbc.update(insert, "3041", "Revenue", "M-balanced", 0, 1250, 0, 125000);
+    });
+    assertThat(journal.count()).isEqualTo(2);
+    assertThat(jdbc.queryForObject("SELECT sealed FROM journal_voucher_registry WHERE voucher_number = 'M-balanced'", Boolean.class))
+        .isTrue();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM journal_entries WHERE voucher_number = 'M-balanced' AND created_at IS NOT NULL", Long.class))
+        .isEqualTo(2L);
+    assertThatThrownBy(() -> jdbc.update(insert, "1930", "Bank", "M-balanced", 1, 0, 100, 0))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      jdbc.update(insert, "1930", "Bank", "M-balanced", 1, 0, 100, 0);
+      jdbc.update(insert, "3041", "Revenue", "M-balanced", 0, 1, 0, 100);
+    })).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("DELETE FROM journal_voucher_registry WHERE voucher_number = 'M-balanced'"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_voucher_registry SET sealed = false WHERE voucher_number = 'M-balanced'"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(journal.count()).isEqualTo(2);
+  }
+
+  @Test
+  void databaseRejectsNewJournalRowWithExplicitlyMissingRegistrationTime() {
+    assertThatThrownBy(() -> jdbc.update("INSERT INTO journal_entries "
+        + "(account_number, account_name, voucher_number, voucher_date, debit, credit, "
+        + "debit_minor, credit_minor, currency_code, created_at) "
+        + "VALUES ('1930', 'Bank', 'M-no-created-at', CURRENT_DATE, 100, 0, 10000, 0, 'SEK', NULL)"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(journal.count()).isZero();
+  }
+
+  @Test
+  void repeatedSchemaPatchDoesNotSilentlyRestoreMissingVoucherReservation() {
+    String voucherNumber = accounting.createManualEntry(new CreateManualJournalEntryRequest(
+        LocalDate.now(), "Registry restart test", "1930", "2018", 125)).getFirst().getVoucherNumber();
+    jdbc.execute("DROP TRIGGER journal_voucher_registry_immutable ON journal_voucher_registry");
+    jdbc.update("DELETE FROM journal_voucher_registry WHERE voucher_number = ?", voucherNumber);
+
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM journal_voucher_registry WHERE voucher_number = ?",
+        Long.class, voucherNumber)).isZero();
+    jdbc.update("INSERT INTO journal_voucher_registry (voucher_number, posting_xid, sealed) VALUES (?, 0, true)",
+        voucherNumber);
+  }
+
+  @Test
+  void firstVoucherSealMigrationBackfillsExistingPostedNumbers() {
+    String voucherNumber = accounting.createManualEntry(new CreateManualJournalEntryRequest(
+        LocalDate.now(), "Registry migration test", "1930", "2018", 125)).getFirst().getVoucherNumber();
+    jdbc.update("DELETE FROM money_migration_ledger WHERE migration_key = 'journal-voucher-seal-v1'");
+    jdbc.execute("TRUNCATE journal_voucher_registry");
+
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+
+    assertThat(jdbc.queryForObject("SELECT sealed FROM journal_voucher_registry WHERE voucher_number = ?",
+        Boolean.class, voucherNumber)).isTrue();
+    assertThat(jdbc.queryForObject("SELECT posting_xid FROM journal_voucher_registry WHERE voucher_number = ?",
+        Long.class, voucherNumber)).isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM money_migration_ledger "
+        + "WHERE migration_key = 'journal-voucher-seal-v1'", Long.class)).isEqualTo(1L);
+  }
+
+  @Test
+  void unrelatedSqlUpdateDoesNotRepairAlreadyCorruptJournalMoney() {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Existing corruption test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow("debit_minor = 125001");
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET description = 'Changed' WHERE account_number = '1930'"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE account_number = '1930'", Long.class))
+        .isEqualTo(125001L);
+  }
+
+  @Test
+  void repeatedSchemaPatchDoesNotRepairJournalMoneyAfterMigrationMarker() {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Restart safety test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow("debit_minor = NULL");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM money_migration_ledger WHERE migration_key = 'journal-entry-shadow-v1'", Long.class))
+        .isEqualTo(1L);
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE account_number = '1930'", Long.class))
+        .isNull();
+  }
+
+  @Test
+  void controlledMigrationFileRunsAgainstRealPostgresWithoutChangingBookedMoney() throws Exception {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Migration file test",
+        "1930", "3041", 1250));
+    var before = jdbc.queryForList("SELECT account_number, debit, credit, debit_minor, credit_minor, currency_code "
+        + "FROM journal_entries ORDER BY id");
+    String migration = Files.readString(Path.of("..", "db", "migrations", "001_startup_schema_patch.sql"));
+
+    new TransactionTemplate(transactions).executeWithoutResult(status -> jdbc.execute(migration));
+
+    assertThat(jdbc.queryForList("SELECT account_number, debit, credit, debit_minor, credit_minor, currency_code "
+        + "FROM journal_entries ORDER BY id")).isEqualTo(before);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM money_migration_ledger "
+        + "WHERE migration_key = 'journal-money-guard-v1'", Long.class)).isEqualTo(1L);
+    assertThatThrownBy(() -> jdbc.update("UPDATE journal_entries SET debit_minor = 125001 "
+        + "WHERE account_number = '1930'"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+  }
+
+  @Test
+  void controlledMigrationFileLeavesCorruptBookedMoneyForBlockedVerification() throws Exception {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Migration corruption test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow("voucher_date = NULL, debit_minor = NULL");
+    String migration = Files.readString(Path.of("..", "db", "migrations", "001_startup_schema_patch.sql"));
+
+    new TransactionTemplate(transactions).executeWithoutResult(status -> jdbc.execute(migration));
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE account_number = '1930'", Long.class))
+        .isNull();
+    assertThat(jdbc.queryForObject("SELECT voucher_date FROM journal_entries WHERE account_number = '1930'", LocalDate.class))
+        .isNull();
+    new TransactionTemplate(transactions).executeWithoutResult(status -> {
+      jdbc.update("DELETE FROM money_migration_checks WHERE migration_key = ? AND check_name = ?",
+          "core-minor-v2-verified", "journal:voucher-date");
+      var verifier = new se.cloudshop.config.MoneyMigrationVerifier(jdbc, true, 26L);
+      assertThatThrownBy(verifier::run).isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("without a voucher date");
+      assertThat(verifier.status()).containsEntry("state", "blocked");
+      status.setRollbackOnly();
+    });
+  }
+
+  @Test
+  void schemaPatchDoesNotReplaceHistoricalVoucherDateOrMoneyShadow() {
+    accounting.createManualEntry(new CreateManualJournalEntryRequest(LocalDate.now(), "Restart mismatch test",
+        "1930", "3041", 1250));
+    corruptTestLedgerRow("voucher_date = NULL, debit_minor = NULL");
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+    assertThat(jdbc.queryForObject("SELECT debit_minor FROM journal_entries WHERE account_number = '1930'", Long.class))
+        .isNull();
+    assertThat(jdbc.queryForObject("SELECT voucher_date FROM journal_entries WHERE account_number = '1930'", LocalDate.class))
+        .isNull();
+  }
+
+  @Test
+  void supplierPaymentTriggerRejectsContradictoryMinorAmounts() {
+    Supplier supplier = suppliers.saveAndFlush(new Supplier("Trigger test", "trigger@example.invalid", "", "", ""));
+    SupplierInvoice invoice = supplierInvoices.saveAndFlush(new SupplierInvoice(supplier, LocalDate.now(),
+        LocalDate.now(), "Trigger test", "trigger-ref", 125, 25, "5420"));
+
+    assertThatThrownBy(() -> jdbc.update("INSERT INTO supplier_invoice_payments "
+        + "(supplier_invoice_id, payment_date, amount, amount_minor, currency_code, reference) "
+        + "VALUES (?, CURRENT_DATE, 125, 12501, 'SEK', 'bad')", invoice.getId()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+    Long id = jdbc.queryForObject("INSERT INTO supplier_invoice_payments "
+        + "(supplier_invoice_id, payment_date, amount, currency_code, reference) "
+        + "VALUES (?, CURRENT_DATE, 125, 'SEK', 'good') RETURNING id", Long.class, invoice.getId());
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM supplier_invoice_payments WHERE id = ?", Long.class, id))
+        .isEqualTo(12_500L);
+    assertThatThrownBy(() -> jdbc.update("UPDATE supplier_invoice_payments SET amount_minor = 12501 WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM supplier_invoice_payments WHERE id = ?", Long.class, id))
+        .isEqualTo(12_500L);
+  }
+
+  @Test
+  void customerPaymentTriggerRejectsContradictoryMinorAmounts() {
+    Order invoice = draft();
+
+    assertThatThrownBy(() -> jdbc.update("INSERT INTO invoice_payments "
+        + "(invoice_id, payment_date, amount, amount_minor, currency_code, reference) "
+        + "VALUES (?, CURRENT_DATE, 125, 12501, 'SEK', 'bad')", invoice.getId()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+    Long id = jdbc.queryForObject("INSERT INTO invoice_payments "
+        + "(invoice_id, payment_date, amount, currency_code, reference) "
+        + "VALUES (?, CURRENT_DATE, 125, 'SEK', 'good') RETURNING id", Long.class, invoice.getId());
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM invoice_payments WHERE id = ?", Long.class, id))
+        .isEqualTo(12_500L);
+    assertThatThrownBy(() -> jdbc.update("UPDATE invoice_payments SET amount_minor = 12501 WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE invoice_payments SET currency_code = 'EUR' WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT amount_minor FROM invoice_payments WHERE id = ?", Long.class, id))
+        .isEqualTo(12_500L);
+  }
+
+  @Test
+  void customerOrderGuardRejectsContradictoryAmountsWithoutBreakingInvoiceFlow() {
+    Order invoice = draft();
+    Long id = invoice.getId();
+    Long amount = jdbc.queryForObject("SELECT total_amount_minor FROM customer_orders WHERE id = ?",
+        Long.class, id);
+
+    assertThatThrownBy(() -> jdbc.update(
+        "UPDATE customer_orders SET total_amount_minor = ? WHERE id = ?", amount + 1, id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update(
+        "UPDATE customer_orders SET total_amount_minor = NULL WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update(
+        "UPDATE customer_orders SET currency_code = 'EUR' WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    assertThat(jdbc.queryForObject("SELECT total_amount_minor FROM customer_orders WHERE id = ?",
+        Long.class, id)).isEqualTo(amount);
+    assertThat(invoices.markInvoiceAsSent(authorization, id).getStatus()).isEqualTo("SENT");
+  }
+
+  @Test
+  void productGuardRejectsContradictoryPricesAndKeepsLegacyOnlyUpdatesCompatible() {
+    Long id = product.getId();
+    assertThatThrownBy(() -> jdbc.update("UPDATE products SET price_minor = 10001 WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE products SET discount_price_minor = NULL WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE products SET currency_code = 'EUR' WHERE id = ?", id))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    jdbc.update("UPDATE products SET price = 125 WHERE id = ?", id);
+    assertThat(jdbc.queryForObject("SELECT price_minor FROM products WHERE id = ?", Long.class, id))
+        .isEqualTo(12_500L);
+  }
+
+  @Test
+  void schemaPatchDoesNotSilentlyRepairMissingOrderShadowOnRestart() {
+    Long id = draft().getId();
+    jdbc.execute("ALTER TABLE customer_orders DISABLE TRIGGER a_customer_orders_money_integrity_guard");
+    jdbc.execute("ALTER TABLE customer_orders DISABLE TRIGGER customer_orders_money_shadow_sync");
+    try {
+      jdbc.update("UPDATE customer_orders SET total_amount_minor = NULL WHERE id = ?", id);
+    } finally {
+      jdbc.execute("ALTER TABLE customer_orders ENABLE TRIGGER customer_orders_money_shadow_sync");
+      jdbc.execute("ALTER TABLE customer_orders ENABLE TRIGGER a_customer_orders_money_integrity_guard");
+    }
+
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+
+    assertThat(jdbc.queryForObject("SELECT total_amount_minor FROM customer_orders WHERE id = ?",
+        Long.class, id)).isNull();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM customer_orders WHERE id = ? "
+        + "AND total_amount IS NOT NULL AND total_amount_minor IS NULL", Long.class, id)).isEqualTo(1L);
+  }
+
+  @Test
+  void schemaPatchDoesNotSilentlyRepairMissingSupplierInvoiceShadowOnRestart() {
+    Supplier supplier = suppliers.saveAndFlush(new Supplier("Restart test", "restart@example.invalid", "", "", ""));
+    SupplierInvoice invoice = supplierInvoices.saveAndFlush(new SupplierInvoice(supplier, LocalDate.now(),
+        LocalDate.now(), "Restart test", "restart-ref", 125, 25, "5420"));
+    jdbc.execute("ALTER TABLE supplier_invoices DISABLE TRIGGER a_supplier_invoices_money_integrity_guard");
+    jdbc.execute("ALTER TABLE supplier_invoices DISABLE TRIGGER supplier_invoices_money_shadow_sync");
+    try {
+      jdbc.update("UPDATE supplier_invoices SET total_amount_minor = NULL WHERE id = ?", invoice.getId());
+    } finally {
+      jdbc.execute("ALTER TABLE supplier_invoices ENABLE TRIGGER supplier_invoices_money_shadow_sync");
+      jdbc.execute("ALTER TABLE supplier_invoices ENABLE TRIGGER a_supplier_invoices_money_integrity_guard");
+    }
+
+    new se.cloudshop.config.DatabaseSchemaPatch(jdbc, true).run();
+
+    assertThat(jdbc.queryForObject("SELECT total_amount_minor FROM supplier_invoices WHERE id = ?",
+        Long.class, invoice.getId())).isNull();
+  }
+
+  @Test
+  void supplierInvoiceMoneyGuardRejectsContradictionsBeforeShadowSync() {
+    Supplier supplier = suppliers.saveAndFlush(new Supplier("Money guard", "guard@example.invalid", "", "", ""));
+    SupplierInvoice invoice = supplierInvoices.saveAndFlush(new SupplierInvoice(supplier, LocalDate.now(),
+        LocalDate.now(), "Money guard", "guard-ref", 125, 25, "5420"));
+    Long id = invoice.getId();
+
+    assertThatThrownBy(() -> jdbc.update("UPDATE supplier_invoices SET total_amount_minor = 12501 WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("UPDATE supplier_invoices SET currency_code = 'EUR' WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+    jdbc.update("UPDATE supplier_invoices SET total_amount = 126, net_amount = 101 WHERE id = ?", id);
+    assertThat(jdbc.queryForObject("SELECT total_amount_minor FROM supplier_invoices WHERE id = ?", Long.class, id))
+        .isEqualTo(12_600L);
+    assertThat(jdbc.queryForObject("SELECT net_amount_minor FROM supplier_invoices WHERE id = ?", Long.class, id))
+        .isEqualTo(10_100L);
+
+    jdbc.execute("ALTER TABLE supplier_invoices DISABLE TRIGGER a_supplier_invoices_money_integrity_guard");
+    jdbc.execute("ALTER TABLE supplier_invoices DISABLE TRIGGER supplier_invoices_money_shadow_sync");
+    try {
+      jdbc.update("UPDATE supplier_invoices SET total_amount_minor = NULL WHERE id = ?", id);
+    } finally {
+      jdbc.execute("ALTER TABLE supplier_invoices ENABLE TRIGGER supplier_invoices_money_shadow_sync");
+      jdbc.execute("ALTER TABLE supplier_invoices ENABLE TRIGGER a_supplier_invoices_money_integrity_guard");
+    }
+    assertThatThrownBy(() -> jdbc.update("UPDATE supplier_invoices SET description = 'Changed' WHERE id = ?", id))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(jdbc.queryForObject("SELECT total_amount_minor FROM supplier_invoices WHERE id = ?", Long.class, id))
+        .isNull();
+  }
+
+  private void corruptTestLedgerRow(String corruption) {
+    // Deliberate corruption only in the isolated integration database, with the trigger restored immediately.
+    jdbc.execute("ALTER TABLE journal_entries DISABLE TRIGGER b_journal_posted_immutable_guard");
+    jdbc.execute("ALTER TABLE journal_entries DISABLE TRIGGER a_journal_money_integrity_guard");
+    try {
+      jdbc.execute("ALTER TABLE journal_entries DISABLE TRIGGER journal_entries_money_shadow_sync");
+      try {
+        jdbc.update("UPDATE journal_entries SET " + corruption + " WHERE account_number = '1930'");
+      } finally {
+        jdbc.execute("ALTER TABLE journal_entries ENABLE TRIGGER journal_entries_money_shadow_sync");
+      }
+    } finally {
+      jdbc.execute("ALTER TABLE journal_entries ENABLE TRIGGER a_journal_money_integrity_guard");
+      jdbc.execute("ALTER TABLE journal_entries ENABLE TRIGGER b_journal_posted_immutable_guard");
+    }
   }
 
   @Test
@@ -581,6 +1756,26 @@ class CloudShopApplicationIT {
       executor.shutdownNow();
       assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
     }
+  }
+
+  @Test
+  void backdatedCorrectionLeavesOriginalVoucherAndAllowsLaterValidCorrection() {
+    LocalDate originalDate = LocalDate.now();
+    String originalVoucher = accounting.createManualEntry(new CreateManualJournalEntryRequest(
+        originalDate, "Correction date test", "1930", "2018", 100)).getFirst().getVoucherNumber();
+
+    assertThatThrownBy(() -> accounting.createCorrectionEntry(
+        originalVoucher, new CreateCorrectionJournalEntryRequest(originalDate.minusDays(1))))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    assertThat(journal.findByVoucherNumber(originalVoucher)).hasSize(2);
+    assertThat(journal.findByCorrectionOfVoucherNumber(originalVoucher)).isEmpty();
+
+    List<JournalEntry> correction = accounting.createCorrectionEntry(
+        originalVoucher, new CreateCorrectionJournalEntryRequest(originalDate));
+    assertThat(correction).hasSize(2);
+    assertThat(journal.findByCorrectionOfVoucherNumber(originalVoucher)).hasSize(2);
+    assertBalanced();
   }
 
   @ParameterizedTest
@@ -1116,7 +2311,12 @@ class CloudShopApplicationIT {
     Long first = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
     Long second = invoices.markInvoiceAsSent(authorization, draft().getId()).getId();
     invoices.markInvoiceAsPaid(authorization, first, new MarkInvoicePaidRequest(LocalDate.now(), 50, "first"));
-    jdbc.update("UPDATE journal_entries SET invoice_id = ? WHERE invoice_id = ? AND account_number = '1510' AND credit = 50", second, first);
+    jdbc.execute("ALTER TABLE journal_entries DISABLE TRIGGER b_journal_posted_immutable_guard");
+    try {
+      jdbc.update("UPDATE journal_entries SET invoice_id = ? WHERE invoice_id = ? AND account_number = '1510' AND credit = 50", second, first);
+    } finally {
+      jdbc.execute("ALTER TABLE journal_entries ENABLE TRIGGER b_journal_posted_immutable_guard");
+    }
     var body = subledgerControl();
     assertThat(body.path("status").asText()).isEqualTo("REVIEW_REQUIRED");
     assertThat(body.path("accounts").get(0).path("difference").asInt()).isZero();
@@ -1418,18 +2618,16 @@ class CloudShopApplicationIT {
   void manualVoucherAuditFailureRollsBackAllJournalLines() {
     failAudit();
 
-    assertThatThrownBy(() -> accountingController.createManualJournalEntry(
-        authorization,
-        new CreateManualJournalEntryRequest(
-            LocalDate.now(),
-            "Manual audit rollback",
-            "5420",
-            "1930",
-            100
-        )
-    )).isInstanceOf(RuntimeException.class);
+    String request = "{\"voucherDate\":\"" + LocalDate.now()
+        + "\",\"description\":\"Manual audit rollback\",\"debitAccountNumber\":\"5420\","
+        + "\"creditAccountNumber\":\"1930\",\"amount\":100}";
+    MockMultipartFile document = new MockMultipartFile("file", "voucher.pdf", "application/pdf",
+        "%PDF-1.4\nAudit rollback".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(() -> voucherEvidenceController.createManualVoucher(authorization, request, document))
+        .isInstanceOf(RuntimeException.class);
 
     assertThat(journal.count()).isZero();
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM voucher_evidence", Long.class)).isZero();
     assertThat(jdbc.queryForObject(
         "SELECT count(*) FROM audit_events WHERE event_action = 'manual_created'",
         Long.class
@@ -1820,6 +3018,20 @@ class CloudShopApplicationIT {
   }
 
   @Test
+  void issuedOriginalRejectsDirectUpdatesAndDeletes() {
+    Order issued = invoices.markInvoiceAsSent(authorization, draft().getId());
+    var original = invoiceOriginals.read(issued);
+
+    assertThatThrownBy(() -> jdbc.update("UPDATE invoice_originals SET sha256 = ? WHERE invoice_id = ?",
+        "changed", issued.getId())).isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> jdbc.update("DELETE FROM invoice_originals WHERE invoice_id = ?", issued.getId()))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    assertThat(invoiceOriginals.read(issued).pdf()).isEqualTo(original.pdf());
+    assertThat(invoiceOriginals.read(issued).sha256()).isEqualTo(original.sha256());
+  }
+
+  @Test
   void archiveFailureRollsBackIssuanceAndPreventsSmtp() {
     Order draft = draft();
     jdbc.execute("ALTER TABLE invoice_originals ADD CONSTRAINT reject_test_original CHECK (false) NOT VALID");
@@ -1852,7 +3064,13 @@ class CloudShopApplicationIT {
   @Test
   void corruptedOriginalReturnsConflictNotRegeneratedPdf() {
     Order issued = invoices.markInvoiceAsSent(authorization, draft().getId());
-    jdbc.update("UPDATE invoice_originals SET sha256 = 'corrupted' WHERE invoice_id = ?", issued.getId());
+    // Simulate corruption from before the immutable trigger was installed.
+    jdbc.execute("ALTER TABLE invoice_originals DISABLE TRIGGER invoice_originals_immutable");
+    try {
+      jdbc.update("UPDATE invoice_originals SET sha256 = 'corrupted' WHERE invoice_id = ?", issued.getId());
+    } finally {
+      jdbc.execute("ALTER TABLE invoice_originals ENABLE TRIGGER invoice_originals_immutable");
+    }
     HttpHeaders headers = new HttpHeaders();
     headers.set(HttpHeaders.AUTHORIZATION, authorization);
     var response = http.exchange("/invoices/" + issued.getId() + "/pdf", org.springframework.http.HttpMethod.GET,

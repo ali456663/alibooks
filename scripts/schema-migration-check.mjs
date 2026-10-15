@@ -34,6 +34,10 @@ function normalizeSql(value) {
     .toLowerCase();
 }
 
+function containsDestructiveStatement(statements) {
+  return statements.some(statement => /(?:^|;|\bBEGIN\b|\bTHEN\b)\s*(?:DROP\s+TABLE\b|TRUNCATE\b|DELETE\s+FROM\b)/i.test(statement));
+}
+
 function extractStartupSql(source) {
   const statements = [];
   const pattern = /jdbcTemplate\.execute\("((?:\\.|[^"\\])*)"\);/g;
@@ -67,7 +71,7 @@ function renderMigration(statements) {
     "--   schema dump first, then run this patch file for additive release changes.",
     "--",
     "-- Example:",
-    "--   psql \"postgresql://USER:PASSWORD@HOST:5432/cloudshop\" -f db/migrations/001_startup_schema_patch.sql",
+    "--   psql -v ON_ERROR_STOP=1 --single-transaction \"postgresql://USER:PASSWORD@HOST:5432/cloudshop\" -f db/migrations/001_startup_schema_patch.sql",
     "",
     ...renderedStatements,
     ""
@@ -105,8 +109,16 @@ check(
 
 check(
   "Migration stays idempotent",
-  !/\bDROP\s+TABLE\b|\bTRUNCATE\b|\bDELETE\s+FROM\b/i.test(migration),
+  !containsDestructiveStatement(statements),
   "Controlled schema patch must not contain destructive SQL."
+);
+
+check(
+  "Migration distinguishes trigger events from destructive statements",
+  !containsDestructiveStatement(["CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON audit_events FOR EACH STATEMENT EXECUTE FUNCTION protect_audit_event()"])
+    && containsDestructiveStatement(["TRUNCATE audit_events"])
+    && containsDestructiveStatement(["DO $$ BEGIN DELETE FROM audit_events; END $$"]),
+  "A trigger that blocks truncation is safe, but direct or embedded destructive SQL must fail."
 );
 
 const failures = checks.filter((result) => !result.ok);

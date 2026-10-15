@@ -1,10 +1,11 @@
 package se.cloudshop.product;
 
-import java.util.Set;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "app.demo-products", name = "seed-enabled", havingValue = "true")
 public class ProductSeeder implements CommandLineRunner {
 
   private final ProductRepository productRepository;
@@ -15,39 +16,9 @@ public class ProductSeeder implements CommandLineRunner {
 
   @Override
   public void run(String... args) {
-    Set<String> activeServices = Set.of(
-        "Sommarkampanj 3 manader",
-        "Tekniktraning 60 minuter",
-        "Tekniktraning 60 minuter - ungdom/student/pensionar",
-        "Individuell PT-traning 60 min",
-        "Individuell PT-traning 20 pass",
-        "PT online Komplett 26 veckor",
-        "PT online Komplett 26 veckor - ungdom/student/pensionar",
-        "PT online Next Level 26",
-        "PT online Next Level 26 - ungdom/student/pensionar",
-        "PT online Body Reboot 26",
-        "PT online Body Reboot 26 - ungdom/student/pensionar",
-        "PT online Livsstilsstarten",
-        "PT online Livsstilsstarten - ungdom/student/pensionar",
-        "PT online Glute & Leg Specialisten 16 veckor",
-        "PT online Glute & Leg Specialisten - ungdom/student/pensionar",
-        "Avancerat Kostschema",
-        "PT online Fokus 12",
-        "PT online Fokus 12 - ungdom/student/pensionar",
-        "PT online 8 veckors Styrka & Halsa",
-        "PT online 8 veckors Styrka & Halsa - ungdom/student/pensionar",
-        "PT online Projekt 4 veckor",
-        "PT online Projekt 4 veckor - ungdom/student/pensionar",
-        "Black Friday 12 veckors transformation",
-        "PT online Julerbjudande 16 veckor"
-    );
-
-    productRepository.findAll().forEach(product -> {
-      if (!activeServices.contains(product.getName())) {
-        product.setActive(false);
-        productRepository.save(product);
-      }
-    });
+    if (productRepository.count() != 0) {
+      return;
+    }
 
     upsert("Sommarkampanj 3 manader", "Personligt anpassat traningsprogram, kostschema, uppfoljning och coachning under 3 manader. Galler till 31/8.", 1856);
     upsert("Tekniktraning 60 minuter", "Tekniktraningssession for korrekt teknik i specifika ovningar.", 499);
@@ -76,13 +47,6 @@ public class ProductSeeder implements CommandLineRunner {
   }
 
   private void upsert(String name, String description, int price) {
-    Product product = productRepository.findAllByName(name).stream().findFirst()
-        .orElseGet(() -> new Product(name, description, price));
-
-    product.setName(name);
-    product.setDescription(description);
-    product.setPrice(price);
-    product.setActive(true);
-    productRepository.save(product);
+    productRepository.save(new Product(name, description, price));
   }
 }

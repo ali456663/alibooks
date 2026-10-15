@@ -40,4 +40,17 @@ class EmailDeliveryAttemptTest {
     assertThat(attempt.getLastError()).isNull();
     assertThat(attempt.getSentAt()).isNotNull();
   }
+
+  @Test
+  void manualReconciliationCannotOverwriteAResolvedOutcome() {
+    EmailDeliveryAttempt attempt = new EmailDeliveryAttempt(
+        "INVOICE_EMAIL", 7L, "customer@example.com", "Invoice 1", "Body", null, null);
+    attempt.markUncertain(new RuntimeException("SMTP timeout"));
+    attempt.confirmNotDelivered();
+
+    assertThat(attempt.getStatus()).isEqualTo("NOT_DELIVERED");
+    assertThat(attempt.getSentAt()).isNull();
+    org.assertj.core.api.Assertions.assertThatThrownBy(attempt::confirmDelivered)
+        .isInstanceOf(IllegalStateException.class);
+  }
 }

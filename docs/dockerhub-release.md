@@ -128,16 +128,27 @@ For a fixed release:
 IMAGE_TAG=v1.0.0
 ```
 
-Then deploy:
+For an existing owner account, provide an authenticated token through the
+shell environment (not a command-line argument or `.env` file), then deploy:
 
 ```bash
-FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/ec2-deploy.sh
+read -r -s -p "AliBooks token: " ALIBOOKS_AUTH_TOKEN
+echo
+export ALIBOOKS_AUTH_TOKEN
+FRONTEND_URL=https://<your-domain> BACKEND_URL=https://<your-domain>/api sh ./scripts/ec2-deploy.sh
+unset ALIBOOKS_AUTH_TOKEN
 ```
 
 The deploy script waits up to 120 seconds for the backend and frontend
 container healthchecks before it runs the public smoke test. A failed health
 check stops the deployment proof instead of presenting a partially started
 release as healthy.
+The smoke test always checks that `/system/status` rejects anonymous access;
+with the token it also verifies `database.ok=true`. Missing public HTTPS URLs
+or a missing token stop deployment before image pull. For the first owner setup
+only, `ALLOW_UNVERIFIED_BOOTSTRAP=true` permits a bootstrap deployment without
+a token. That result is not go-live proof; create the owner, enable MFA and
+rerun with a token before using real data.
 
 For real production deployment the script also requires a fixed `sha-*` or
 `v*` image tag, a public origin, RDS settings, distinct strong JWT/owner keys,

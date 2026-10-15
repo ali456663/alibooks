@@ -7,3 +7,11 @@ export function isTraceableCheckout({ upstream, githubActions, githubSha, headSh
     && githubSha.toLowerCase() === headSha.toLowerCase()
     && Boolean(githubRef);
 }
+
+export function workingTreeChangeCount(result) {
+  if (!result || result.error || result.status !== 0 || typeof result.stdout !== "string") {
+    return null;
+  }
+
+  return result.stdout.split(/\r?\n/).filter(Boolean).length;
+}

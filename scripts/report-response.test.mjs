@@ -2,11 +2,77 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readReportResponse } from "../frontend/src/lib/report-response.js";
 import { readSubledgerResponse } from "../frontend/src/lib/subledger-response.js";
+import { formatMinorAmount } from "../frontend/src/lib/minor-money.js";
 
 const row = { accountNumber: "5420", accountName: "Cost", amount: 300 };
 const profit = { totalRevenue: 0, totalExpenses: 300, result: -300, revenue: [], expenses: [row] };
 const reply = (data, ok = true) => ({ ok, json: async () => data });
 const fallback = "Report unavailable";
+
+function minorTrial(amount = 125050) {
+  return {
+    currencyCode: "SEK", minorUnitExponent: 2,
+    openingDebitTotalMinor: 0, openingCreditTotalMinor: 0,
+    periodDebitTotalMinor: amount, periodCreditTotalMinor: 0,
+    closingDebitTotalMinor: amount, closingCreditTotalMinor: 0, differenceMinor: amount,
+    lines: [{ accountNumber: "1930", accountName: "Bank", openingDebitMinor: 0,
+      openingCreditMinor: 0, periodDebitMinor: amount, periodCreditMinor: 0,
+      closingDebitMinor: amount, closingCreditMinor: 0 }]
+  };
+}
+
+for (const amount of [0, 1, 125050, 2147483648, Number.MAX_SAFE_INTEGER]) {
+  test(`minor trial preserves exact amounts and differences: ${amount}`, async () => {
+    const report = minorTrial(amount);
+    assert.deepEqual(await readReportResponse(reply(report), "trialMinor", fallback), report);
+  });
+}
+
+test("minor trial accepts a credit balance and a signed one-cent difference", async () => {
+  const report = minorTrial(0);
+  Object.assign(report.lines[0], { periodCreditMinor: 1, closingCreditMinor: 1 });
+  Object.assign(report, { periodCreditTotalMinor: 1, closingCreditTotalMinor: 1, differenceMinor: -1 });
+  assert.equal((await readReportResponse(reply(report), "trialMinor", fallback)).differenceMinor, -1);
+});
+
+const minorCorruptions = [
+  report => { report.currencyCode = "EUR"; },
+  report => { report.minorUnitExponent = 0; },
+  report => { delete report.periodDebitTotalMinor; },
+  report => { report.lines[0].periodDebitMinor = "125050"; },
+  report => { report.lines[0].periodDebitMinor = 0.01; },
+  report => { report.lines[0].periodDebitMinor = Number.MAX_SAFE_INTEGER + 1; },
+  report => { report.lines[0].periodDebitMinor = -1; },
+  report => { report.lines[0].accountNumber = " "; },
+  report => { report.lines.push({ ...report.lines[0] }); },
+  report => { report.lines[0].closingDebitMinor++; },
+  report => { report.periodDebitTotalMinor++; },
+  report => { report.differenceMinor++; },
+  report => { report.lines[0].openingDebitMinor = report.lines[0].openingCreditMinor = 1; },
+  report => { report.lines[0].closingDebitMinor++; report.lines[0].closingCreditMinor = 1; }
+];
+minorCorruptions.forEach((corrupt, index) => test(`minor trial rejects contradictory payload ${index}`, async () => {
+  const report = minorTrial();
+  corrupt(report);
+  await assert.rejects(readReportResponse(reply(report), "trialMinor", fallback), { message: fallback });
+}));
+
+test("minor trial rejects totals outside the safe JSON range even when each line is safe", async () => {
+  const report = minorTrial(Number.MAX_SAFE_INTEGER);
+  report.lines.push({ ...minorTrial(1).lines[0], accountNumber: "1910" });
+  await assert.rejects(readReportResponse(reply(report), "trialMinor", fallback), { message: fallback });
+});
+
+test("minor currency formatting never rounds through decimal floating-point division", () => {
+  assert.equal(formatMinorAmount(1, "en"), "0.01 SEK");
+  assert.equal(formatMinorAmount(-1, "en"), "-0.01 SEK");
+  assert.equal(formatMinorAmount(125050, "en"), "1,250.50 SEK");
+  assert.equal(formatMinorAmount(Number.MAX_SAFE_INTEGER, "en"), "90,071,992,547,409.91 SEK");
+  assert.equal(formatMinorAmount(1, "sv"), "0,01 SEK");
+  for (const invalid of [NaN, Infinity, 1.5, "100", null, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => formatMinorAmount(invalid));
+  }
+});
 
 const reconciliation = {
   asOf: "2026-07-31", accountingMethod: "INVOICE_METHOD", status: "MATCHED",
@@ -94,6 +160,13 @@ for (const kind of ["profit", "balance", "vat", "trial"]) {
 test("uses safe fallback when server error has no usable text", async () => {
   await assert.rejects(readReportResponse(reply({ message: {} }, false), "profit", fallback), { message: fallback });
 });
+
+for (const kind of ["profit", "balance", "vat", "trial", "trialMinor"]) {
+  test(`${kind} stops on stored ledger corruption instead of returning report data`, async () => {
+    const error = { code: "LEDGER_MONEY_INTEGRITY", message: "Bokforingsraden har oforenliga belopp eller valuta." };
+    await assert.rejects(readReportResponse(reply(error, false), kind, fallback), { message: error.message });
+  });
+}
 
 test("rejects unreadable JSON", async () => {
   await assert.rejects(readReportResponse({ ok: false, json: async () => { throw new SyntaxError("Invalid JSON"); } }, "profit", fallback));

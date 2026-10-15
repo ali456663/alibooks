@@ -35,6 +35,7 @@ docs/mvp-testprotokoll.md
 docs/dockerhub-release.md
 docs/aws-rds-ec2-checklista.md
 docs/go-live-riskregister.md
+docs/cybersecurity-governance-sme.md
 docs/schema-bootstrap-runbook.md
 ```
 
@@ -243,14 +244,22 @@ DOCKERHUB_USERNAME=<your-dockerhub-user>
 IMAGE_TAG=latest
 
 VITE_API_URL=/api
-APP_FRONTEND_URL=http://<ec2-public-ip>
+APP_FRONTEND_URL=https://<your-domain>
+TLS_CERT_HOST_PATH=/etc/letsencrypt/live/<your-domain>/fullchain.pem
+TLS_KEY_HOST_PATH=/etc/letsencrypt/live/<your-domain>/privkey.pem
 
-SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop
-SPRING_DATASOURCE_USERNAME=cloudshop
+RDS_CA_CERT_HOST_PATH=/opt/alibooks/certs/global-bundle.pem
+SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem
+SPRING_DATASOURCE_USERNAME=alibooks_app
 SPRING_DATASOURCE_PASSWORD=<rds-password>
 
 JWT_SECRET=<long-random-secret-at-least-32-chars>
+APP_AUTH_MFA_ENCRYPTION_KEY=<base64-encoded-32-random-bytes>
 ```
+
+Before deployment, place the current [AWS RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) at `RDS_CA_CERT_HOST_PATH` on EC2. The backend container mounts it read-only and the JDBC URL must use `verify-full` to verify the server certificate and hostname.
+
+Also provide a valid public-domain TLS certificate chain and private key through `TLS_CERT_HOST_PATH` and `TLS_KEY_HOST_PATH`. Nginx redirects HTTP to HTTPS and mounts both files read-only. Verify certificate renewal and Nginx reload before go-live.
 
 Kontrollera sedan `.env` utan att skriva ut hemligheter:
 
@@ -283,7 +292,7 @@ npm run check:schema-bootstrap
 Testa alltid mot restore/staging forst:
 
 ```bash
-psql "postgresql://USER:PASSWORD@HOST:5432/cloudshop_test" -f ../db/migrations/001_startup_schema_patch.sql
+psql -v ON_ERROR_STOP=1 --single-transaction "postgresql://USER:PASSWORD@HOST:5432/cloudshop_test" -f ../db/migrations/001_startup_schema_patch.sql
 ```
 
 For en helt ny RDS-databas ska full bas-schema komma fran en testad schema-dump av release-databasen enligt `docs/schema-bootstrap-runbook.md`.
@@ -324,8 +333,12 @@ Committa aldrig riktiga `.env`-filer. Git ignorerar `.env` och `.env.*`, men mal
 
 Kor:
 
+Satt `ALIBOOKS_AUTH_TOKEN` i skalets miljo fore kommandot. Utan token kan
+endast forsta bootstrap koras med ett uttryckligt undantag, inte godkannas
+for riktig data. Se [Dockerhub-guiden](dockerhub-release.md).
+
 ```bash
-FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/ec2-deploy.sh
+FRONTEND_URL=https://<your-domain> BACKEND_URL=https://<your-domain>/api sh ./scripts/ec2-deploy.sh
 ```
 
 Klart nar:
@@ -342,9 +355,9 @@ smoke test passed
 Oppna:
 
 ```text
-http://<ec2-public-ip>
-http://<ec2-public-ip>/api/health
-http://<ec2-public-ip>/api/system/status
+https://<your-domain>
+https://<your-domain>/api/health
+https://<your-domain>/api/system/status
 ```
 
 Forvantat:
@@ -415,7 +428,7 @@ Kontrollera /config.js.
 API fungerar inte:
 
 ```text
-Oppna http://<ec2-public-ip>/api/health.
+Oppna https://<your-domain>/api/health.
 Kontrollera frontend/nginx.conf.
 Kontrollera backend logs.
 ```

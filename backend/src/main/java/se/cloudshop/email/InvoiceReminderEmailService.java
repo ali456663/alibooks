@@ -1,6 +1,7 @@
 package se.cloudshop.email;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -15,46 +16,56 @@ public class InvoiceReminderEmailService {
 
   private final JavaMailSender mailSender;
   private final SettingsService settingsService;
+  private final EmailDeliveryLedger deliveryLedger;
   private final String mailHost;
   private final String mailUsername;
 
+  @Autowired
   public InvoiceReminderEmailService(
       JavaMailSender mailSender,
       SettingsService settingsService,
+      EmailDeliveryLedger deliveryLedger,
       @Value("${spring.mail.host:}") String mailHost,
       @Value("${spring.mail.username:}") String mailUsername
   ) {
     this.mailSender = mailSender;
     this.settingsService = settingsService;
+    this.deliveryLedger = deliveryLedger;
     this.mailHost = mailHost;
     this.mailUsername = mailUsername;
   }
 
+  public InvoiceReminderEmailService(
+      JavaMailSender mailSender,
+      SettingsService settingsService,
+      String mailHost,
+      String mailUsername
+  ) {
+    this(mailSender, settingsService, null, mailHost, mailUsername);
+  }
+
   public void sendReminder(Order invoice) {
-    requireEmailConfigured();
-
-    if (invoice.getCustomer() == null || invoice.getCustomer().getEmail() == null || invoice.getCustomer().getEmail().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer has no email address.");
-    }
-
-    AppSettings settings = settingsService.getSettings();
-    requireInvoicePaymentDetails(invoice);
-    SimpleMailMessage message = new SimpleMailMessage();
-    message.setFrom(mailUsername);
-    message.setTo(invoice.getCustomer().getEmail());
-    if (hasText(settings.getContactEmail())) {
-      message.setReplyTo(settings.getContactEmail());
-    }
-    message.setSubject("Paminnelse faktura " + invoice.getInvoiceNumber());
-    message.setText(createReminderText(invoice, settings, false));
-    mailSender.send(message);
+    send(invoice, false);
   }
 
   public void sendOverdueReminder(Order invoice) {
+    send(invoice, true);
+  }
+
+  public boolean hasDeliveryAttempt(Long invoiceId, boolean overdue) {
+    return deliveryLedger != null && deliveryLedger.hasReminderAttempt(invoiceId, overdue);
+  }
+
+  private void send(Order invoice, boolean overdue) {
     requireEmailConfigured();
 
     if (invoice.getCustomer() == null || invoice.getCustomer().getEmail() == null || invoice.getCustomer().getEmail().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer has no email address.");
+    }
+
+    if (deliveryLedger != null && deliveryLedger.hasUnresolvedReminderAttempt(invoice.getId(), overdue)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Reminder delivery is unresolved. Reconcile the previous attempt before sending again.");
     }
 
     AppSettings settings = settingsService.getSettings();
@@ -65,9 +76,25 @@ public class InvoiceReminderEmailService {
     if (hasText(settings.getContactEmail())) {
       message.setReplyTo(settings.getContactEmail());
     }
-    message.setSubject("Forfallen faktura " + invoice.getInvoiceNumber());
-    message.setText(createReminderText(invoice, settings, true));
-    mailSender.send(message);
+    message.setSubject((overdue ? "Forfallen faktura " : "Paminnelse faktura ") + invoice.getInvoiceNumber());
+    message.setText(createReminderText(invoice, settings, overdue));
+    Long attemptId = deliveryLedger == null ? null : deliveryLedger.startReminderAttempt(
+        invoice.getId(), overdue, invoice.getCustomer().getEmail(), message.getSubject(), message.getText());
+    try {
+      mailSender.send(message);
+    } catch (RuntimeException exception) {
+      if (attemptId != null) {
+        try {
+          deliveryLedger.markUncertain(attemptId, exception);
+        } catch (RuntimeException ignored) {
+          // The durable PENDING row still blocks automatic retries.
+        }
+      }
+      throw exception;
+    }
+    if (attemptId != null) {
+      deliveryLedger.markSent(attemptId);
+    }
   }
 
   public void sendSettingsTestEmail() {

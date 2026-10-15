@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ${TLS_CERT_HOST_PATH}:/etc/nginx/certs/fullchain.pem:ro
+      - ${TLS_KEY_HOST_PATH}:/etc/nginx/certs/privkey.pem:ro
     environment:
       - VITE_API_URL=${VITE_API_URL}
     depends_on:
@@ -17,6 +21,7 @@ services:
     restart: unless-stopped
     volumes:
       - receipt_uploads:/app/uploads
+      - ${RDS_CA_CERT_HOST_PATH}:/run/certs/rds-ca-bundle.pem:ro
     expose:
       - "3000"
     environment:
@@ -44,6 +49,8 @@ services:
       - APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES=${APP_AUTH_LOGIN_ATTEMPT_CACHE_MAX_ENTRIES:-10000}
       - APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES=${APP_AUTH_LOGIN_ATTEMPT_RETENTION_MINUTES:-15}
       - APP_AUTH_REGISTRATION_BOOTSTRAP_KEY=${APP_AUTH_REGISTRATION_BOOTSTRAP_KEY}
+      - APP_AUTH_MFA_ENCRYPTION_KEY=${APP_AUTH_MFA_ENCRYPTION_KEY}
+      - APP_AUTH_REQUIRE_MFA=${APP_AUTH_REQUIRE_MFA:-true}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -62,6 +69,11 @@ services:
       - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD:-}
       - SPRING_MAIL_SMTP_AUTH=${SPRING_MAIL_SMTP_AUTH:-true}
       - SPRING_MAIL_SMTP_STARTTLS_ENABLE=${SPRING_MAIL_SMTP_STARTTLS_ENABLE:-true}
+      - SPRING_MAIL_SMTP_STARTTLS_REQUIRED=${SPRING_MAIL_SMTP_STARTTLS_REQUIRED:-true}
+      - SPRING_MAIL_SMTP_CHECK_SERVER_IDENTITY=${SPRING_MAIL_SMTP_CHECK_SERVER_IDENTITY:-true}
+      - SPRING_MAIL_CONNECTION_TIMEOUT_MS=${SPRING_MAIL_CONNECTION_TIMEOUT_MS:-5000}
+      - SPRING_MAIL_READ_TIMEOUT_MS=${SPRING_MAIL_READ_TIMEOUT_MS:-10000}
+      - SPRING_MAIL_WRITE_TIMEOUT_MS=${SPRING_MAIL_WRITE_TIMEOUT_MS:-10000}
 
 volumes:
   receipt_uploads:

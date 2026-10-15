@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isTraceableCheckout } from "./lib/release-traceability.mjs";
+import { isTraceableCheckout, workingTreeChangeCount } from "./lib/release-traceability.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -148,6 +148,19 @@ const aheadBehind = upstream ? git(["rev-list", "--left-right", "--count", `${up
 const [behindText = "0", aheadText = "0"] = aheadBehind.split(/\s+/);
 const behind = Number(behindText || 0);
 const ahead = Number(aheadText || 0);
+const worktreeStatus = spawnSync("git", ["status", "--porcelain=v1", "--untracked-files=normal"], {
+  cwd: repoRoot,
+  encoding: "utf8",
+  shell: false
+});
+const dirtyCount = workingTreeChangeCount(worktreeStatus);
+const worktreeStatusAvailable = dirtyCount !== null;
+
+check(
+  "Git working tree status is readable",
+  worktreeStatusAvailable,
+  "Release traceability must not assume a clean checkout when git status fails."
+);
 
 check(
   "Git branch has upstream or CI ref is traceable",
@@ -171,6 +184,16 @@ warn(
     : "Local branch is in sync with upstream."
 );
 
+warn(
+  "Release checkout is clean",
+  worktreeStatusAvailable && dirtyCount === 0,
+  !worktreeStatusAvailable
+    ? "Git working tree status could not be read; release checkout is unverified."
+    : dirtyCount > 0
+    ? `${dirtyCount} uncommitted or untracked file(s) are not included in HEAD, GitHub Actions or Dockerhub proof.`
+    : "All local files are represented by the current commit."
+);
+
 const failures = checks.filter((result) => !result.ok);
 const activeWarnings = warnings.filter((result) => !result.ok);
 
@@ -183,7 +206,7 @@ for (const result of warnings) {
 }
 
 console.log("");
-console.log(`Current release candidate: ${version} ${branch || "unknown-branch"} ${head || "unknown-commit"}`);
+console.log(`${dirtyCount === 0 ? "Current release candidate" : "Current checkout (unverified local state)"}: ${version} ${branch || "unknown-branch"} ${head || "unknown-commit"}`);
 if (upstream) {
   console.log(`Upstream: ${upstream}, ahead ${ahead}, behind ${behind}`);
 } else if (traceableCheckout) {

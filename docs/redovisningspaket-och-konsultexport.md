@@ -53,6 +53,11 @@ Stoppa export eller overlamning om:
 - backup inte ar verifierad
 - `npm run check:handoff` failar
 
+SIE-kvittensen markerar inte exporten som redo om verifikationsnumret saknar serie/lopnummer,
+ett konto inte kan exporteras, eller ett tidigare ars verifikat saknar nummer eller ar obalanserat.
+Kontrollkoden omfattar aven tidigare ars poster som bildar ingaende balans. Den ar ett
+sparbarhetsbevis for filunderlaget, inte ett godkannande av bokforing i produktion.
+
 ## Kommando
 
 ```bash

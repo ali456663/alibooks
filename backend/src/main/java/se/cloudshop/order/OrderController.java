@@ -402,6 +402,12 @@ public class OrderController {
     Order order = orderRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found."));
 
+    if (order.getStatus() == null || !java.util.Set.of("SENT", "PARTIALLY_PAID").contains(order.getStatus())
+        || !order.hasRemainingAmount() || order.getDueDate() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Only issued invoices with an outstanding balance and due date can receive a reminder.");
+    }
+
     invoiceReminderEmailService.sendReminder(order);
     order.addReminder("EMAIL", "SENT", order.getCustomer() == null ? null : order.getCustomer().getEmail());
     Order savedOrder = orderRepository.saveAndFlush(order);

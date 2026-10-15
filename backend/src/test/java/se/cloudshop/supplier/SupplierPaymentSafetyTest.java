@@ -3,10 +3,32 @@ package se.cloudshop.supplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.LocalDate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SupplierPaymentSafetyTest {
+  @org.junit.jupiter.api.Test
+  void corruptStoredPaymentIsNeverReconstructedOrOverwritten() {
+    Supplier supplier = new Supplier("Test", "test@example.invalid", "", "", "");
+    SupplierInvoice invoice = new SupplierInvoice(supplier, LocalDate.now(), LocalDate.now(), "Test", "ref", 125, 25, "5420");
+    invoice.registerPayment(LocalDate.now(), 50, "first");
+    SupplierPayment row = invoice.getPaymentRows().get(0);
+    ReflectionTestUtils.setField(row, "amountMinor", null);
+    assertThatThrownBy(row::getAmountMinor).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(row::validateMinorUnitShadow).isInstanceOf(IllegalStateException.class);
+    assertThat(ReflectionTestUtils.getField(row, "amountMinor")).isNull();
+
+    ReflectionTestUtils.setField(row, "amountMinor", 5_001L);
+    assertThatThrownBy(row::validateMinorUnitShadow).isInstanceOf(IllegalStateException.class);
+    assertThat(ReflectionTestUtils.getField(row, "amountMinor")).isEqualTo(5_001L);
+
+    ReflectionTestUtils.setField(row, "amountMinor", 5_000L);
+    ReflectionTestUtils.setField(row, "currencyCode", "EUR");
+    assertThatThrownBy(row::validateMinorUnitShadow).isInstanceOf(IllegalStateException.class);
+    assertThat(row.getCurrencyCode()).isEqualTo("EUR");
+  }
+
   @ParameterizedTest
   @ValueSource(ints = {-1, 0, 76, Integer.MAX_VALUE})
   void invalidPaymentCannotClampOrOverflowExistingPaidAmount(int amount) {

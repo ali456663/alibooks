@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -52,7 +51,7 @@ public class AccountingService {
   private final PayablesReportService payablesReportService;
   private final VoucherApprovalRepository voucherApprovalRepository;
 
-  public AccountingService(
+  public  AccountingService(
       AccountRepository accountRepository,
       JournalEntryRepository journalEntryRepository,
       StripePayoutRepository stripePayoutRepository,
@@ -90,10 +89,12 @@ public class AccountingService {
     int totalAmount = wholeKronaFromMinor(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "fakturans totalbelopp");
     int netAmount = wholeKronaFromMinor(invoice.getNetAmountMinor(), invoice.getNetAmount(), "fakturans nettobelopp");
     int vatAmount = wholeKronaFromMinor(invoice.getVatAmountMinor(), invoice.getVatAmount(), "fakturans momsbelopp");
+    if (totalAmount <= 0 || netAmount < 0 || vatAmount < 0 || (long) netAmount + vatAmount != totalAmount) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invoice amounts must be positive and balanced.");
+    }
     String voucherNumber = voucherNumberService.nextVoucherNumber("F");
     Account receivables = account("1510");
     Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
-    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
 
     journalEntryRepository.save(new JournalEntry(
         invoice,
@@ -104,24 +105,17 @@ public class AccountingService {
         "Invoice created",
         invoice.getInvoiceDate()
     ));
-    journalEntryRepository.save(new JournalEntry(
-        invoice,
-        sales,
-        voucherNumber,
-        0,
-        netAmount,
-        "Invoice created",
-        invoice.getInvoiceDate()
-    ));
-    journalEntryRepository.save(new JournalEntry(
-        invoice,
-        outputVat,
-        voucherNumber,
-        0,
-        vatAmount,
-        "Invoice created",
-        invoice.getInvoiceDate()
-    ));
+    if (netAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          invoice, sales, voucherNumber, 0, netAmount, "Invoice created", invoice.getInvoiceDate()
+      ));
+    }
+    if (vatAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          invoice, account(VatRate.outputVatAccount(invoice.getVatPercent())), voucherNumber,
+          0, vatAmount, "Invoice created", invoice.getInvoiceDate()
+      ));
+    }
   }
 
   private boolean hasInvoiceBookingEntries(Order invoice) {
@@ -689,29 +683,24 @@ public class AccountingService {
     int netAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getNetAmountMinor(), creditInvoice.getNetAmount(), "kreditfakturans nettobelopp"));
     int vatAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getVatAmountMinor(), creditInvoice.getVatAmount(), "kreditfakturans momsbelopp"));
     int totalAmount = Math.abs(wholeKronaFromMinor(creditInvoice.getTotalAmountMinor(), creditInvoice.getTotalAmount(), "kreditfakturans totalbelopp"));
+    if (totalAmount <= 0 || (long) netAmount + vatAmount != totalAmount) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit invoice amounts must be positive and balanced.");
+    }
     String voucherNumber = voucherNumberService.nextVoucherNumber("KR");
     Account receivables = account("1510");
     Account sales = account(VatRate.salesAccount(creditInvoice.getVatPercent()));
-    Account outputVat = account(VatRate.outputVatAccount(creditInvoice.getVatPercent()));
 
-    journalEntryRepository.save(new JournalEntry(
-        creditInvoice,
-        sales,
-        voucherNumber,
-        netAmount,
-        0,
-        "Credit invoice",
-        creditInvoice.getInvoiceDate()
-    ));
-    journalEntryRepository.save(new JournalEntry(
-        creditInvoice,
-        outputVat,
-        voucherNumber,
-        vatAmount,
-        0,
-        "Credit invoice",
-        creditInvoice.getInvoiceDate()
-    ));
+    if (netAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          creditInvoice, sales, voucherNumber, netAmount, 0, "Credit invoice", creditInvoice.getInvoiceDate()
+      ));
+    }
+    if (vatAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          creditInvoice, account(VatRate.outputVatAccount(creditInvoice.getVatPercent())), voucherNumber,
+          vatAmount, 0, "Credit invoice", creditInvoice.getInvoiceDate()
+      ));
+    }
     journalEntryRepository.save(new JournalEntry(
         creditInvoice,
         receivables,
@@ -979,6 +968,7 @@ public class AccountingService {
     requireUnlockedAccountingDate(voucherDate);
 
     validateCorrectionAmounts(originalEntries, "verifikatets korrigeringspost");
+    validateManualCorrectionSource(originalEntries, voucherDate);
 
     String correctionVoucherNumber = voucherNumberService.nextVoucherNumber("R");
     List<JournalEntry> correctionEntries = originalEntries.stream()
@@ -1008,8 +998,10 @@ public class AccountingService {
 
   @Transactional
   public void deleteEntriesForInvoice(Order invoice) {
-    journalEntryRepository.findByInvoice(invoice).forEach(entry -> requireUnlockedAccountingDate(entry.getVoucherDate()));
-    journalEntryRepository.deleteByInvoice(invoice);
+    if (!journalEntryRepository.findByInvoice(invoice).isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "An invoice with posted journal entries cannot be deleted. Use a credit invoice or correction voucher.");
+    }
   }
 
   public VatReport createVatReport() {
@@ -1539,7 +1531,7 @@ public class AccountingService {
     liabilitiesAndEquity = new java.util.ArrayList<>(liabilitiesAndEquity);
     ReportLine yearResultLine = yearResultLine(result);
     int year = asOfDate == null ? LocalDate.now().getYear() : asOfDate.getYear();
-    if (!hasAnnualResultVoucher(year, yearResultLine.accountNumber())) {
+    if (!hasAnnualResultVoucher(year, yearResultLine.accountNumber(), asOfDate)) {
       liabilitiesAndEquity.add(yearResultLine);
     }
 
@@ -1580,7 +1572,7 @@ public class AccountingService {
         profit ? "8999" : resultAccount.getNumber(),
         profit ? resultAccount.getNumber() : "8999",
         amount,
-        hasAnnualResultVoucher(normalizedYear, resultAccount.getNumber())
+        hasAnnualResultVoucher(normalizedYear, resultAccount.getNumber(), null)
     );
   }
 
@@ -1888,11 +1880,11 @@ public class AccountingService {
   }
 
   public String createSieExport(LocalDate periodFrom, LocalDate periodTo) {
-    validatePeriod(periodFrom, periodTo);
-
-    List<JournalEntry> entries = journalEntryRepository.findAll()
+    List<JournalEntry> allEntries = journalEntryRepository.findAll();
+    SiePeriod siePeriod = resolveSiePeriod(periodFrom, periodTo, allEntries);
+    List<JournalEntry> entries = allEntries
         .stream()
-        .filter(entry -> isWithinPeriod(entry.getVoucherDate(), periodFrom, periodTo))
+        .filter(entry -> isWithinPeriod(entry.getVoucherDate(), siePeriod.from(), siePeriod.to()))
         .sorted(Comparator
             .comparing(JournalEntry::getVoucherDate, Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(entry -> entry.getVoucherNumber() == null ? "" : entry.getVoucherNumber())
@@ -1931,7 +1923,7 @@ public class AccountingService {
       );
     }
 
-    VoucherControlReport voucherControlReport = createVoucherControlReport(periodFrom, periodTo);
+    VoucherControlReport voucherControlReport = createVoucherControlReport(siePeriod.from(), siePeriod.to());
     if (voucherControlReport.criticalIssueCount() > 0) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST,
@@ -1939,16 +1931,29 @@ public class AccountingService {
       );
     }
 
-    LocalDate periodStart = periodFrom == null
-        ? entries.stream().map(JournalEntry::getVoucherDate).filter(date -> date != null).min(LocalDate::compareTo).orElse(LocalDate.now().withDayOfYear(1))
-        : periodFrom;
-    LocalDate periodEnd = periodTo == null
-        ? entries.stream().map(JournalEntry::getVoucherDate).filter(date -> date != null).max(LocalDate::compareTo).orElse(LocalDate.now())
-        : periodTo;
+    if (countInvalidPriorSieVouchers(allEntries, siePeriod.from()) > 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "SIE export stopped because prior-year vouchers lack numbers or do not balance.");
+    }
+
+    if (voucherGroups.keySet().stream().anyMatch(voucherNumber -> parseVoucherNumber(voucherNumber) == null)) {
+      throw new ResponseStatusException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export requires a voucher series and numeric sequence number."
+      );
+    }
+
+    LocalDate periodStart = siePeriod.from();
+    LocalDate periodEnd = siePeriod.to();
+    List<JournalEntry> balanceEntries = allEntries.stream()
+        .filter(entry -> !entry.getVoucherDate().isAfter(periodEnd))
+        .toList();
+    boolean hasPreviousYear = balanceEntries.stream()
+        .anyMatch(entry -> entry.getVoucherDate().isBefore(periodStart));
 
     Map<String, String> accounts = new TreeMap<>();
     accountRepository.findAll().forEach(account -> accounts.put(account.getNumber(), account.getName()));
-    entries.forEach(entry -> {
+    balanceEntries.forEach(entry -> {
       if (entry.getAccountNumber() != null && !entry.getAccountNumber().isBlank()) {
         accounts.putIfAbsent(entry.getAccountNumber(), entry.getAccountName());
       }
@@ -1962,19 +1967,32 @@ public class AccountingService {
     lines.add("#GEN " + sieDate(LocalDate.now()));
     lines.add("#FNAMN " + sieString(settingsService.getSettings().getCompanyName() == null ? "AliBooks" : settingsService.getSettings().getCompanyName()));
     lines.add("#RAR 0 " + sieDate(periodStart) + " " + sieDate(periodEnd));
+    if (hasPreviousYear) {
+      lines.add("#RAR -1 " + sieDate(periodStart.minusYears(1)) + " " + sieDate(periodStart.minusDays(1)));
+    }
     lines.add("");
 
     accounts.forEach((number, name) -> lines.add("#KONTO " + number + " " + sieString(name == null || name.isBlank() ? number : name)));
     lines.add("");
+    lines.addAll(sieBalanceRows(balanceEntries, periodStart, hasPreviousYear));
+    lines.add("");
 
-    voucherGroups.forEach((voucherNumber, voucherEntries) -> {
+    List<String> orderedVoucherNumbers = new ArrayList<>(voucherGroups.keySet());
+    orderedVoucherNumbers.sort(Comparator
+        .comparing((String voucherNumber) -> parseVoucherNumber(voucherNumber).series())
+        .thenComparingInt(voucherNumber -> parseVoucherNumber(voucherNumber).sequenceNumber()));
+
+    orderedVoucherNumbers.forEach(voucherNumber -> {
+      List<JournalEntry> voucherEntries = voucherGroups.get(voucherNumber);
+      ParsedVoucherNumber parsedVoucherNumber = parseVoucherNumber(voucherNumber);
       JournalEntry firstEntry = voucherEntries.get(0);
       LocalDate voucherDate = firstEntry.getVoucherDate() == null ? periodEnd : firstEntry.getVoucherDate();
       String voucherText = firstEntry.getDescription() == null || firstEntry.getDescription().isBlank()
           ? voucherNumber
           : firstEntry.getDescription();
 
-      lines.add("#VER " + sieString("A") + " " + sieString(voucherNumber) + " " + sieDate(voucherDate) + " " + sieString(voucherText));
+      lines.add("#VER " + sieString(parsedVoucherNumber.series()) + " " + parsedVoucherNumber.sequenceNumber()
+          + " " + sieDate(voucherDate) + " " + sieString(voucherText));
       lines.add("{");
       voucherEntries.forEach(entry -> {
         int amount = reportAccountingWholeKrona(
@@ -1995,21 +2013,81 @@ public class AccountingService {
     return String.join("\r\n", lines);
   }
 
-  public SieExportReceipt createSieExportReceipt(LocalDate periodFrom, LocalDate periodTo) {
-    validatePeriod(periodFrom, periodTo);
+  private List<String> sieBalanceRows(List<JournalEntry> entries, LocalDate periodStart, boolean hasPreviousYear) {
+    Map<String, Long> priorOpening = new TreeMap<>();
+    Map<String, Long> opening = new TreeMap<>();
+    Map<String, Long> closing = new TreeMap<>();
+    Map<String, Long> priorResult = new TreeMap<>();
+    Map<String, Long> result = new TreeMap<>();
+    LocalDate priorStart = periodStart.minusYears(1);
 
-    List<JournalEntry> entries = journalEntryRepository.findAll()
+    try {
+      for (JournalEntry entry : entries) {
+        String account = entry.getAccountNumber();
+        if (!isSieAccount(account)) {
+          throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+              "SIE export requires a numeric balance or result account for every journal line.");
+        }
+        long movement = Math.subtractExact(entry.getDebitMinorValue(), entry.getCreditMinorValue());
+        boolean balanceAccount = account.charAt(0) <= '2';
+        if (balanceAccount) {
+          closing.merge(account, movement, Math::addExact);
+          if (entry.getVoucherDate().isBefore(periodStart)) {
+            opening.merge(account, movement, Math::addExact);
+            if (entry.getVoucherDate().isBefore(priorStart)) {
+              priorOpening.merge(account, movement, Math::addExact);
+            }
+          }
+        } else if (!entry.getVoucherDate().isBefore(periodStart)) {
+          result.merge(account, movement, Math::addExact);
+        } else if (!entry.getVoucherDate().isBefore(priorStart)) {
+          priorResult.merge(account, movement, Math::addExact);
+        }
+      }
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export stopped because an account balance exceeds the supported range.");
+    }
+
+    List<String> lines = new ArrayList<>();
+    if (hasPreviousYear) {
+      appendSieSaldo(lines, "IB", -1, priorOpening);
+      appendSieSaldo(lines, "UB", -1, opening);
+      appendSieSaldo(lines, "RES", -1, priorResult);
+    }
+    appendSieSaldo(lines, "IB", 0, opening);
+    appendSieSaldo(lines, "UB", 0, closing);
+    appendSieSaldo(lines, "RES", 0, result);
+    return lines;
+  }
+
+  private void appendSieSaldo(List<String> lines, String type, int year, Map<String, Long> balances) {
+    balances.forEach((account, amountMinor) -> {
+      if (amountMinor != 0L) {
+        int amount = reportAccountingWholeKrona(amountMinor, "SIE-exportens " + type + " for konto " + account);
+        lines.add("#" + type + " " + year + " " + account + " " + sieAmount(amount));
+      }
+    });
+  }
+
+  public SieExportReceipt createSieExportReceipt(LocalDate periodFrom, LocalDate periodTo) {
+    List<JournalEntry> allEntries = journalEntryRepository.findAll();
+    SiePeriod siePeriod = resolveSiePeriod(periodFrom, periodTo, allEntries);
+    List<JournalEntry> entries = allEntries
         .stream()
-        .filter(entry -> isWithinPeriod(entry.getVoucherDate(), periodFrom, periodTo))
+        .filter(entry -> isWithinPeriod(entry.getVoucherDate(), siePeriod.from(), siePeriod.to()))
         .toList();
-    LocalDate periodStart = periodFrom == null
-        ? entries.stream().map(JournalEntry::getVoucherDate).filter(date -> date != null).min(LocalDate::compareTo).orElse(LocalDate.now().withDayOfYear(1))
-        : periodFrom;
-    LocalDate periodEnd = periodTo == null
-        ? entries.stream().map(JournalEntry::getVoucherDate).filter(date -> date != null).max(LocalDate::compareTo).orElse(LocalDate.now())
-        : periodTo;
-    VoucherControlReport voucherControlReport = createVoucherControlReport(periodFrom, periodTo);
-    JournalIntegrityReport journalIntegrityReport = createJournalIntegrityReport(periodFrom, periodTo);
+    LocalDate periodStart = siePeriod.from();
+    LocalDate periodEnd = siePeriod.to();
+    VoucherControlReport voucherControlReport = createVoucherControlReport(periodStart, periodEnd);
+    int invalidPriorVoucherCount = countInvalidPriorSieVouchers(allEntries, periodStart);
+    JournalIntegrityReport journalIntegrityReport = createJournalIntegrityReport(periodStart, periodEnd);
+    boolean validVoucherNumbers = voucherControlReport.invalidVoucherNumberCount() == 0;
+    boolean validAccounts = allEntries.stream()
+        .filter(entry -> !entry.getVoucherDate().isAfter(periodEnd))
+        .allMatch(entry -> isSieAccount(entry.getAccountNumber()));
+    int criticalIssueCount = Math.addExact(voucherControlReport.criticalIssueCount(), invalidPriorVoucherCount);
+    int warningIssueCount = voucherControlReport.warningIssueCount();
     int accountCount = (int) entries.stream()
         .map(JournalEntry::getAccountNumber)
         .filter(accountNumber -> accountNumber != null && !accountNumber.isBlank())
@@ -2021,8 +2099,11 @@ public class AccountingService {
     int totalCredit = reportAccountingWholeKrona(totalCreditMinor, "SIE-kvittots totalkredit");
     boolean exportReady = !entries.isEmpty()
         && totalDebit == totalCredit
-        && voucherControlReport.criticalIssueCount() == 0
-        && journalIntegrityReport.difference() == 0;
+        && criticalIssueCount == 0
+        && validVoucherNumbers
+        && validAccounts
+        && journalIntegrityReport.difference() == 0
+        && journalIntegrityReport.missingEvidenceCount() == 0;
     String message;
     if (entries.isEmpty()) {
       message = "No journal entries in the selected period.";
@@ -2030,11 +2111,27 @@ public class AccountingService {
       message = "SIE export is not ready because debit and credit do not balance.";
     } else if (voucherControlReport.criticalIssueCount() > 0) {
       message = "SIE export has critical voucher issues that should be fixed before handoff.";
-    } else if (voucherControlReport.warningIssueCount() > 0) {
+    } else if (invalidPriorVoucherCount > 0) {
+      message = "SIE export has prior-year vouchers without numbers or with unbalanced amounts.";
+    } else if (!validVoucherNumbers) {
+      message = "SIE export requires a voucher series and numeric sequence number.";
+    } else if (!validAccounts) {
+      message = "SIE export requires a numeric balance or result account for every journal line.";
+    } else if (journalIntegrityReport.missingEvidenceCount() > 0) {
+      message = "SIE export can be downloaded, but source evidence is incomplete and must be reviewed before handoff.";
+    } else if (warningIssueCount > 0) {
       message = "SIE export is balanced, but voucher warnings should be reviewed.";
     } else {
       message = "SIE export is ready for accountant handoff.";
     }
+    String priorLedgerFingerprint = sha256(allEntries.stream()
+        .filter(entry -> entry.getVoucherDate().isBefore(periodStart))
+        .sorted(Comparator
+            .comparing(JournalEntry::getVoucherDate)
+            .thenComparing(entry -> entry.getVoucherNumber() == null ? "" : entry.getVoucherNumber())
+            .thenComparing(entry -> entry.getId() == null ? 0L : entry.getId()))
+        .map(JournalEntry::getIntegrityHash)
+        .collect(Collectors.joining("|")));
     String exportControlHash = sha256(String.join("|",
         value(periodStart),
         value(periodEnd),
@@ -2045,8 +2142,11 @@ public class AccountingService {
         String.valueOf(totalDebit),
         String.valueOf(totalCredit),
         String.valueOf(totalDebit - totalCredit),
-        String.valueOf(voucherControlReport.criticalIssueCount()),
-        String.valueOf(voucherControlReport.warningIssueCount()),
+        String.valueOf(criticalIssueCount),
+        String.valueOf(warningIssueCount),
+        String.valueOf(validVoucherNumbers),
+        String.valueOf(validAccounts),
+        priorLedgerFingerprint,
         value(journalIntegrityReport.periodFingerprint()),
         value(journalIntegrityReport.finalChainHash())
     ));
@@ -2064,8 +2164,8 @@ public class AccountingService {
         totalDebit,
         totalCredit,
         totalDebit - totalCredit,
-        voucherControlReport.criticalIssueCount(),
-        voucherControlReport.warningIssueCount(),
+        criticalIssueCount,
+        warningIssueCount,
         voucherControlReport.unbalancedVoucherCount(),
         journalIntegrityReport.missingEvidenceCount(),
         journalIntegrityReport.periodFingerprint(),
@@ -2093,7 +2193,10 @@ public class AccountingService {
         .filter(entry -> isWithinPeriod(entry.getVoucherDate(), periodFrom, periodTo))
         .toList();
     VoucherApprovalStats voucherApprovalStats = calculateVoucherApprovalStats(periodEntries);
-    boolean sieExportReady = !periodEntries.isEmpty() && voucherControlReport.criticalIssueCount() == 0;
+    boolean sieExportReady = !periodEntries.isEmpty()
+        && voucherControlReport.criticalIssueCount() == 0
+        && journalIntegrityReport.difference() == 0
+        && journalIntegrityReport.missingEvidenceCount() == 0;
 
     List<AccountantPackageItem> items = new ArrayList<>();
     items.add(new AccountantPackageItem(
@@ -2161,7 +2264,7 @@ public class AccountingService {
         sieExportReady ? "ok" : "warning",
         sieExportReady
             ? "SIE kan exporteras for vald period. Spara aven SIE-kvittens med kontrollkod."
-            : "SIE kraver bokforingsrader utan kritiska verifikationsfel.",
+            : "SIE-overlamning kraver balanserade bokforingsrader utan kritiska verifikationsfel eller saknade underlag.",
         "/sie/export och /sie/receipt/export"
     ));
     items.add(new AccountantPackageItem(
@@ -2848,6 +2951,45 @@ public class AccountingService {
     }
   }
 
+  private SiePeriod resolveSiePeriod(LocalDate from, LocalDate to, List<JournalEntry> entries) {
+    validatePeriod(from, to);
+    if ((from == null) != (to == null)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "SIE export requires both fiscal-year dates, or neither date for a single-year ledger.");
+    }
+    if (entries.stream().anyMatch(entry -> entry.getVoucherDate() == null)) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export stopped because a journal entry has no voucher date.");
+    }
+    int startMonth = settingsService.getSettings().getFiscalYearStartMonth();
+    int endMonth = settingsService.getSettings().getFiscalYearEndMonth();
+    if (startMonth < 1 || startMonth > 12 || endMonth != (startMonth + 10) % 12 + 1) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export requires a configured twelve-month fiscal year.");
+    }
+    LocalDate earliest = entries.stream().map(JournalEntry::getVoucherDate).min(LocalDate::compareTo).orElse(null);
+    LocalDate latest = entries.stream().map(JournalEntry::getVoucherDate).max(LocalDate::compareTo).orElse(null);
+    LocalDate anchor = from == null ? latest : from;
+    if (anchor == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "There are no journal entries to export.");
+    }
+    int startYear = anchor.getMonthValue() < startMonth ? anchor.getYear() - 1 : anchor.getYear();
+    LocalDate fiscalStart = LocalDate.of(startYear, startMonth, 1);
+    LocalDate fiscalEnd = fiscalStart.plusYears(1).minusDays(1);
+    if (from == null && earliest.isBefore(fiscalStart)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "SIE export spans multiple fiscal years. Select one complete fiscal year.");
+    }
+    if (from != null && (!from.equals(fiscalStart) || !to.equals(fiscalEnd))) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "SIE export requires the first and last day of one complete fiscal year.");
+    }
+    return new SiePeriod(fiscalStart, fiscalEnd);
+  }
+
+  private record SiePeriod(LocalDate from, LocalDate to) {
+  }
+
   private String sha256(String value) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -2886,6 +3028,7 @@ public class AccountingService {
 
   private String evidenceIssueSeverity(String evidenceStatus) {
     if ("missing_receipt".equals(evidenceStatus)
+        || "missing_voucher_evidence".equals(evidenceStatus)
         || "missing_invoice_number".equals(evidenceStatus)
         || "missing_voucher_number".equals(evidenceStatus)) {
       return "critical";
@@ -2901,6 +3044,9 @@ public class AccountingService {
     }
     if ("missing_receipt_hash".equals(evidenceStatus)) {
       return selectedVoucherNumber + " has receipt evidence without SHA-256 archive hash.";
+    }
+    if ("missing_voucher_evidence".equals(evidenceStatus)) {
+      return selectedVoucherNumber + " is missing an archived voucher document.";
     }
     if ("missing_invoice_number".equals(evidenceStatus)) {
       return selectedVoucherNumber + " is linked to an invoice without invoice number.";
@@ -3071,10 +3217,14 @@ public class AccountingService {
     return account("LIMITED_COMPANY".equals(companyType) ? "2099" : "2019");
   }
 
-  private boolean hasAnnualResultVoucher(int year, String resultAccountNumber) {
+  private boolean hasAnnualResultVoucher(int year, String resultAccountNumber, LocalDate asOfDate) {
     String description = annualResultDescription(year);
     return journalEntryRepository.findAll().stream()
-        .anyMatch(entry -> description.equals(entry.getDescription())
+        .anyMatch(entry -> "annual_result".equals(entry.getSourceType())
+            && entry.getVoucherDate() != null
+            && entry.getVoucherDate().getYear() == year
+            && (asOfDate == null || !entry.getVoucherDate().isAfter(asOfDate))
+            && description.equals(entry.getDescription())
             && (resultAccountNumber.equals(entry.getAccountNumber()) || "8999".equals(entry.getAccountNumber())));
   }
 
@@ -3094,7 +3244,6 @@ public class AccountingService {
     String voucherNumber = voucherNumberService.nextVoucherNumber("B");
     Account bank = account(receivedAccount);
     Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
-    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
 
     JournalEntry bankEntry = journalEntryRepository.save(new JournalEntry(
         invoice,
@@ -3114,15 +3263,12 @@ public class AccountingService {
         "Invoice paid - cash method",
         voucherDate
     ));
-    journalEntryRepository.save(new JournalEntry(
-        invoice,
-        outputVat,
-        voucherNumber,
-        0,
-        vatAmount,
-        "Invoice paid - cash method",
-        voucherDate
-    ));
+    if (vatAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          invoice, account(VatRate.outputVatAccount(invoice.getVatPercent())), voucherNumber,
+          0, vatAmount, "Invoice paid - cash method", voucherDate
+      ));
+    }
     return bankEntry;
   }
 
@@ -3137,7 +3283,6 @@ public class AccountingService {
 
     String voucherNumber = voucherNumberService.nextVoucherNumber("AR");
     Account sales = account(VatRate.salesAccount(invoice.getVatPercent()));
-    Account outputVat = account(VatRate.outputVatAccount(invoice.getVatPercent()));
     Account bank = account("1930");
 
     journalEntryRepository.save(new JournalEntry(
@@ -3149,15 +3294,12 @@ public class AccountingService {
         "Customer refund - cash method",
         voucherDate
     ));
-    journalEntryRepository.save(new JournalEntry(
-        invoice,
-        outputVat,
-        voucherNumber,
-        vatAmount,
-        0,
-        "Customer refund - cash method",
-        voucherDate
-    ));
+    if (vatAmount > 0) {
+      journalEntryRepository.save(new JournalEntry(
+          invoice, account(VatRate.outputVatAccount(invoice.getVatPercent())), voucherNumber,
+          vatAmount, 0, "Customer refund - cash method", voucherDate
+      ));
+    }
     journalEntryRepository.save(new JournalEntry(
         invoice,
         bank,
@@ -3307,6 +3449,33 @@ public class AccountingService {
     }
   }
 
+  private void validateManualCorrectionSource(List<JournalEntry> entries, LocalDate correctionDate) {
+    LocalDate originalDate = entries.getFirst().getVoucherDate();
+    if (originalDate == null || entries.stream().anyMatch(entry -> !originalDate.equals(entry.getVoucherDate()))) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Original voucher has missing or inconsistent accounting dates.");
+    }
+    if (correctionDate.isBefore(originalDate)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Correction date cannot be before original voucher date.");
+    }
+    long debit = 0;
+    long credit = 0;
+    try {
+      for (JournalEntry entry : entries) {
+        debit = Math.addExact(debit, entry.getDebitMinorValue());
+        credit = Math.addExact(credit, entry.getCreditMinorValue());
+      }
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Original voucher totals exceed the supported range.", exception);
+    }
+    if (debit == 0 || debit != credit) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Original voucher is not balanced in minor units.");
+    }
+  }
+
   private int reportAccountingWholeKrona(long amountMinor, String field) {
     if (amountMinor % 100L != 0L) {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
@@ -3337,7 +3506,34 @@ public class AccountingService {
   }
 
   private String sieAmount(int value) {
-    return String.format(Locale.US, "%.2f", (double) value);
+    return value + ".00";
+  }
+
+  private boolean isSieAccount(String account) {
+    return account != null && account.matches("[1-8][0-9]*");
+  }
+
+  private int countInvalidPriorSieVouchers(List<JournalEntry> entries, LocalDate periodStart) {
+    Map<String, long[]> totals = new LinkedHashMap<>();
+    int missingNumberCount = 0;
+    try {
+      for (JournalEntry entry : entries) {
+        if (!entry.getVoucherDate().isBefore(periodStart)) continue;
+        String voucherNumber = entry.getVoucherNumber();
+        if (voucherNumber == null || voucherNumber.isBlank()) {
+          missingNumberCount++;
+          continue;
+        }
+        long[] amounts = totals.computeIfAbsent(voucherNumber, ignored -> new long[2]);
+        amounts[0] = Math.addExact(amounts[0], entry.getDebitMinorValue());
+        amounts[1] = Math.addExact(amounts[1], entry.getCreditMinorValue());
+      }
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "SIE export stopped because prior-year voucher totals exceed the supported range.", exception);
+    }
+    return Math.addExact(missingNumberCount,
+        Math.toIntExact(totals.values().stream().filter(amounts -> amounts[0] != amounts[1]).count()));
   }
 
   private boolean isSalesAccount(String accountNumber) {

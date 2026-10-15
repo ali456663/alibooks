@@ -25,6 +25,10 @@ public final class InvoiceIssueValidator {
           "Add a clear product or service description before issuing the invoice.");
     }
     int totalAmount = wholeKrona(invoice.getTotalAmountMinor(), invoice.getTotalAmount(), "fakturans totalbelopp");
+    if (totalAmount <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invoice total must be greater than zero before issuance.");
+    }
     if (totalAmount > 4_000
         && (blank(snapshot.customerName()) || blank(snapshot.address())
             || blank(snapshot.postalCode()) || blank(snapshot.city()))) {

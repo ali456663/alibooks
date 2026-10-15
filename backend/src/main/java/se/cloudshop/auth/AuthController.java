@@ -16,17 +16,20 @@ public class AuthController {
   private final JwtService jwtService;
   private final LoginAttemptService loginAttemptService;
   private final AuditService auditService;
+  private final MfaService mfaService;
 
   public AuthController(
       UserService userService,
       JwtService jwtService,
       LoginAttemptService loginAttemptService,
-      AuditService auditService
+      AuditService auditService,
+      MfaService mfaService
   ) {
     this.userService = userService;
     this.jwtService = jwtService;
     this.loginAttemptService = loginAttemptService;
     this.auditService = auditService;
+    this.mfaService = mfaService;
   }
 
   @PostMapping("/auth/register")
@@ -52,7 +55,7 @@ public class AuthController {
       throw exception;
     }
     auditService.record("auth", "user", user.getEmail(), "register_success", user.getEmail(), "User registered.", 0, null);
-    String token = jwtService.createToken(user.getEmail());
+    String token = jwtService.createToken(user.getEmail(), false, user.getAuthVersion());
 
     return Map.of(
         "token", token,
@@ -100,15 +103,31 @@ public class AuthController {
               : "Invalid email or password.";
           return new ResponseStatusException(status, message);
         });
+    if (user.isMfaEnabled()) {
+      String challenge = mfaService.createLoginChallenge(user.getEmail());
+      auditService.record("auth", "user", user.getEmail(), "mfa_challenge_created", user.getEmail(), "Second factor required.", 0, null);
+      return Map.of("mfaRequired", "true", "challenge", challenge, "email", user.getEmail());
+    }
     loginAttemptService.recordSuccess(user.getEmail());
     auditService.record("auth", "user", user.getEmail(), "login_success", user.getEmail(), "Login successful.", 0, null);
-    String token = jwtService.createToken(user.getEmail());
+    String token = jwtService.createToken(user.getEmail(), false, user.getAuthVersion());
 
     return Map.of(
         "token", token,
         "email", user.getEmail()
     );
   }
+
+  @PostMapping("/auth/login/mfa")
+  public Map<String, String> completeMfaLogin(@RequestBody MfaLoginRequest request) {
+    String challenge = request == null ? null : request.challenge();
+    MfaService.MfaLoginResult login = mfaService.completeLogin(challenge, request == null ? null : request.code());
+    String email = login.email();
+    auditService.record("auth", "user", email, "login_success_mfa", email, "Login completed with second factor.", 0, null);
+    return Map.of("token", jwtService.createToken(email, true, login.authVersion()), "email", email);
+  }
+
+  public record MfaLoginRequest(String challenge, String code) {}
 
   private String normalizedEmail(String email) {
     return email == null || email.isBlank() ? "unknown" : email.trim().toLowerCase();

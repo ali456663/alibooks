@@ -29,11 +29,13 @@ class AuthControllerTest {
       Clock.fixed(Instant.parse("2026-07-01T10:00:00Z"), ZoneOffset.UTC)
   );
   private final AuditService auditService = mock(AuditService.class);
+  private final MfaService mfaService = mock(MfaService.class);
   private final AuthController authController = new AuthController(
       userService,
       jwtService,
       loginAttemptService,
-      auditService
+      auditService,
+      mfaService
   );
 
   @Test
@@ -105,5 +107,32 @@ class AuthControllerTest {
     assertThat(response.get("email")).isEqualTo("ali@example.com");
     assertThat(jwtService.isValid(response.get("token"))).isTrue();
     verify(auditService).record(eq("auth"), eq("user"), eq("ali@example.com"), eq("login_success"), eq("ali@example.com"), eq("Login successful."), eq(0), isNull());
+  }
+
+  @Test
+  void enabledMfaReturnsChallengeInsteadOfJwt() {
+    User user = new User("ali@example.com", "encoded");
+    user.setMfaEnabled(true);
+    when(userService.login("ali@example.com", "secret123")).thenReturn(Optional.of(user));
+    when(mfaService.createLoginChallenge("ali@example.com")).thenReturn("opaque-challenge");
+
+    Map<String, String> response = authController.login(new AuthRequest("ali@example.com", "secret123"));
+
+    assertThat(response).containsEntry("mfaRequired", "true").containsEntry("challenge", "opaque-challenge");
+    assertThat(response).doesNotContainKey("token");
+  }
+
+  @Test
+  void validMfaChallengeReturnsJwtOnlyAfterSecondFactor() {
+    when(mfaService.completeLogin("opaque-challenge", "123456"))
+        .thenReturn(new MfaService.MfaLoginResult("ali@example.com", 3));
+
+    Map<String, String> response = authController.completeMfaLogin(
+        new AuthController.MfaLoginRequest("opaque-challenge", "123456"));
+
+    assertThat(response.get("email")).isEqualTo("ali@example.com");
+    assertThat(jwtService.isValid(response.get("token"))).isTrue();
+    assertThat(jwtService.mfaVerified(response.get("token"))).isTrue();
+    assertThat(jwtService.authVersion(response.get("token"))).hasValue(3);
   }
 }

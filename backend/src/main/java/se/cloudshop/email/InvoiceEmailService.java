@@ -59,10 +59,17 @@ public class InvoiceEmailService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer has no email address.");
     }
 
+    requireReconciledDelivery(invoice);
+
     AppSettings settings = settingsService.getSettings();
     requireInvoicePaymentDetails(invoice);
     String filename = (invoice.getInvoiceNumber() == null ? "invoice-" + invoice.getId() : invoice.getInvoiceNumber()) + ".pdf";
-    byte[] pdf = invoiceOriginalService.read(invoice).pdf();
+    var document = invoiceOriginalService.read(invoice);
+    if (!"original".equals(document.source())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Invoice original is missing. Reconcile the archived document before email delivery.");
+    }
+    byte[] pdf = document.pdf();
     String subject = "Faktura " + invoice.getInvoiceNumber();
     String body = createInvoiceText(invoice, settings);
     Long deliveryAttemptId = startDeliveryAttempt(invoice, subject, body, filename, pdf);
@@ -96,6 +103,19 @@ public class InvoiceEmailService {
     return deliveryLedger.startInvoiceAttempt(
         invoice.getId(), invoice.getCustomer().getEmail(), subject, body, filename, pdf
     );
+  }
+
+  private void requireReconciledDelivery(Order invoice) {
+    if (deliveryLedger == null) {
+      return;
+    }
+    Long invoiceId = invoice.getId();
+    if (deliveryLedger.hasUnresolvedInvoiceAttempt(invoiceId)
+        || (deliveryLedger.hasInvoiceAttempt(invoiceId) && !invoice.hasReminder("INVOICE_EMAIL", "SENT")
+            && !deliveryLedger.hasOnlyConfirmedNotDeliveredInvoiceAttempts(invoiceId))) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Invoice email delivery is unresolved. Reconcile the previous attempt before sending again.");
+    }
   }
 
   private void markDeliverySent(Long attemptId) {

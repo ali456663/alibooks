@@ -1,8 +1,13 @@
 package se.cloudshop.config;
 
-import java.time.Instant;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,20 +36,41 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   private static final Logger log = LoggerFactory.getLogger(MoneyMigrationVerifier.class);
   private static final String CURRENCY = "SEK";
   private static final String MIGRATION_KEY = "core-minor-v2-verified";
-  private static final List<String> REQUIRED_TRIGGER_NAMES = List.of(
-      "products_money_shadow_sync",
-      "customer_orders_money_shadow_sync",
-      "invoice_payments_money_shadow_sync",
-      "supplier_invoices_money_shadow_sync",
-      "supplier_invoice_payments_money_shadow_sync",
-      "expenses_money_shadow_sync",
-      "card_purchases_money_shadow_sync",
-      "stripe_payouts_money_shadow_sync",
-      "bank_reconciliation_entries_money_shadow_sync",
-      "vat_filings_money_shadow_sync",
-      "journal_entries_money_shadow_sync",
-      "owner_transactions_money_shadow_sync",
-      "audit_events_money_shadow_sync"
+  // Deliberately remains false until every API, write path and report uses minor units.
+  private static final boolean API_MINOR_UNIT_AUTHORITATIVE = false;
+  private static final List<RequiredTrigger> REQUIRED_TRIGGERS = List.of(
+      new RequiredTrigger("products", "products_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("products", "a_products_money_integrity_guard", "guard_product_money_integrity"),
+      new RequiredTrigger("customer_orders", "customer_orders_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("customer_orders", "a_customer_orders_money_integrity_guard", "guard_customer_order_money_integrity"),
+      new RequiredTrigger("invoice_payments", "invoice_payments_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("invoice_payments", "a_invoice_payment_money_integrity_guard", "guard_customer_payment_money_integrity"),
+      new RequiredTrigger("supplier_invoices", "supplier_invoices_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("supplier_invoices", "a_supplier_invoices_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("supplier_invoice_payments", "supplier_invoice_payments_money_shadow_sync", "sync_supplier_payment_shadow_fields"),
+      new RequiredTrigger("expenses", "expenses_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("expenses", "a_expenses_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("card_purchases", "card_purchases_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("card_purchases", "a_card_purchases_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("stripe_payouts", "stripe_payouts_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("stripe_payouts", "a_stripe_payouts_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("bank_reconciliation_entries", "bank_reconciliation_entries_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("bank_reconciliation_entries", "a_bank_reconciliation_entries_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("vat_filings", "vat_filings_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("vat_filings", "a_vat_filings_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("journal_entries", "journal_entries_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("journal_entries", "a_journal_money_integrity_guard", "guard_journal_money_integrity"),
+      new RequiredTrigger("journal_entries", "b_journal_posted_immutable_guard", "protect_posted_journal_entry"),
+      new RequiredTrigger("journal_entries", "journal_voucher_reservation_guard", "reserve_journal_voucher", 7, false),
+      new RequiredTrigger("journal_entries", "journal_voucher_balance_guard", "require_balanced_journal_voucher", 5, true),
+      new RequiredTrigger("journal_voucher_registry", "journal_voucher_registry_immutable", "protect_journal_voucher_registry", 27, false),
+      new RequiredTrigger("invoice_originals", "invoice_originals_immutable", "protect_invoice_original", 27, false),
+      new RequiredTrigger("audit_events", "audit_events_immutable", "protect_audit_event", 27, false),
+      new RequiredTrigger("audit_events", "audit_events_no_truncate", "protect_audit_event", 34, false),
+      new RequiredTrigger("owner_transactions", "owner_transactions_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("owner_transactions", "a_owner_transactions_money_integrity_guard", "guard_operational_money_integrity"),
+      new RequiredTrigger("audit_events", "audit_events_money_shadow_sync", "sync_money_shadow_fields"),
+      new RequiredTrigger("audit_events", "a_audit_events_money_integrity_guard", "guard_operational_money_integrity")
   );
 
   private static final List<MoneyColumn> MONEY_COLUMNS = List.of(
@@ -81,11 +107,16 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       new MoneyColumn("owner_transactions", "amount", "amount_minor"),
       new MoneyColumn("audit_events", "amount", "amount_minor")
   );
+  private static final List<String> MONEY_TABLES = List.of(
+      "products", "customer_orders", "invoice_payments", "supplier_invoices",
+      "expenses", "card_purchases", "stripe_payouts", "bank_reconciliation_entries",
+      "vat_filings", "supplier_invoice_payments", "journal_entries", "owner_transactions",
+      "audit_events");
+  private static final List<String> REQUIRED_CHECK_NAMES = requiredCheckNames();
 
   private final JdbcTemplate jdbcTemplate;
   private final boolean verifyOnStartup;
   private final long maxFullCheckAgeHours;
-  private final boolean apiMinorUnitAuthoritative;
   private volatile Map<String, Object> status = Map.of(
       "state", "not-verified",
       "currency", CURRENCY,
@@ -98,21 +129,12 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       JdbcTemplate jdbcTemplate,
       @Value("${app.money-migration.verify-on-startup:true}") boolean verifyOnStartup,
       @Value("${app.money-migration.max-full-check-age-hours:26}") long maxFullCheckAgeHours) {
-    this(jdbcTemplate, verifyOnStartup, maxFullCheckAgeHours, false);
-  }
-
-  public MoneyMigrationVerifier(
-      JdbcTemplate jdbcTemplate,
-      boolean verifyOnStartup,
-      long maxFullCheckAgeHours,
-      @Value("${app.money-migration.authoritative:false}") boolean apiMinorUnitAuthoritative) {
     this.jdbcTemplate = jdbcTemplate;
     this.verifyOnStartup = verifyOnStartup;
     if (maxFullCheckAgeHours <= 0) {
       throw new IllegalArgumentException("app.money-migration.max-full-check-age-hours must be positive");
     }
     this.maxFullCheckAgeHours = maxFullCheckAgeHours;
-    this.apiMinorUnitAuthoritative = apiMinorUnitAuthoritative;
   }
 
   @Override
@@ -133,8 +155,6 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       return;
     }
 
-    ensureControlTables();
-
     if (hasFreshVerifiedCheckpoint()) {
       verifyCheckpoint();
       return;
@@ -143,36 +163,13 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
     runFullVerification();
   }
 
-  private void ensureControlTables() {
-    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS money_migration_issues ("
-        + "id bigserial PRIMARY KEY, run_id uuid, migration_key varchar(128) NOT NULL, "
-        + "entity_table varchar(128) NOT NULL, entity_id varchar(128) NOT NULL, "
-        + "field_name varchar(128) NOT NULL, issue_code varchar(64) NOT NULL, "
-        + "source_value text, target_value text, details text, "
-        + "first_seen_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-        + "last_seen_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP)");
-    jdbcTemplate.execute("ALTER TABLE money_migration_issues ADD COLUMN IF NOT EXISTS run_id uuid");
-    jdbcTemplate.execute("ALTER TABLE money_migration_issues DROP CONSTRAINT IF EXISTS money_migration_issues_migration_key_entity_table_entity_id_field_name_issue_code_key");
-    jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS money_migration_issues_key_idx "
-        + "ON money_migration_issues(migration_key, last_seen_at)");
-    jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS money_migration_issues_run_idx "
-        + "ON money_migration_issues(run_id, id)");
-    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS money_migration_runs ("
-        + "run_id uuid PRIMARY KEY, migration_key varchar(128) NOT NULL, mode varchar(32) NOT NULL, "
-        + "state varchar(32) NOT NULL, started_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-        + "finished_at timestamp with time zone, checked_rows bigint NOT NULL DEFAULT 0, "
-        + "issue_count bigint NOT NULL DEFAULT 0, error_details text)");
-    jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS money_migration_checks ("
-        + "migration_key varchar(128) NOT NULL, check_name varchar(128) NOT NULL, run_id uuid, "
-        + "status varchar(32) NOT NULL, row_count bigint NOT NULL DEFAULT 0, "
-        + "issue_count bigint NOT NULL DEFAULT 0, details text, "
-        + "checked_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-        + "PRIMARY KEY (migration_key, check_name))");
-    jdbcTemplate.execute("ALTER TABLE money_migration_checks ADD COLUMN IF NOT EXISTS run_id uuid");
-  }
-
   private void runFullVerification() {
-
+    status = Map.of(
+        "state", "verifying",
+        "currency", CURRENCY,
+        "verified", false,
+        "readyForAuthoritativeCutover", false
+    );
     UUID runId = UUID.randomUUID();
     jdbcTemplate.update("INSERT INTO money_migration_runs (run_id, migration_key, mode, state) VALUES (?, ?, 'full', 'RUNNING')",
         runId, MIGRATION_KEY);
@@ -181,6 +178,7 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
     List<String> failures = new ArrayList<>();
     long issueCount = 0L;
     long checkedRows = 0L;
+    long fractionalLegacyIssues = 0L;
 
     for (MoneyColumn column : MONEY_COLUMNS) {
       long missingMinor = count("SELECT COUNT(*) FROM " + column.table()
@@ -195,10 +193,15 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
           + " WHERE " + column.legacyColumn() + " IS NOT NULL AND " + column.minorColumn()
           + " IS NOT NULL AND " + column.minorColumn() + " <> ROUND(CAST(" + column.legacyColumn()
           + " AS numeric) * " + minorUnitFactor + ", 0)");
+      long fractionalLegacy = API_MINOR_UNIT_AUTHORITATIVE ? 0L
+          : count("SELECT COUNT(*) FROM " + column.table() + " WHERE " + column.legacyColumn()
+              + " IS NOT NULL AND CAST(" + column.legacyColumn() + " AS numeric) "
+              + "<> TRUNC(CAST(" + column.legacyColumn() + " AS numeric))");
       long rows = count("SELECT COUNT(*) FROM " + column.table());
       checkedRows = Math.addExact(checkedRows, rows);
+      fractionalLegacyIssues = Math.addExact(fractionalLegacyIssues, fractionalLegacy);
       long totalIssues = Math.addExact(missingMinor,
-          Math.addExact(orphanMinor, Math.addExact(roundingRequired, mismatch)));
+          Math.addExact(orphanMinor, Math.addExact(roundingRequired, Math.addExact(mismatch, fractionalLegacy))));
       issueCount = Math.addExact(issueCount, totalIssues);
       recordCheck(runId, "shadow:" + column.table() + "." + column.legacyColumn(), rows,
           totalIssues, "legacy and bigint shadow must exist together and match without implicit truncation");
@@ -206,16 +209,19 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       recordIssues(runId, column, "LEGACY_MISSING", column.legacyColumn() + " is null while the shadow exists", minorUnitFactor);
       recordIssues(runId, column, "ROUNDING_REQUIRED", "legacy value requires explicit minor-unit rounding", minorUnitFactor);
       recordIssues(runId, column, "MINOR_MISMATCH", "legacy value * " + minorUnitFactor + " differs from bigint shadow", minorUnitFactor);
+      if (fractionalLegacy > 0) {
+        recordIssues(runId, column, "FRACTIONAL_LEGACY", "legacy value has oren while the API still reads whole kronor", minorUnitFactor);
+      }
       if (totalIssues > 0) {
         failures.add(column.table() + "." + column.legacyColumn() + " has "
             + totalIssues + " non-exact row(s)");
       }
     }
 
-    for (String table : List.of("products", "customer_orders", "invoice_payments", "supplier_invoices",
-      "expenses", "card_purchases", "stripe_payouts", "bank_reconciliation_entries", "vat_filings",
-        "supplier_invoice_payments",
-        "journal_entries", "owner_transactions", "audit_events")) {
+    recordCheck(runId, "legacy:whole-krona", checkedRows, fractionalLegacyIssues,
+        "all legacy money columns must contain whole kronor until API and booking flows use minor units");
+
+    for (String table : MONEY_TABLES) {
       long wrongCurrency = count("SELECT COUNT(*) FROM " + table
           + " WHERE currency_code IS NULL OR currency_code <> '" + CURRENCY + "'");
       long rows = count("SELECT COUNT(*) FROM " + table);
@@ -227,6 +233,80 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       }
     }
 
+    long missingVoucherNumbers = count("SELECT COUNT(*) FROM journal_entries "
+        + "WHERE voucher_number IS NULL OR btrim(voucher_number) = ''");
+    recordCheck(runId, "journal:voucher-number", count("SELECT COUNT(*) FROM journal_entries"),
+        missingVoucherNumbers, "every journal row must have a voucher number");
+    if (missingVoucherNumbers > 0) {
+      issueCount = Math.addExact(issueCount, missingVoucherNumbers);
+      failures.add("journal_entries has " + missingVoucherNumbers + " row(s) without a voucher number");
+    }
+
+    long missingVoucherDates = count("SELECT COUNT(*) FROM journal_entries WHERE voucher_date IS NULL");
+    recordCheck(runId, "journal:voucher-date", count("SELECT COUNT(*) FROM journal_entries"),
+        missingVoucherDates, "historical voucher dates must be documented, never replaced with today's date");
+    if (missingVoucherDates > 0) {
+      issueCount = Math.addExact(issueCount, missingVoucherDates);
+      failures.add("journal_entries has " + missingVoucherDates + " row(s) without a voucher date");
+    }
+
+    long missingAccounts = count("SELECT COUNT(*) FROM journal_entries "
+        + "WHERE account_number IS NULL OR btrim(account_number) = ''");
+    recordCheck(runId, "journal:account-number", count("SELECT COUNT(*) FROM journal_entries"),
+        missingAccounts, "every journal row must have an account number");
+    if (missingAccounts > 0) {
+      issueCount = Math.addExact(issueCount, missingAccounts);
+      failures.add("journal_entries has " + missingAccounts + " row(s) without an account number");
+    }
+
+    long mixedVoucherDates = count("SELECT COUNT(*) FROM (SELECT voucher_number FROM journal_entries "
+        + "WHERE voucher_number IS NOT NULL AND btrim(voucher_number) <> '' "
+        + "GROUP BY voucher_number HAVING COUNT(DISTINCT voucher_date) > 1) mixed_dates");
+    recordCheck(runId, "journal:voucher-date-consistency",
+        count("SELECT COUNT(DISTINCT voucher_number) FROM journal_entries"), mixedVoucherDates,
+        "all rows of a voucher must have the same accounting date");
+    if (mixedVoucherDates > 0) {
+      issueCount = Math.addExact(issueCount, mixedVoucherDates);
+      failures.add("journal_entries has " + mixedVoucherDates + " voucher(s) with inconsistent dates");
+    }
+
+    long unsealedVouchers = count("SELECT COUNT(*) FROM journal_voucher_registry WHERE NOT sealed");
+    recordCheck(runId, "journal:voucher-seal", count("SELECT COUNT(*) FROM journal_voucher_registry"),
+        unsealedVouchers, "committed vouchers must be sealed");
+    if (unsealedVouchers > 0) {
+      issueCount = Math.addExact(issueCount, unsealedVouchers);
+      failures.add("journal_voucher_registry has " + unsealedVouchers + " unsealed voucher(s)");
+    }
+    long missingRegistry = count("SELECT COUNT(*) FROM (SELECT DISTINCT voucher_number FROM journal_entries "
+        + "WHERE voucher_number IS NOT NULL AND btrim(voucher_number) <> '') vouchers "
+        + "LEFT JOIN journal_voucher_registry registry ON registry.voucher_number = vouchers.voucher_number "
+        + "WHERE registry.voucher_number IS NULL");
+    recordCheck(runId, "journal:voucher-registry", count("SELECT COUNT(DISTINCT voucher_number) FROM journal_entries"),
+        missingRegistry, "every posted voucher must have a registry row");
+    if (missingRegistry > 0) {
+      issueCount = Math.addExact(issueCount, missingRegistry);
+      failures.add("journal_entries has " + missingRegistry + " voucher(s) missing from the registry");
+    }
+    long orphanRegistry = count("SELECT COUNT(*) FROM journal_voucher_registry registry "
+        + "WHERE NOT EXISTS (SELECT 1 FROM journal_entries entry "
+        + "WHERE entry.voucher_number = registry.voucher_number)");
+    recordCheck(runId, "journal:orphan-voucher-registry", count("SELECT COUNT(*) FROM journal_voucher_registry"),
+        orphanRegistry, "every sealed voucher number must have posted journal rows");
+    if (orphanRegistry > 0) {
+      issueCount = Math.addExact(issueCount, orphanRegistry);
+      failures.add("journal_voucher_registry has " + orphanRegistry + " orphaned voucher(s)");
+    }
+
+    long invalidJournalRows = count("SELECT COUNT(*) FROM journal_entries "
+        + "WHERE debit IS NULL OR credit IS NULL OR debit < 0 OR credit < 0 "
+        + "OR (debit > 0 AND credit > 0)");
+    recordCheck(runId, "journal:row-shape", count("SELECT COUNT(*) FROM journal_entries"),
+        invalidJournalRows, "journal rows need nonnegative debit and credit on separate sides");
+    if (invalidJournalRows > 0) {
+      issueCount = Math.addExact(issueCount, invalidJournalRows);
+      failures.add("journal_entries has " + invalidJournalRows + " invalid debit/credit row(s)");
+    }
+
     long unbalancedVouchers = count("SELECT COUNT(*) FROM (SELECT voucher_number FROM journal_entries "
         + "WHERE voucher_number IS NOT NULL AND voucher_number <> '' GROUP BY voucher_number "
         + "HAVING COALESCE(SUM(debit_minor), 0) <> COALESCE(SUM(credit_minor), 0)) balanced");
@@ -234,7 +314,37 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
         + "WHERE voucher_number IS NOT NULL AND voucher_number <> ''"), unbalancedVouchers,
         "debit_minor must equal credit_minor per voucher");
     if (unbalancedVouchers > 0) {
+      issueCount = Math.addExact(issueCount, unbalancedVouchers);
       failures.add("journal_entries has " + unbalancedVouchers + " unbalanced voucher(s)");
+    }
+
+    long validMoneyTriggers = triggerCount();
+    long invalidMoneyTriggers = REQUIRED_TRIGGERS.size() - validMoneyTriggers;
+    issueCount = Math.addExact(issueCount, invalidMoneyTriggers);
+    recordCheck(runId, "database:money-shadow-triggers", REQUIRED_TRIGGERS.size(), invalidMoneyTriggers,
+        "all required money and voucher triggers must be enabled with the expected events and deferral");
+    recordCheck(runId, "database:operational-money-guard", REQUIRED_TRIGGERS.size(), invalidMoneyTriggers,
+        "operational money tables must reject contradictory legacy and minor-unit values before shadow synchronization");
+    if (invalidMoneyTriggers > 0) {
+      failures.add("database has " + invalidMoneyTriggers + " missing, disabled, or misconfigured money shadow trigger(s)");
+    }
+
+    long supplierGuard = count("SELECT COUNT(*) FROM money_migration_ledger "
+        + "WHERE migration_key = 'supplier-payment-exact-v1'");
+    recordCheck(runId, "database:supplier-payment-exact-guard", 1, supplierGuard == 1 ? 0 : 1,
+        "supplier payment trigger must reject fractional and contradictory legacy/minor amounts");
+    if (supplierGuard != 1) {
+      issueCount = Math.addExact(issueCount, 1);
+      failures.add("supplier payment exact-money guard is not installed");
+    }
+
+    long customerGuard = count("SELECT COUNT(*) FROM money_migration_ledger "
+        + "WHERE migration_key = 'customer-payment-exact-v1'");
+    recordCheck(runId, "database:customer-payment-exact-guard", 1, customerGuard == 1 ? 0 : 1,
+        "customer payment trigger must reject contradictory legacy/minor amounts");
+    if (customerGuard != 1) {
+      issueCount = Math.addExact(issueCount, 1);
+      failures.add("customer payment exact-money guard is not installed");
     }
 
     long accountMismatches = count("SELECT COUNT(*) FROM (SELECT account_number FROM journal_entries "
@@ -245,6 +355,7 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
         + "FROM journal_entries WHERE account_number IS NOT NULL"), accountMismatches,
         "legacy account totals * 100 must equal minor account totals");
     if (accountMismatches > 0) {
+      issueCount = Math.addExact(issueCount, accountMismatches);
       failures.add("journal_entries has " + accountMismatches + " account total mismatch(es)");
     }
 
@@ -266,11 +377,10 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
     fullStatus.put("issueCount", issueCount);
     fullStatus.put("checkedAt", Instant.now().toString());
     fullStatus.put("failures", List.copyOf(failures));
-    putCutoverStatus(fullStatus);
-    status = Map.copyOf(fullStatus);
-
     jdbcTemplate.update("UPDATE money_migration_runs SET state = ?, finished_at = CURRENT_TIMESTAMP, checked_rows = ?, issue_count = ? WHERE run_id = ?",
         verified ? "VERIFIED" : "BLOCKED", checkedRows, issueCount, runId);
+    putCutoverStatus(fullStatus);
+    status = Map.copyOf(fullStatus);
     if (!verified) {
       throw new IllegalStateException("Money migration verification failed: " + String.join("; ", failures));
     }
@@ -282,7 +392,6 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       if (!verifyOnStartup) {
         throw new IllegalStateException("Money migration verification is disabled");
       }
-      ensureControlTables();
       runFullVerification();
     } catch (RuntimeException exception) {
       Map<String, Object> failedStatus = new LinkedHashMap<>(status);
@@ -296,23 +405,92 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   }
 
   public Map<String, Object> status() {
-    return status;
+    Map<String, Object> current = status;
+    if (!Boolean.TRUE.equals(current.get("verified"))) {
+      return current;
+    }
+    try {
+      Instant checkedAt = Instant.parse((String) current.get("checkedAt"));
+      if (!Instant.now().isAfter(checkedAt.plus(maxFullCheckAgeHours, ChronoUnit.HOURS))) {
+        return current;
+      }
+    } catch (RuntimeException exception) {
+      log.warn("Money migration checkpoint timestamp is unavailable; blocking readiness.", exception);
+    }
+    Map<String, Object> expired = new LinkedHashMap<>(current);
+    expired.put("state", "stale-checkpoint");
+    expired.put("verified", false);
+    expired.put("readyForAuthoritativeCutover", false);
+    expired.put("cutoverEligible", false);
+    return Map.copyOf(expired);
   }
 
   private boolean hasFreshVerifiedCheckpoint() {
     Long count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM money_migration_runs WHERE migration_key = ? AND mode = 'full' "
-            + "AND state = 'VERIFIED' AND issue_count = 0 AND finished_at >= "
-            + "CURRENT_TIMESTAMP - (? * INTERVAL '1 hour')",
+        "SELECT COUNT(*) FROM (SELECT state, issue_count, finished_at FROM money_migration_runs "
+            + "WHERE migration_key = ? AND mode = 'full' ORDER BY started_at DESC LIMIT 1) latest_run "
+            + "WHERE state = 'VERIFIED' AND issue_count = 0 AND finished_at >= "
+            + "CURRENT_TIMESTAMP - (? * INTERVAL '1 hour') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'journal-money-guard-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'journal-posted-immutable-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'journal-voucher-balance-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'journal-voucher-seal-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'supplier-payment-exact-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'customer-payment-exact-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'customer-order-exact-v1') "
+            + "AND finished_at >= (SELECT applied_at FROM money_migration_ledger "
+            + "WHERE migration_key = 'product-money-guard-v1')",
         Long.class, MIGRATION_KEY, maxFullCheckAgeHours);
-    return count != null && count > 0 && triggerCount() == REQUIRED_TRIGGER_NAMES.size();
+    return count != null && count > 0 && triggerCount() == REQUIRED_TRIGGERS.size()
+        && latestFullRunHasRequiredChecks();
+  }
+
+  private boolean latestFullRunHasRequiredChecks() {
+    String expected = String.join(",", REQUIRED_CHECK_NAMES.stream()
+        .map(name -> "('" + name + "')")
+        .toList());
+    Long missing = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM (VALUES " + expected + ") AS required(check_name) "
+            + "CROSS JOIN (SELECT run_id FROM money_migration_runs WHERE migration_key = ? AND mode = 'full' "
+            + "ORDER BY started_at DESC LIMIT 1) latest_run "
+            + "LEFT JOIN money_migration_checks check_row ON check_row.run_id = latest_run.run_id "
+            + "AND check_row.migration_key = ? AND check_row.check_name = required.check_name "
+            + "AND check_row.status = 'PASS' AND check_row.issue_count = 0 "
+            + "WHERE check_row.check_name IS NULL",
+        Long.class, MIGRATION_KEY, MIGRATION_KEY);
+    return missing != null && missing == 0;
+  }
+
+  private static List<String> requiredCheckNames() {
+    List<String> names = new ArrayList<>();
+    for (MoneyColumn column : MONEY_COLUMNS) {
+      names.add("shadow:" + column.table() + "." + column.legacyColumn());
+    }
+    names.add("legacy:whole-krona");
+    for (String table : MONEY_TABLES) {
+      names.add("currency:" + table);
+    }
+    names.addAll(List.of(
+        "journal:voucher-number", "journal:voucher-date", "journal:account-number",
+        "journal:voucher-date-consistency", "journal:voucher-seal", "journal:voucher-registry",
+        "journal:orphan-voucher-registry", "journal:row-shape", "journal:voucher-balance",
+        "database:money-shadow-triggers", "database:operational-money-guard", "database:supplier-payment-exact-guard",
+        "database:customer-payment-exact-guard", "journal:account-total-reconciliation"));
+    return List.copyOf(names);
   }
 
   private void verifyCheckpoint() {
     Map<String, Object> checkpoint = jdbcTemplate.queryForMap(
         "SELECT run_id::text AS run_id, checked_rows, issue_count, finished_at "
             + "FROM money_migration_runs WHERE migration_key = ? AND mode = 'full' "
-            + "AND state = 'VERIFIED' AND issue_count = 0 ORDER BY finished_at DESC LIMIT 1",
+            + "AND state = 'VERIFIED' AND issue_count = 0 ORDER BY started_at DESC LIMIT 1",
         MIGRATION_KEY);
     Map<String, Object> checkpointStatus = new LinkedHashMap<>();
     checkpointStatus.put("state", "verified-checkpoint");
@@ -322,28 +500,73 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
     checkpointStatus.put("runId", String.valueOf(checkpoint.get("run_id")));
     checkpointStatus.put("checkedRows", ((Number) checkpoint.get("checked_rows")).longValue());
     checkpointStatus.put("issueCount", ((Number) checkpoint.get("issue_count")).longValue());
-    checkpointStatus.put("checkedAt", String.valueOf(checkpoint.get("finished_at")));
+    if (!(checkpoint.get("finished_at") instanceof Timestamp finishedAt)) {
+      throw new IllegalStateException("Money migration checkpoint timestamp is unavailable");
+    }
+    checkpointStatus.put("checkedAt", finishedAt.toInstant().toString());
     checkpointStatus.put("checkpointMaxAgeHours", maxFullCheckAgeHours);
     putCutoverStatus(checkpointStatus);
     status = Map.copyOf(checkpointStatus);
   }
 
   private long triggerCount() {
-    String sqlNames = String.join(",", REQUIRED_TRIGGER_NAMES.stream().map(name -> "'" + name + "'").toList());
+    String requirements = String.join(",", REQUIRED_TRIGGERS.stream()
+        .map(trigger -> {
+          List<String> arguments = triggerArguments(trigger);
+          String argumentHex = arguments.isEmpty() ? "" : HexFormat.of().formatHex(
+              (String.join("\0", arguments) + "\0").getBytes(StandardCharsets.UTF_8));
+          return "('" + trigger.table() + "','" + trigger.name() + "','" + trigger.function()
+              + "'," + trigger.eventMask() + "," + trigger.deferred() + ","
+              + arguments.size() + ",'" + argumentHex + "')";
+        })
+        .toList());
     Long count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (" + sqlNames + ")",
+        "SELECT COUNT(*) FROM (VALUES " + requirements + ") AS expected(table_name, trigger_name, function_name, event_mask, is_deferred, argument_count, argument_hex) "
+            + "JOIN pg_class relation ON relation.relname = expected.table_name "
+            + "JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace "
+            + "JOIN pg_trigger trigger_row ON trigger_row.tgrelid = relation.oid "
+            + "AND trigger_row.tgname = expected.trigger_name AND NOT trigger_row.tgisinternal "
+            + "JOIN pg_proc trigger_function ON trigger_function.oid = trigger_row.tgfoid "
+            + "JOIN pg_namespace function_namespace ON function_namespace.oid = trigger_function.pronamespace "
+            + "WHERE namespace.nspname = current_schema() "
+            + "AND function_namespace.nspname = current_schema() "
+            + "AND trigger_function.proname = expected.function_name "
+            + "AND trigger_row.tgenabled IN ('O', 'A') "
+            + "AND (trigger_row.tgtype & expected.event_mask) = expected.event_mask "
+            + "AND trigger_row.tgnargs = expected.argument_count "
+            + "AND encode(trigger_row.tgargs, 'hex') = expected.argument_hex "
+            + "AND (NOT expected.is_deferred OR (trigger_row.tgdeferrable "
+            + "AND trigger_row.tginitdeferred AND trigger_row.tgconstraint <> 0))",
         Long.class);
     return count == null ? 0L : count;
+  }
+
+  private static List<String> triggerArguments(RequiredTrigger trigger) {
+    if (!"guard_operational_money_integrity".equals(trigger.function())
+        && !"guard_customer_order_money_integrity".equals(trigger.function())) {
+      return List.of();
+    }
+    List<String> arguments = new ArrayList<>();
+    for (MoneyColumn column : MONEY_COLUMNS) {
+      if (column.table().equals(trigger.table())) {
+        arguments.add(column.legacyColumn());
+        arguments.add(column.minorColumn());
+      }
+    }
+    if (arguments.isEmpty()) {
+      throw new IllegalStateException("Money guard has no field arguments: " + trigger.name());
+    }
+    return List.copyOf(arguments);
   }
 
   private void putCutoverStatus(Map<String, Object> target) {
     int streak = zeroIssueFullCheckStreak();
     boolean restoreVerified = verifiedBackupRestore();
-    boolean eligible = streak >= 7 && restoreVerified && apiMinorUnitAuthoritative;
+    boolean eligible = streak >= 7 && restoreVerified && API_MINOR_UNIT_AUTHORITATIVE;
     target.put("zeroIssueFullCheckStreak", streak);
     target.put("requiredZeroIssueFullChecks", 7);
     target.put("verifiedBackupRestore", restoreVerified);
-    target.put("apiMinorUnitAuthoritative", apiMinorUnitAuthoritative);
+    target.put("apiMinorUnitAuthoritative", API_MINOR_UNIT_AUTHORITATIVE);
     target.put("cutoverEligible", eligible);
     target.put("readyForAuthoritativeCutover", eligible);
     target.put("cutoverBlockers", cutoverBlockers(streak, restoreVerified));
@@ -352,17 +575,39 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   private int zeroIssueFullCheckStreak() {
     try {
       List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-          "SELECT state, issue_count FROM money_migration_runs WHERE migration_key = ? "
-              + "AND mode = 'full' ORDER BY finished_at DESC NULLS LAST LIMIT 7",
-          MIGRATION_KEY);
+          "SELECT (COALESCE(finished_at, started_at) AT TIME ZONE 'UTC')::date AS check_day, "
+              + "BOOL_AND(state = 'VERIFIED' AND issue_count = 0 AND finished_at IS NOT NULL) AS clean, "
+              + "BOOL_OR(finished_at >= CURRENT_TIMESTAMP - (? * INTERVAL '1 hour')) AS fresh "
+              + "FROM money_migration_runs WHERE migration_key = ? AND mode = 'full' "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'journal-money-guard-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'journal-posted-immutable-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'journal-voucher-balance-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'journal-voucher-seal-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'supplier-payment-exact-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'customer-payment-exact-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'customer-order-exact-v1') "
+              + "AND COALESCE(finished_at, started_at) >= (SELECT applied_at FROM money_migration_ledger "
+              + "WHERE migration_key = 'product-money-guard-v1') "
+              + "GROUP BY check_day ORDER BY check_day DESC LIMIT 7",
+          maxFullCheckAgeHours, MIGRATION_KEY);
+      if (rows.isEmpty() || !Boolean.TRUE.equals(rows.getFirst().get("fresh"))) {
+        return 0;
+      }
       int streak = 0;
+      LocalDate expectedDay = checkDay(rows.getFirst().get("check_day"));
       for (Map<String, Object> row : rows) {
-        Object state = row.get("state");
-        Object issueCount = row.get("issue_count");
-        if (!"VERIFIED".equals(state) || !(issueCount instanceof Number number) || number.longValue() != 0L) {
+        if (!Boolean.TRUE.equals(row.get("clean")) || !expectedDay.equals(checkDay(row.get("check_day")))) {
           break;
         }
         streak++;
+        expectedDay = expectedDay.minusDays(1);
       }
       return streak;
     } catch (RuntimeException exception) {
@@ -371,11 +616,34 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
     }
   }
 
+  private LocalDate checkDay(Object value) {
+    if (value instanceof java.sql.Date date) return date.toLocalDate();
+    if (value instanceof LocalDate day) return day;
+    throw new IllegalStateException("Money migration check day is unavailable.");
+  }
+
   private boolean verifiedBackupRestore() {
     try {
       Long count = jdbcTemplate.queryForObject(
-          "SELECT COUNT(*) FROM money_migration_ledger WHERE migration_key = 'backup-restore-v1' "
-              + "AND target_unit = 'verified-restore'",
+          "SELECT COUNT(*) FROM money_migration_ledger restore "
+              + "JOIN money_migration_ledger journal_guard ON journal_guard.migration_key = 'journal-money-guard-v1' "
+              + "JOIN money_migration_ledger journal_immutable ON journal_immutable.migration_key = 'journal-posted-immutable-v1' "
+              + "JOIN money_migration_ledger journal_balance ON journal_balance.migration_key = 'journal-voucher-balance-v1' "
+              + "JOIN money_migration_ledger journal_seal ON journal_seal.migration_key = 'journal-voucher-seal-v1' "
+              + "JOIN money_migration_ledger supplier_guard ON supplier_guard.migration_key = 'supplier-payment-exact-v1' "
+              + "JOIN money_migration_ledger customer_guard ON customer_guard.migration_key = 'customer-payment-exact-v1' "
+              + "JOIN money_migration_ledger order_guard ON order_guard.migration_key = 'customer-order-exact-v1' "
+              + "JOIN money_migration_ledger product_guard ON product_guard.migration_key = 'product-money-guard-v1' "
+              + "WHERE restore.migration_key = 'backup-restore-v1' "
+              + "AND restore.target_unit = 'verified-restore' "
+              + "AND restore.applied_at >= journal_guard.applied_at "
+              + "AND restore.applied_at >= journal_immutable.applied_at "
+              + "AND restore.applied_at >= journal_balance.applied_at "
+              + "AND restore.applied_at >= journal_seal.applied_at "
+              + "AND restore.applied_at >= supplier_guard.applied_at "
+              + "AND restore.applied_at >= customer_guard.applied_at "
+              + "AND restore.applied_at >= order_guard.applied_at "
+              + "AND restore.applied_at >= product_guard.applied_at",
           Long.class);
       return count != null && count > 0;
     } catch (RuntimeException exception) {
@@ -387,12 +655,12 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   private List<String> cutoverBlockers(int streak, boolean restoreVerified) {
     List<String> blockers = new ArrayList<>();
     if (streak < 7) {
-      blockers.add("seven consecutive zero-issue full checks are required");
+      blockers.add("seven consecutive UTC days with zero-issue full checks are required");
     }
     if (!restoreVerified) {
       blockers.add("verified backup restore rehearsal is required");
     }
-    if (!apiMinorUnitAuthoritative) {
+    if (!API_MINOR_UNIT_AUTHORITATIVE) {
       blockers.add("API and booking flows are not yet minor-unit authoritative");
     }
     return List.copyOf(blockers);
@@ -406,8 +674,8 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   private int minorUnitExponent() {
     Integer exponent = jdbcTemplate.queryForObject(
         "SELECT minor_unit_exponent FROM currencies WHERE currency_code = '" + CURRENCY + "'", Integer.class);
-    if (exponent == null || exponent < 0 || exponent > 9) {
-      throw new IllegalStateException("No valid minor-unit exponent configured for " + CURRENCY);
+    if (exponent == null || exponent != 2) {
+      throw new IllegalStateException("SEK must use a minor-unit exponent of 2");
     }
     return exponent;
   }
@@ -428,6 +696,8 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
       case "LEGACY_MISSING" -> column.legacyColumn() + " IS NULL AND " + column.minorColumn() + " IS NOT NULL";
       case "ROUNDING_REQUIRED" -> "CAST(" + column.legacyColumn() + " AS numeric) * " + factor
           + " <> ROUND(CAST(" + column.legacyColumn() + " AS numeric) * " + factor + ", 0)";
+      case "FRACTIONAL_LEGACY" -> "CAST(" + column.legacyColumn() + " AS numeric) "
+          + "<> TRUNC(CAST(" + column.legacyColumn() + " AS numeric))";
       default -> column.minorColumn() + " IS NOT NULL AND " + column.minorColumn() + " <> ROUND(CAST("
           + column.legacyColumn() + " AS numeric) * " + factor + ", 0)";
     };
@@ -454,5 +724,11 @@ public class MoneyMigrationVerifier implements CommandLineRunner {
   }
 
   private record MoneyColumn(String table, String legacyColumn, String minorColumn) {
+  }
+
+  private record RequiredTrigger(String table, String name, String function, int eventMask, boolean deferred) {
+    private RequiredTrigger(String table, String name, String function) {
+      this(table, name, function, 23, false);
+    }
   }
 }

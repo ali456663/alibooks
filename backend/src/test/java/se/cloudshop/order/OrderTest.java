@@ -6,9 +6,49 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import se.cloudshop.product.Product;
 
 class OrderTest {
+
+  @Test
+  void rejectsStoredInvoiceWhenAnyMoneyShadowIsMissingOrContradictory() {
+    for (String field : new String[] {"netAmountMinor", "vatAmountMinor", "totalAmountMinor",
+        "paidAmountMinor", "refundedAmountMinor", "ordinaryPriceMinor", "discountAmountMinor"}) {
+      Order missing = new Order("Test", new Product("PT", "Training", 1000), Instant.now());
+      ReflectionTestUtils.setField(missing, field, null);
+      assertThatThrownBy(missing::validateMinorUnitShadow)
+          .as("missing " + field).isInstanceOf(OrderMoneyIntegrityException.class);
+
+      Order contradictory = new Order("Test", new Product("PT", "Training", 1000), Instant.now());
+      long original = (long) ReflectionTestUtils.getField(contradictory, field);
+      ReflectionTestUtils.setField(contradictory, field, original + 1);
+      assertThatThrownBy(contradictory::validateMinorUnitsBeforeUpdate)
+          .as("contradictory " + field).isInstanceOf(OrderMoneyIntegrityException.class);
+      assertThat(ReflectionTestUtils.getField(contradictory, field)).isEqualTo(original + 1);
+    }
+  }
+
+  @Test
+  void initializesOnlyAbsentShadowsOnNewInvoiceAndRejectsContradictions() {
+    Order fresh = new Order("Test", new Product("PT", "Training", 1000), Instant.now());
+    ReflectionTestUtils.setField(fresh, "netAmountMinor", null);
+    fresh.initializeMinorUnits();
+    assertThat(fresh.getNetAmountMinor()).isEqualTo(100_000L);
+
+    ReflectionTestUtils.setField(fresh, "vatAmountMinor", 25_001L);
+    assertThatThrownBy(fresh::initializeMinorUnits)
+        .isInstanceOf(OrderMoneyIntegrityException.class);
+    assertThat(fresh.getVatAmountMinor()).isEqualTo(25_001L);
+  }
+
+  @Test
+  void rejectsStoredInvoiceWithUnexpectedCurrency() {
+    Order order = new Order("Test", new Product("PT", "Training", 1000), Instant.now());
+    ReflectionTestUtils.setField(order, "currencyCode", "EUR");
+    assertThatThrownBy(order::validateMinorUnitShadow)
+        .isInstanceOf(OrderMoneyIntegrityException.class);
+  }
 
   @Test
   void largePriceVatDoesNotLoseAWholeKronaToFloatPrecision() {

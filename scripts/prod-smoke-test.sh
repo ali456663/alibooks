@@ -7,9 +7,14 @@ AUTH_TOKEN="${AUTH_TOKEN:-}"
 
 if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
   echo "Usage:"
-  echo "  FRONTEND_URL=http://your-ec2-public-ip BACKEND_URL=http://your-ec2-public-ip/api ./scripts/prod-smoke-test.sh"
+  echo "  FRONTEND_URL=https://your-domain BACKEND_URL=https://your-domain/api ./scripts/prod-smoke-test.sh"
   exit 1
 fi
+
+case "$FRONTEND_URL:$BACKEND_URL" in
+  https://*:https://*) ;;
+  *) echo "Production smoke URLs must use HTTPS."; exit 1 ;;
+esac
 
 echo "Checking frontend: $FRONTEND_URL"
 frontend_status="$(curl -L -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL")"
@@ -29,6 +34,13 @@ echo "$backend_health" | grep -q '"status":"ok"' || {
 echo "Backend health OK"
 
 echo "Checking protected system status: $BACKEND_URL/system/status"
+status_code="$(curl -L -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/system/status")"
+if [ "$status_code" != "401" ]; then
+  echo "System status protection check failed. Expected HTTP 401, got $status_code"
+  exit 1
+fi
+echo "System status protected (HTTP 401 without AUTH_TOKEN)"
+
 if [ -n "$AUTH_TOKEN" ]; then
   case "$AUTH_TOKEN" in
     Bearer\ *) auth_header="$AUTH_TOKEN" ;;
@@ -42,13 +54,7 @@ if [ -n "$AUTH_TOKEN" ]; then
   }
   echo "Authenticated system status and database OK"
 else
-  status_code="$(curl -L -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/system/status")"
-  if [ "$status_code" != "401" ]; then
-    echo "System status protection check failed. Expected HTTP 401, got $status_code"
-    exit 1
-  fi
-  echo "System status protected (HTTP 401 without AUTH_TOKEN)"
-  echo "Set AUTH_TOKEN to verify database.ok in the protected status response."
+  echo "Bootstrap-only smoke: database.ok is unverified without AUTH_TOKEN."
 fi
 
-echo "Production smoke test passed."
+echo "Public smoke test passed."

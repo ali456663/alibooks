@@ -1,6 +1,7 @@
 package se.cloudshop.accounting;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -37,6 +38,10 @@ public class JournalEntry {
   @ManyToOne
   @JoinColumn(name = "supplier_invoice_id")
   private SupplierInvoice supplierInvoice;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "voucher_evidence_id")
+  private VoucherEvidence voucherEvidence;
 
   private String accountNumber;
   private String accountName;
@@ -165,12 +170,12 @@ public class JournalEntry {
 
   @com.fasterxml.jackson.annotation.JsonIgnore
   public long getDebitMinorValue() {
-    return minorValue(debitMinor, debit, "debit");
+    return minorValue(debitMinor);
   }
 
   @com.fasterxml.jackson.annotation.JsonIgnore
   public long getCreditMinorValue() {
-    return minorValue(creditMinor, credit, "credit");
+    return minorValue(creditMinor);
   }
 
   public String getDescription() {
@@ -187,6 +192,13 @@ public class JournalEntry {
 
   public void setCorrectionOfVoucherNumber(String correctionOfVoucherNumber) {
     this.correctionOfVoucherNumber = correctionOfVoucherNumber;
+  }
+
+  void attachVoucherEvidence(VoucherEvidence evidence) {
+    if (voucherEvidence != null || evidence == null || !evidence.getVoucherNumber().equals(voucherNumber)) {
+      throw new IllegalStateException("Voucher evidence cannot be replaced or linked to another voucher.");
+    }
+    voucherEvidence = evidence;
   }
 
   public String getSourceType() {
@@ -300,6 +312,10 @@ public class JournalEntry {
     if (expense != null && (expense.getReceiptSha256() == null || expense.getReceiptSha256().isBlank())) {
       return "missing_receipt_hash";
     }
+    if (("manual_voucher".equals(getSourceType()) || "opening_balance".equals(getSourceType()))
+        && voucherEvidence == null) {
+      return "missing_voucher_evidence";
+    }
     if ("unknown".equals(getSourceType())) {
       return "needs_review";
     }
@@ -307,6 +323,9 @@ public class JournalEntry {
   }
 
   public String getEvidenceHash() {
+    if (voucherEvidence != null) {
+      return voucherEvidence.getSha256();
+    }
     if (expense != null && expense.getReceiptSha256() != null && !expense.getReceiptSha256().isBlank()) {
       return expense.getReceiptSha256();
     }
@@ -343,18 +362,37 @@ public class JournalEntry {
 
   /**
    * Legacy whole-krona columns remain authoritative during the staged migration.
-   * The shadow values make the ledger precision explicit without changing old API responses.
+   * Validate persisted values without repairing them during reads or unrelated updates.
    */
   @PostLoad
-  void synchronizeMinorUnitShadowsFromLegacy() {
-    synchronizeMinorUnits();
+  @PreUpdate
+  void validatePersistedMoney() {
+    validateMoneySides();
+    if (debitMinor == null || creditMinor == null
+        || debitMinor != toMinorUnits(debit, "debit")
+        || creditMinor != toMinorUnits(credit, "credit")) {
+      throw new JournalMoneyIntegrityException();
+    }
   }
 
   @PrePersist
-  @PreUpdate
-  void synchronizeMinorUnits() {
-    debitMinor = toMinorUnits(debit, "debit");
-    creditMinor = toMinorUnits(credit, "credit");
+  void prepareMoneyForInsert() {
+    validateMoneySides();
+    long expectedDebit = toMinorUnits(debit, "debit");
+    long expectedCredit = toMinorUnits(credit, "credit");
+    if ((debitMinor != null && debitMinor != expectedDebit)
+        || (creditMinor != null && creditMinor != expectedCredit)) {
+      throw new JournalMoneyIntegrityException();
+    }
+    // Only a new row may initialize absent shadows. Never overwrite contradictory values.
+    debitMinor = expectedDebit;
+    creditMinor = expectedCredit;
+  }
+
+  private void validateMoneySides() {
+    if (!"SEK".equals(currencyCode) || debit < 0 || credit < 0 || (debit > 0 && credit > 0)) {
+      throw new JournalMoneyIntegrityException();
+    }
   }
 
   private static long toMinorUnits(int amount, String field) {
@@ -365,8 +403,9 @@ public class JournalEntry {
     }
   }
 
-  private static long minorValue(Long shadow, int legacyAmount, String field) {
-    return shadow == null ? toMinorUnits(legacyAmount, field) : shadow;
+  private static long minorValue(Long shadow) {
+    if (shadow == null) throw new JournalMoneyIntegrityException();
+    return shadow;
   }
 
   private String value(Object value) {

@@ -30,6 +30,7 @@ const restoreVerifier = exists("scripts/backup-restore-verify.mjs") ? read("scri
 const runbook = exists("docs/backup-restore-runbook.md") ? read("docs/backup-restore-runbook.md") : "";
 const gitignore = read(".gitignore");
 const releaseEvidence = read("docs/release-evidence.md");
+const releaseGate = read("scripts/release-gate.mjs");
 const frontend = read("frontend/src/main.jsx");
 
 check("Shell backup script exists", exists("scripts/backup-postgres.sh"), "Linux/EC2 backup script should exist.");
@@ -40,8 +41,8 @@ check("Backup runbook exists", exists("docs/backup-restore-runbook.md"), "Backup
 
 check(
   "Shell backup uses pg_dump custom format",
-  includesAll(shellBackup, ["postgres:16", "pg_dump", "-Fc", "PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]),
-  "Shell backup should use Postgres 16 pg_dump with required connection variables."
+  includesAll(shellBackup, ["postgres:16", "pg_dump", "-Fc", "PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD", "PGSSLMODE", "verify-full", "PGSSLROOTCERT", "RDS_CA_CERT_HOST_PATH"]),
+  "Shell backup should use Postgres 16 pg_dump and verified PostgreSQL TLS by default."
 );
 check(
   "Shell backup verifies pg_restore catalog",
@@ -50,8 +51,8 @@ check(
 );
 check(
   "PowerShell backup uses pg_dump custom format",
-  includesAll(psBackup, ["postgres:16", "pg_dump", "-Fc", "PgHost", "PgDatabase", "PgUser", "PgPassword"]),
-  "PowerShell backup should use Postgres 16 pg_dump with required connection variables."
+  includesAll(psBackup, ["postgres:16", "pg_dump", "-Fc", "PgHost", "PgDatabase", "PgUser", "PgPassword", "PGSSLMODE", "verify-full", "PGSSLROOTCERT", "RDS_CA_CERT_HOST_PATH"]),
+  "PowerShell backup should use Postgres 16 pg_dump and verified PostgreSQL TLS by default."
 );
 check(
   "PowerShell backup verifies pg_restore catalog",
@@ -60,8 +61,8 @@ check(
 );
 check(
   "Shell restore verifies catalog before restore",
-  includesAll(shellRestore, ["RESTORE_FILE", "RESTORE_CONFIRM", "pg_restore", "-l", "--single-transaction", "--exit-on-error"]),
-  "Shell restore should require a dump file, explicit confirmation and catalog verification."
+  includesAll(shellRestore, ["RESTORE_FILE", "RESTORE_CONFIRM", "pg_restore", "-l", "--single-transaction", "--exit-on-error", "PGSSLMODE", "verify-full", "PGSSLROOTCERT", "RDS_CA_CERT_HOST_PATH"]),
+  "Shell restore should require a dump file, explicit confirmation, catalog verification and verified TLS by default."
 );
 check(
   "Shell restore blocks production-looking targets",
@@ -70,8 +71,8 @@ check(
 );
 check(
   "PowerShell restore verifies catalog before restore",
-  includesAll(psRestore, ["RestoreFile", "RestoreConfirm", "pg_restore", "-l", "--single-transaction", "--exit-on-error"]),
-  "PowerShell restore should require a dump file, explicit confirmation and catalog verification."
+  includesAll(psRestore, ["RestoreFile", "RestoreConfirm", "pg_restore", "-l", "--single-transaction", "--exit-on-error", "PGSSLMODE", "verify-full", "PGSSLROOTCERT", "RDS_CA_CERT_HOST_PATH"]),
+  "PowerShell restore should require a dump file, explicit confirmation, catalog verification and verified TLS by default."
 );
 check(
   "PowerShell restore blocks production-looking targets",
@@ -102,6 +103,11 @@ check(
   "Release evidence mentions backup gate",
   releaseEvidence.includes("npm run check:backup"),
   "Release evidence should mention the backup readiness check."
+);
+check(
+  "Full local release gate runs isolated backup restore tests",
+  releaseGate.includes('runNpmScript("test:backup",') && releaseGate.includes('if (withBackend) {'),
+  "A full local release must fail when the real PostgreSQL backup/restore test fails."
 );
 
 check(

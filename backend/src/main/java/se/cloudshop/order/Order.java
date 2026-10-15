@@ -582,23 +582,38 @@ public class Order {
   }
 
   @PostLoad
-  private void validateMinorUnitShadow() {
-    // The legacy whole-krona columns remain authoritative during the staged migration.
-    // Rebuild shadows on read so older imports and controlled reconciliation updates
-    // cannot leave reports using stale shadow values.
-    synchronizeMinorUnits();
+  void validateMinorUnitShadow() {
+    if (!"SEK".equals(currencyCode)
+        || !matches(netAmountMinor, netAmount)
+        || !matches(vatAmountMinor, vatAmount)
+        || !matches(totalAmountMinor, totalAmount)
+        || !matches(paidAmountMinor, paidAmount)
+        || !matches(refundedAmountMinor, refundedAmount)
+        || !matches(ordinaryPriceMinor, ordinaryPrice)
+        || !matches(discountAmountMinor, discountAmount)) {
+      throw new OrderMoneyIntegrityException();
+    }
   }
 
   @PrePersist
+  void initializeMinorUnits() {
+    if (netAmountMinor == null) netAmountMinor = toMinorUnits(netAmount, "netAmount");
+    if (vatAmountMinor == null) vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
+    if (totalAmountMinor == null) totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
+    if (paidAmountMinor == null) paidAmountMinor = toMinorUnits(paidAmount, "paidAmount");
+    if (refundedAmountMinor == null) refundedAmountMinor = toMinorUnits(refundedAmount, "refundedAmount");
+    if (ordinaryPriceMinor == null) ordinaryPriceMinor = toMinorUnits(ordinaryPrice, "ordinaryPrice");
+    if (discountAmountMinor == null) discountAmountMinor = toMinorUnits(discountAmount, "discountAmount");
+    validateMinorUnitShadow();
+  }
+
   @PreUpdate
-  private void synchronizeMinorUnits() {
-    netAmountMinor = toMinorUnits(netAmount, "netAmount");
-    vatAmountMinor = toMinorUnits(vatAmount, "vatAmount");
-    totalAmountMinor = toMinorUnits(totalAmount, "totalAmount");
-    paidAmountMinor = toMinorUnits(paidAmount, "paidAmount");
-    refundedAmountMinor = toMinorUnits(refundedAmount, "refundedAmount");
-    ordinaryPriceMinor = toMinorUnits(ordinaryPrice, "ordinaryPrice");
-    discountAmountMinor = toMinorUnits(discountAmount, "discountAmount");
+  void validateMinorUnitsBeforeUpdate() {
+    validateMinorUnitShadow();
+  }
+
+  private static boolean matches(Long shadow, int legacy) {
+    return shadow != null && shadow == toMinorUnits(legacy, "amount");
   }
 
   private int normalizeQuantity(int quantity) {

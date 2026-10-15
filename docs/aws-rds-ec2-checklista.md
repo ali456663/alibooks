@@ -141,14 +141,21 @@ DOCKERHUB_USERNAME=<your-dockerhub-user>
 IMAGE_TAG=latest
 
 VITE_API_URL=/api
-APP_FRONTEND_URL=http://<ec2-public-ip>
+APP_FRONTEND_URL=https://<your-domain>
+TLS_CERT_HOST_PATH=/etc/letsencrypt/live/<your-domain>/fullchain.pem
+TLS_KEY_HOST_PATH=/etc/letsencrypt/live/<your-domain>/privkey.pem
 
-SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop
-SPRING_DATASOURCE_USERNAME=cloudshop
+RDS_CA_CERT_HOST_PATH=/opt/alibooks/certs/global-bundle.pem
+SPRING_DATASOURCE_URL=jdbc:postgresql://<rds-endpoint>:5432/cloudshop?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem
+SPRING_DATASOURCE_USERNAME=alibooks_app
 SPRING_DATASOURCE_PASSWORD=<rds-password>
 
 JWT_SECRET=<long-random-secret-at-least-32-chars>
 ```
+
+Place the current AWS RDS global CA bundle at the host path in `RDS_CA_CERT_HOST_PATH` before deployment. Compose mounts it read-only for pgJDBC; `verify-full` checks both the certificate chain and endpoint hostname. The JDBC driver's `require` mode encrypts traffic but accepts unverified server certificates. See [AWS RDS certificate bundles](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) and [pgJDBC SSL settings](https://jdbc.postgresql.org/documentation/ssl/).
+
+Issue a valid certificate for the public domain and set `TLS_CERT_HOST_PATH` to its full chain and `TLS_KEY_HOST_PATH` to its private key on EC2. Compose mounts both read-only into Nginx, which redirects port 80 to HTTPS on 443. Keep certificate renewal configured and reload Nginx after renewal. Do not send real data over the EC2 IP or HTTP; an external HTTPS load balancer is an alternative only if it is actually configured and verified.
 
 Stripe och e-post kan vara testvarden i forsta molndemon:
 
@@ -163,16 +170,21 @@ SPRING_MAIL_PASSWORD=...
 
 Starta appen:
 
+Satt `ALIBOOKS_AUTH_TOKEN` i skalets miljo utan att skriva vardet i kommandohistorik.
+Deploy kraver token for att prova skyddad databasstatus. Vid forsta
+agarkontots bootstrap, se undantaget i [Dockerhub-guiden](dockerhub-release.md);
+bootstrap ar inte ett go-live-bevis.
+
 ```bash
-FRONTEND_URL=http://<ec2-public-ip> BACKEND_URL=http://<ec2-public-ip>/api sh ./scripts/ec2-deploy.sh
+FRONTEND_URL=https://<your-domain> BACKEND_URL=https://<your-domain>/api sh ./scripts/ec2-deploy.sh
 ```
 
 Kontrollera manuellt:
 
 ```text
-http://<ec2-public-ip>
-http://<ec2-public-ip>/api/health
-http://<ec2-public-ip>/api/system/status
+https://<your-domain>
+https://<your-domain>/api/health
+https://<your-domain>/api/system/status
 ```
 
 ## 7. Demo: Vad Du Ska Visa

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isTraceableCheckout } from "./lib/release-traceability.mjs";
+import { isTraceableCheckout, workingTreeChangeCount } from "./lib/release-traceability.mjs";
 
 const headSha = "0123456789abcdef0123456789abcdef01234567";
 
@@ -42,4 +42,15 @@ test("rejects a local checkout without upstream", () => {
     headSha,
     githubRef: ""
   }), false);
+});
+
+test("counts tracked and untracked changes without exposing file names", () => {
+  assert.equal(workingTreeChangeCount({ status: 0, stdout: " M backend/pom.xml\n?? local.txt\n" }), 2);
+  assert.equal(workingTreeChangeCount({ status: 0, stdout: "" }), 0);
+});
+
+test("does not treat failed or incomplete git status as a clean checkout", () => {
+  assert.equal(workingTreeChangeCount({ status: 1, stdout: "" }), null);
+  assert.equal(workingTreeChangeCount({ status: 0 }), null);
+  assert.equal(workingTreeChangeCount({ error: new Error("git unavailable"), status: null, stdout: "" }), null);
 });

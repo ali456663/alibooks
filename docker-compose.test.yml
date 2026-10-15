@@ -16,14 +16,19 @@ services:
   backend-test:
     image: maven:3.9.9-eclipse-temurin-21
     working_dir: /workspace
-    command: ["mvn", "-B", "clean", "-Pintegration", "verify"]
+    command: ["sh", "-ec", "cp -a /source/pom.xml /source/src /workspace/ && mvn -B clean -Pintegration verify"]
     environment:
       TEST_DATABASE_URL: jdbc:postgresql://postgres:5432/alibooks_test
       TEST_DATABASE_USERNAME: alibooks_test
       TEST_DATABASE_PASSWORD: integration_only
     volumes:
-      - ./backend:/workspace
+      - ./backend:/source:ro
+      - backend_test_workspace:/workspace
+      - ./db:/db:ro
       - ./.m2-cache:/root/.m2
     depends_on:
       postgres:
         condition: service_healthy
+
+volumes:
+  backend_test_workspace:

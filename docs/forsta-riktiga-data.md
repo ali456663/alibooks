@@ -4,7 +4,7 @@ Det har dokumentet anvands precis innan du borjar lagga in riktiga kunder, faktu
 
 Malet ar att undvika fel som blir dyra att reda ut senare: fel foretagsform, fel momsperiod, fel nummerserie, saknad backup, testdata blandad med riktig data eller betalningar som inte kan stammas av.
 
-**Aktuellt stopp:** AliBooks pengamodell bevarar inte kronor och oren genom hela bokforingsflodet. Anvand inte systemet for riktiga bokforingsposter forran en fullstandig beloppsmigrering och avstamning ar genomford och verifierad. Fortsatt endast med avskild testdata under tiden.
+**Aktuella stopp:** AliBooks pengamodell bevarar inte kronor och oren genom hela bokforingsflodet. TOTP-MFA finns nu i kodbasen men maste konfigureras med `APP_AUTH_MFA_ENCRYPTION_KEY`, migreras, aktiveras pa agarkontot och verifieras genom lokal/staging-inloggning samt release/restore. Skapa nyckeln lokalt med `npm run generate:mfa-key`; hall den separat fran backupen. Anvand inte systemet for riktiga bokforingsposter forran beloppsmigrering, MFA och avstamning ar genomforda och verifierade. Skarp drift kraver dessutom daterat lednings-/VD-beslut, NIS2-scopebedomning, tillgangs-/riskregister, incidentovning, leverantorsgranskning och kontinuitets-/restorebevis. Fortsatt endast med avskild testdata under tiden. Se [cybersakerhetsstyrning for SME](cybersecurity-governance-sme.md).
 
 `npm run check:first-real-data` kontrollerar att skydd och arbetssteg finns i projektet. Ett godkant resultat ar **inte** ett verksamhetsgodkannande och upphaver inte stoppet ovan.
 
@@ -17,6 +17,9 @@ AliBooks kan anvandas med riktig lokal MVP-data forst nar samtliga villkor nedan
 - `npm run check:use-today` ar gron.
 - `npm run check:first-real-data` ar gron.
 - Backendens pengamodell bekraftar fullt stod for kronor och oren; om detta saknas ska riktiga bokforingsposter stoppas.
+- MFA ar implementerat och testat end-to-end for agarkontot; en dokumenterad plan eller statusruta raknas inte som MFA.
+- Ledningen har fattat ett faktiskt dokumenterat beslut; NIS2-scope, verksamhetstillgangar, risker och kritiska leverantorer ar bedomda.
+- Incidentovning och restore/continuity-bevis finns; lagstadgad rapportering anvands endast om verksamheten omfattas och enligt gallande sektorsregler.
 - `npm run check:git -- --strict` ar gron efter senaste commit.
 - En backup ar skapad och sparad utanfor projektmappen.
 - Restore drill ar testad i separat testdatabas innan stor import eller molnflytt.

@@ -2,12 +2,12 @@ package se.cloudshop.admin;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import se.cloudshop.accounting.JournalEntryRepository;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.customer.CustomerRepository;
 import se.cloudshop.expense.ExpenseRepository;
@@ -17,7 +17,7 @@ import se.cloudshop.order.OrderRepository;
 public class TestDataController {
 
   private final AuthHeader authHeader;
-  private final JournalEntryRepository journalEntryRepository;
+  private final JdbcTemplate jdbcTemplate;
   private final OrderRepository orderRepository;
   private final ExpenseRepository expenseRepository;
   private final CustomerRepository customerRepository;
@@ -25,14 +25,14 @@ public class TestDataController {
 
   public TestDataController(
       AuthHeader authHeader,
-      JournalEntryRepository journalEntryRepository,
+      JdbcTemplate jdbcTemplate,
       OrderRepository orderRepository,
       ExpenseRepository expenseRepository,
       CustomerRepository customerRepository,
       @Value("${app.test-data-reset.enabled:false}") boolean testDataResetEnabled
   ) {
     this.authHeader = authHeader;
-    this.journalEntryRepository = journalEntryRepository;
+    this.jdbcTemplate = jdbcTemplate;
     this.orderRepository = orderRepository;
     this.expenseRepository = expenseRepository;
     this.customerRepository = customerRepository;
@@ -58,7 +58,7 @@ public class TestDataController {
           "Missing reset confirmation header."
       );
     }
-    journalEntryRepository.deleteAll();
+    jdbcTemplate.execute("TRUNCATE TABLE journal_entries, journal_voucher_registry, voucher_evidence_contents, voucher_evidence CASCADE");
     orderRepository.deleteAll();
     expenseRepository.deleteAll();
     customerRepository.deleteAll();

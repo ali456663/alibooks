@@ -1,5 +1,6 @@
 package se.cloudshop.audit;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -7,6 +8,8 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import se.cloudshop.auth.JwtService;
 
 @Service
@@ -39,7 +42,8 @@ public class AuditService {
     String previousChainHash = "START";
     for (int index = 0; index < events.size(); index++) {
       AuditEvent event = events.get(index);
-      String rowHash = sha256(String.join("|",
+      String rowHash = sha256Fields(
+          "audit-row-v2",
           value(event.getId()),
           value(event.getCreatedAt()),
           value(event.getEventType()),
@@ -50,12 +54,13 @@ public class AuditService {
           value(event.getMessage()),
           String.valueOf(event.getAmount()),
           value(event.getActorEmail())
-      ));
-      String chainHash = sha256(String.join("|",
+      );
+      String chainHash = sha256Fields(
+          "audit-chain-v2",
           previousChainHash,
           rowHash,
           String.valueOf(index + 1)
-      ));
+      );
 
       lines.add(new AuditIntegrityLine(
           index + 1,
@@ -77,11 +82,12 @@ public class AuditService {
 
     String firstChainHash = lines.isEmpty() ? "" : lines.get(0).chainHash();
     String finalChainHash = lines.isEmpty() ? "" : lines.get(lines.size() - 1).chainHash();
-    String auditFingerprint = sha256(String.join("|",
+    String auditFingerprint = sha256Fields(
+        "audit-fingerprint-v2",
         String.valueOf(events.size()),
         firstChainHash,
         finalChainHash
-    ));
+    );
 
     return new AuditIntegrityReport(
         Instant.now(),
@@ -104,6 +110,11 @@ public class AuditService {
         amount,
         actorFromHeader(authorizationHeader)
     ));
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void recordMfaLoginFailure(String email, String message) {
+    record("security", "user", email, "mfa_login_failed", email, message, 0, null);
   }
 
   private String clean(String value) {
@@ -131,10 +142,15 @@ public class AuditService {
     return value == null ? "" : String.valueOf(value);
   }
 
-  private String sha256(String value) {
+  private String sha256Fields(String... fields) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8))).toUpperCase();
+      for (String field : fields) {
+        byte[] bytes = field.getBytes(StandardCharsets.UTF_8);
+        digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+        digest.update(bytes);
+      }
+      return HexFormat.of().formatHex(digest.digest()).toUpperCase();
     } catch (Exception exception) {
       throw new IllegalStateException("SHA-256 is not available.", exception);
     }

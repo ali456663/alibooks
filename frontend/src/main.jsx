@@ -4,6 +4,7 @@ import AiLoader from "./components/ui/AiLoader.jsx";
 import AnimatedGlowingSearchBar from "./components/ui/AnimatedGlowingSearchBar.jsx";
 import HeroErrorBoundary from "./components/ui/hero-error-boundary.jsx";
 import { readReportResponse } from "./lib/report-response.js";
+import { formatMinorAmount } from "./lib/minor-money.js";
 import SubledgerControl from "./components/ui/SubledgerControl.jsx";
 import BankJournalLink from "./components/ui/BankJournalLink.jsx";
 import { parseWholeSekInput, verifiedSieLines } from "./lib/import-money.js";
@@ -1746,6 +1747,9 @@ function App() {
     }
   });
   const [bokioImportFiles, setBokioImportFiles] = useState({});
+  const [sieVoucherEvidenceFiles, setSieVoucherEvidenceFiles] = useState({});
+  const [sieVoucherImportingKeys, setSieVoucherImportingKeys] = useState({});
+  const sieVoucherImportingRef = useRef(new Set());
   const [bokioImportMessage, setBokioImportMessage] = useState("");
   const [automaticReminderMessage, setAutomaticReminderMessage] = useState("");
   const [automaticReminderResult, setAutomaticReminderResult] = useState(null);
@@ -1788,6 +1792,7 @@ function App() {
   const [profitAndLoss, setProfitAndLoss] = useState(null);
   const [balanceReport, setBalanceReport] = useState(null);
   const [trialBalanceReport, setTrialBalanceReport] = useState(null);
+  const trialBalanceRequest = useRef(0);
   const [journalIntegrityReport, setJournalIntegrityReport] = useState(null);
   const [archiveYearReport, setArchiveYearReport] = useState(null);
   const [auditIntegrityReport, setAuditIntegrityReport] = useState(null);
@@ -1840,8 +1845,13 @@ function App() {
   const [manualDebitAccount, setManualDebitAccount] = useState("");
   const [manualCreditAccount, setManualCreditAccount] = useState("");
   const [manualAmount, setManualAmount] = useState("");
+  const [manualEvidenceFile, setManualEvidenceFile] = useState(null);
+  const [voucherEvidenceNumber, setVoucherEvidenceNumber] = useState("");
+  const [voucherEvidenceFile, setVoucherEvidenceFile] = useState(null);
+  const [voucherEvidenceMessage, setVoucherEvidenceMessage] = useState("");
   const [openingBalanceDate, setOpeningBalanceDate] = useState(() => `${new Date().toISOString().slice(0, 4)}-01-01`);
   const [openingBalanceDescription, setOpeningBalanceDescription] = useState("Ingaende balans");
+  const [openingBalanceEvidenceFile, setOpeningBalanceEvidenceFile] = useState(null);
   const [openingBalanceLines, setOpeningBalanceLines] = useState([
     { id: 1, accountNumber: "1930", debit: "", credit: "" },
     { id: 2, accountNumber: "2018", debit: "", credit: "" },
@@ -1986,6 +1996,15 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [registrationSetupKey, setRegistrationSetupKey] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaSetup, setMfaSetup] = useState(null);
+  const [mfaSetupPassword, setMfaSetupPassword] = useState("");
+  const [mfaSetupCode, setMfaSetupCode] = useState("");
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState([]);
+  const [mfaDisablePassword, setMfaDisablePassword] = useState("");
+  const [mfaDisableCode, setMfaDisableCode] = useState("");
   const [token, setToken] = useState(readStoredSessionToken);
   const [currentEmail, setCurrentEmail] = useState(() => token ? localStorage.getItem("alibooks-email") || "" : "");
   const [language, setLanguage] = useState(() => {
@@ -2045,6 +2064,10 @@ function App() {
   const [payrollReportYear, setPayrollReportYear] = useState(() => localStorage.getItem("alibooks-payroll-report-year") || new Date().toISOString().slice(0, 4));
   const [payrollSalaryPaymentDate, setPayrollSalaryPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-salary-payment-date") || new Date().toISOString().slice(0, 10));
   const [payrollTaxPaymentDate, setPayrollTaxPaymentDate] = useState(() => localStorage.getItem("alibooks-payroll-tax-payment-date") || new Date().toISOString().slice(0, 10));
+  const [payrollEvidenceFiles, setPayrollEvidenceFiles] = useState({});
+  const [payrollMonthEvidenceFile, setPayrollMonthEvidenceFile] = useState(null);
+  const [payrollTaxTransferEvidenceFile, setPayrollTaxTransferEvidenceFile] = useState(null);
+  const [payrollTaxSettlementEvidenceFile, setPayrollTaxSettlementEvidenceFile] = useState(null);
   const [payrollTaxSettlements, setPayrollTaxSettlements] = useState(() => {
     try {
       const savedSettlements = JSON.parse(localStorage.getItem("alibooks-payroll-tax-settlements") || "{}");
@@ -2234,6 +2257,19 @@ function App() {
   useEffect(() => {
     loadServices();
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setMfaEnabled(false);
+      return;
+    }
+    let active = true;
+    fetch(`${apiUrl}/auth/mfa/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => { if (active) setMfaEnabled(data.enabled === true); })
+      .catch(() => { if (active) setMfaEnabled(false); });
+    return () => { active = false; };
+  }, [token]);
 
   useEffect(() => {
     localStorage.setItem("alibooks-language", language);
@@ -3280,15 +3316,17 @@ function App() {
   }
 
   async function loadTrialBalanceReport(authToken = token) {
+    const requestId = ++trialBalanceRequest.current;
     setTrialBalanceReport(null);
     const fallback = language === "sv" ? "Kunde inte ladda saldobalans." : "Could not load trial balance.";
     try {
-      const response = await fetch(`${apiUrl}/trial-balance${selectedReportQuery(true)}`, {
+      const response = await fetch(`${apiUrl}/v2/trial-balance${selectedReportQuery(true)}`, {
         headers: authHeaders(authToken)
       });
-      setTrialBalanceReport(await readReportResponse(response, "trial", fallback));
+      const report = await readReportResponse(response, "trialMinor", fallback);
+      if (requestId === trialBalanceRequest.current) setTrialBalanceReport(report);
     } catch (error) {
-      setError(error?.message || fallback);
+      if (requestId === trialBalanceRequest.current) setError(error?.message || fallback);
     }
   }
 
@@ -5943,21 +5981,28 @@ function App() {
     event.preventDefault();
     setError("");
 
-    const response = await fetch(`${apiUrl}/journal-entries/manual`, {
+    if (!manualEvidenceFile) {
+      setError(language === "sv" ? "Valj ett underlag innan verifikatet bokfors." : "Select a document before posting the voucher.");
+      return;
+    }
+
+    const form = event.currentTarget;
+    const formData = new FormData();
+    formData.append("request", JSON.stringify({
+      voucherDate: manualVoucherDate,
+      description: manualDescription,
+      debitAccountNumber: manualDebitAccount,
+      creditAccountNumber: manualCreditAccount,
+      amount: Number(manualAmount)
+    }));
+    formData.append("file", manualEvidenceFile);
+
+    const response = await fetch(`${apiUrl}/journal-entries/manual-with-evidence`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate: manualVoucherDate,
-        description: manualDescription,
-        debitAccountNumber: manualDebitAccount,
-        creditAccountNumber: manualCreditAccount,
-        amount: Number(manualAmount)
-      })
+      headers: authHeaders(),
+      body: formData
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       setError(apiErrorMessage(data, "Could not create manual voucher."));
@@ -5968,11 +6013,67 @@ function App() {
     setManualDescription("");
     setManualVoucherDate(new Date().toISOString().slice(0, 10));
     setManualAmount("");
+    setManualEvidenceFile(null);
+    form.reset();
     loadJournalEntries();
     loadStripePayouts();
     loadVatReport();
     loadProfitAndLoss();
     loadBalanceReport();
+  }
+
+  async function handleAttachVoucherEvidence(event) {
+    event.preventDefault();
+    setVoucherEvidenceMessage("");
+    if (!voucherEvidenceNumber || !voucherEvidenceFile) return;
+
+    const form = event.currentTarget;
+    const formData = new FormData();
+    formData.append("file", voucherEvidenceFile);
+    const response = await fetch(`${apiUrl}/journal-entries/${encodeURIComponent(voucherEvidenceNumber)}/evidence`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setVoucherEvidenceMessage(apiErrorMessage(data, language === "sv" ? "Underlaget kunde inte sparas." : "Could not save the document."));
+      return;
+    }
+
+    setVoucherEvidenceMessage(language === "sv" ? `Underlag sparat for ${data.voucherNumber}.` : `Document saved for ${data.voucherNumber}.`);
+    setVoucherEvidenceNumber("");
+    setVoucherEvidenceFile(null);
+    form.reset();
+    loadJournalEntries();
+  }
+
+  async function openVoucherEvidence(voucherNumber) {
+    setError("");
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+    try {
+      const response = await fetch(`${apiUrl}/journal-entries/${encodeURIComponent(voucherNumber)}/evidence`, {
+        headers: authHeaders()
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(data, language === "sv" ? "Kunde inte oppna underlaget." : "Could not open the document."));
+      }
+      const url = URL.createObjectURL(await response.blob());
+      if (tab) {
+        tab.location.href = url;
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${voucherNumber}.${response.headers.get("Content-Type")?.includes("pdf") ? "pdf" : "bin"}`;
+        link.click();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 300000);
+    } catch (error) {
+      tab?.close();
+      setError(error.message || (language === "sv" ? "Kunde inte oppna underlaget." : "Could not open the document."));
+    }
   }
 
   function updateOpeningBalanceLine(lineId, field, value) {
@@ -5997,6 +6098,7 @@ function App() {
   async function handleCreateOpeningBalance(event) {
     event.preventDefault();
     setError("");
+    const fileInput = event.currentTarget.querySelector('input[type="file"]');
 
     if (openingBalanceDateIsLocked) {
       setError(lockedAccountingMessage(openingBalanceDate));
@@ -6010,23 +6112,29 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${apiUrl}/journal-entries/opening-balance`, {
+    if (!openingBalanceEvidenceFile) {
+      setError(language === "sv" ? "Valj ett underlag innan ingaende balans bokfors." : "Select a document before posting the opening balance.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("request", JSON.stringify({
+      voucherDate: openingBalanceDate,
+      description: openingBalanceDescription || "Ingaende balans",
+      lines: openingBalanceFilledLines.map((line) => ({
+        accountNumber: line.accountNumber,
+        debit: Number(line.debit || 0),
+        credit: Number(line.credit || 0)
+      }))
+    }));
+    formData.append("file", openingBalanceEvidenceFile);
+
+    const response = await fetch(`${apiUrl}/journal-entries/opening-balance-with-evidence`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate: openingBalanceDate,
-        description: openingBalanceDescription || "Ingaende balans",
-        lines: openingBalanceFilledLines.map((line) => ({
-          accountNumber: line.accountNumber,
-          debit: Number(line.debit || 0),
-          credit: Number(line.credit || 0)
-        }))
-      })
+      headers: authHeaders(),
+      body: formData
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skapa ingaende balans." : "Could not create opening balance."));
@@ -6034,6 +6142,8 @@ function App() {
     }
 
     setJournalEntries((current) => [...current, ...data]);
+    setOpeningBalanceEvidenceFile(null);
+    if (fileInput) fileInput.value = "";
     setBookkeepingSearch(data?.[0]?.voucherNumber || "IB");
     loadJournalEntries();
     loadVatReport();
@@ -7550,6 +7660,16 @@ function App() {
     await downloadCsv(`/general-ledger/export${selectedBookkeepingQuery()}`, "huvudbok.csv", language === "sv" ? "Kunde inte exportera huvudbok." : "Could not export general ledger.");
   }
 
+  async function downloadGeneralLedgerMinorCsv() {
+    setError("");
+    await downloadCsv(`/v2/general-ledger/export${selectedBookkeepingQuery()}`, "huvudbok-oren.csv", language === "sv" ? "Kunde inte exportera huvudbok i oren." : "Could not export general ledger in minor units.");
+  }
+
+  async function downloadJournalMinorCsv() {
+    setError("");
+    await downloadCsv(`/v2/journal-entries/export${selectedBookkeepingQuery()}`, "grundbok-oren.csv", language === "sv" ? "Kunde inte exportera grundbok i oren." : "Could not export journal in minor units.");
+  }
+
   async function downloadArchiveYearCsv() {
     setError("");
     await downloadCsv(`/archive-year/export?year=${encodeURIComponent(annualCloseYear || new Date().getFullYear())}`, `arsarkivkontroll-${annualCloseYear || "ar"}.csv`, language === "sv" ? "Kunde inte exportera arsarkivkontroll." : "Could not export yearly archive control.");
@@ -7649,115 +7769,6 @@ function App() {
     );
 
     downloadLocalCsv("verifikationskedja.csv", rows);
-  }
-
-  function sieString(value) {
-    return `"${String(value || "")
-      .replaceAll("\\", "/")
-      .replaceAll("\"", "'")
-      .replace(/\r?\n/g, " ")
-      .trim()}"`;
-  }
-
-  function sieDate(value) {
-    const raw = String(value || "").slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return raw.replaceAll("-", "");
-    }
-
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return dateInputString(parsed).replaceAll("-", "");
-    }
-
-    return todayInput.replaceAll("-", "");
-  }
-
-  function sieAmount(value) {
-    return Number(value || 0).toFixed(2);
-  }
-
-  function downloadSieExport() {
-    setError("");
-
-    if (filteredJournalGroups.length === 0) {
-      setError(language === "sv" ? "Det finns inga verifikationer att exportera." : "There are no vouchers to export.");
-      return;
-    }
-
-    if (filteredJournalDifference !== 0) {
-      setError(language === "sv"
-        ? "SIE-export stoppad: valda verifikationer balanserar inte debet och kredit."
-        : "SIE export stopped: selected vouchers do not balance debit and credit.");
-      return;
-    }
-
-    const sortedGroupsForSie = [...filteredJournalGroups]
-      .sort((first, second) => String(first.voucherDate || first.createdAt || "").localeCompare(String(second.voucherDate || second.createdAt || "")));
-    const voucherDates = sortedGroupsForSie
-      .map((group) => String(group.voucherDate || group.createdAt || "").slice(0, 10))
-      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      .sort();
-    const periodStart = bookkeepingDateFrom || voucherDates[0] || `${todayInput.slice(0, 4)}-01-01`;
-    const periodEnd = bookkeepingDateTo || voucherDates[voucherDates.length - 1] || `${todayInput.slice(0, 4)}-12-31`;
-    const accountMap = new Map();
-    const organizationNumber = settings?.organizationNumber || settings?.orgNumber || "";
-
-    accounts.forEach((account) => {
-      if (account.number) {
-        accountMap.set(String(account.number), account.name || "");
-      }
-    });
-
-    sortedGroupsForSie.forEach((group) => {
-      group.rows.forEach((entry) => {
-        if (entry.accountNumber && !accountMap.has(String(entry.accountNumber))) {
-          accountMap.set(String(entry.accountNumber), entry.accountName || "");
-        }
-      });
-    });
-
-    const lines = [
-      "#FLAGGA 0",
-      `#PROGRAM ${sieString("AliBooks")} ${sieString("0.1")}`,
-      "#SIETYP 4",
-      "#FORMAT PC8",
-      `#GEN ${sieDate(todayInput)}`,
-      `#FNAMN ${sieString(settings?.companyName || "AliBooks")}`,
-      `#RAR 0 ${sieDate(periodStart)} ${sieDate(periodEnd)}`,
-      ""
-    ];
-
-    if (organizationNumber) {
-      lines.splice(6, 0, `#ORGNR ${sieString(organizationNumber)}`);
-    }
-
-    Array.from(accountMap.entries())
-      .sort(([first], [second]) => first.localeCompare(second, "sv-SE", { numeric: true }))
-      .forEach(([number, name]) => {
-        lines.push(`#KONTO ${number} ${sieString(name || number)}`);
-      });
-
-    lines.push("");
-
-    sortedGroupsForSie.forEach((group) => {
-      const voucherDate = sieDate(group.voucherDate || group.createdAt);
-      const voucherText = group.correctionOfVoucherNumber
-        ? `${group.description || group.voucherNumber || ""} (rattelse av ${group.correctionOfVoucherNumber})`
-        : group.description || group.voucherNumber || "";
-
-      lines.push(`#VER ${sieString("A")} ${sieString(group.voucherNumber || "Utan verifikat")} ${voucherDate} ${sieString(voucherText)}`);
-      lines.push("{");
-      group.rows.forEach((entry) => {
-        const amount = (entry.debit || 0) - (entry.credit || 0);
-        lines.push(`  #TRANS ${entry.accountNumber || "0000"} {} ${sieAmount(amount)} ${sieString(entry.description || group.description || "")}`);
-      });
-      lines.push("}");
-      lines.push("");
-    });
-
-    const safePeriod = `${periodStart || "start"}_${periodEnd || "slut"}`.replaceAll("-", "");
-    downloadLocalText(`alibooks-sie-${safePeriod}.se`, lines.join("\r\n"), "text/plain;charset=cp437");
   }
 
   async function downloadCsv(path, filename, fallbackMessage) {
@@ -7910,6 +7921,9 @@ function App() {
 
   function removeBokioImportRow(rowId) {
     setBokioImportQueue((current) => current.filter((row) => row.id !== rowId));
+    setSieVoucherEvidenceFiles((current) => Object.fromEntries(
+      Object.entries(current).filter(([key]) => !key.startsWith(`${rowId}::`))
+    ));
     setBokioImportFiles((current) => {
       const nextFiles = { ...current };
       delete nextFiles[rowId];
@@ -7920,6 +7934,9 @@ function App() {
   function clearReviewedBokioImports() {
     const importedIds = new Set(bokioImportQueue.filter((row) => row.status === "imported").map((row) => row.id));
     setBokioImportQueue((current) => current.filter((row) => row.status !== "imported"));
+    setSieVoucherEvidenceFiles((current) => Object.fromEntries(
+      Object.entries(current).filter(([key]) => !importedIds.has(key.split("::")[0]))
+    ));
     setBokioImportFiles((current) => Object.fromEntries(
       Object.entries(current).filter(([rowId]) => !importedIds.has(rowId))
     ));
@@ -7995,6 +8012,9 @@ function App() {
   async function createManualVoucherFromSie(row, voucher) {
     setError("");
 
+    const evidenceKey = `${row.id}::${voucher.key}`;
+    if (voucher.importedVoucherNumber || sieVoucherImportingRef.current.has(evidenceKey)) return;
+
     const importStatus = sieVoucherImportStatus(voucher);
 
     if (!importStatus.ok) {
@@ -8002,40 +8022,65 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${apiUrl}/journal-entries/manual`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate: voucher.date || new Date().toISOString().slice(0, 10),
-        description: `Bokio SIE ${row.fileName}: ${voucher.description || voucher.number || ""}`.trim(),
-        debitAccountNumber: importStatus.debitLine.account,
-        creditAccountNumber: importStatus.creditLine.account,
-        amount: importStatus.amount
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skapa verifikat fran SIE." : "Could not create voucher from SIE."));
+    const evidenceFile = sieVoucherEvidenceFiles[evidenceKey];
+    if (!evidenceFile) {
+      setError(language === "sv" ? "Valj originalunderlag for SIE-verifikatet innan import." : "Select the original document for this SIE voucher before importing.");
       return;
     }
 
-    const voucherNumber = data?.[0]?.voucherNumber || "";
-    updateBokioImportVoucher(row.id, voucher.key, {
-      importedVoucherNumber: voucherNumber || (language === "sv" ? "Importerad" : "Imported")
-    });
-    setBokioImportMessage(language === "sv"
-      ? `SIE-verifikat importerades${voucherNumber ? ` som ${voucherNumber}` : ""}.`
-      : `SIE voucher imported${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
-    loadJournalEntries();
-    loadVatReport();
-    loadAdvisorSummary();
-    loadProfitAndLoss();
-    loadBalanceReport();
+    const formData = new FormData();
+    formData.append("request", JSON.stringify({
+      voucherDate: voucher.date || new Date().toISOString().slice(0, 10),
+      description: `Bokio SIE ${row.fileName}: ${voucher.description || voucher.number || ""}`.trim(),
+      debitAccountNumber: importStatus.debitLine.account,
+      creditAccountNumber: importStatus.creditLine.account,
+      amount: importStatus.amount
+    }));
+    formData.append("file", evidenceFile);
+    sieVoucherImportingRef.current.add(evidenceKey);
+    setSieVoucherImportingKeys((current) => ({ ...current, [evidenceKey]: true }));
+    try {
+      const response = await fetch(`${apiUrl}/journal-entries/manual-with-evidence`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: formData
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(apiErrorMessage(data, language === "sv" ? "Kunde inte skapa verifikat fran SIE." : "Could not create voucher from SIE."));
+        return;
+      }
+
+      const voucherNumber = data?.[0]?.voucherNumber || "";
+      updateBokioImportVoucher(row.id, voucher.key, {
+        importedVoucherNumber: voucherNumber || (language === "sv" ? "Importerad" : "Imported")
+      });
+      setSieVoucherEvidenceFiles((current) => {
+        const next = { ...current };
+        delete next[evidenceKey];
+        return next;
+      });
+      setBokioImportMessage(language === "sv"
+        ? `SIE-verifikat importerades${voucherNumber ? ` som ${voucherNumber}` : ""}.`
+        : `SIE voucher imported${voucherNumber ? ` as ${voucherNumber}` : ""}.`);
+      loadJournalEntries();
+      loadVatReport();
+      loadAdvisorSummary();
+      loadProfitAndLoss();
+      loadBalanceReport();
+    } catch {
+      setError(language === "sv"
+        ? "Svaret fran servern uteblev. Kontrollera verifikationslistan innan du forsoker importera igen."
+        : "No response from the server. Check the voucher list before trying to import again.");
+    } finally {
+      sieVoucherImportingRef.current.delete(evidenceKey);
+      setSieVoucherImportingKeys((current) => {
+        const next = { ...current };
+        delete next[evidenceKey];
+        return next;
+      });
+    }
   }
 
   async function createExpenseFromBokioImport(row) {
@@ -8193,7 +8238,7 @@ function App() {
 
   async function downloadTrialBalanceCsv() {
     setError("");
-    await downloadCsv(`/trial-balance/export${selectedReportQuery(true)}`, "saldobalans.csv", language === "sv" ? "Kunde inte exportera saldobalans." : "Could not export trial balance.");
+    await downloadCsv(`/v2/trial-balance/export${selectedReportQuery(true)}`, "saldobalans-ore.csv", language === "sv" ? "Kunde inte exportera saldobalans." : "Could not export trial balance.");
   }
 
   async function downloadAccountSignControlCsv() {
@@ -11914,8 +11959,25 @@ function App() {
     }));
   }
 
+  async function postManualMultiVoucherWithEvidence(request, file) {
+    const formData = new FormData();
+    formData.append("request", JSON.stringify(request));
+    formData.append("file", file);
+    const response = await fetch(`${apiUrl}/journal-entries/manual-multi-with-evidence`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData
+    });
+    return { response, data: await response.json().catch(() => ({})) };
+  }
+
   async function bookPayrollDraft(draft) {
     setError("");
+    const evidenceFile = payrollEvidenceFiles[draft.id];
+    if (!evidenceFile) {
+      setError(language === "sv" ? "Valj loneunderlag innan lonen bokfors." : "Select payroll evidence before posting.");
+      return;
+    }
     const calculation = payrollDraftCalculation(draft);
     const voucherDate = `${draft.period || new Date().toISOString().slice(0, 7)}-25`;
 
@@ -11932,20 +11994,11 @@ function App() {
       { accountNumber: "1930", debit: 0, credit: calculation.netPay }
     ].filter((line) => line.debit > 0 || line.credit > 0);
 
-    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate,
-        description: `Lon ${draft.employeeName} ${draft.period}`,
-        lines
-      })
-    });
-
-    const data = await response.json();
+    const { response, data } = await postManualMultiVoucherWithEvidence({
+      voucherDate,
+      description: `Lon ${draft.employeeName} ${draft.period}`,
+      lines
+    }, evidenceFile);
 
     if (!response.ok) {
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora loneutkast." : "Could not book payroll draft."));
@@ -11953,6 +12006,11 @@ function App() {
     }
 
     const voucherNumber = data?.[0]?.voucherNumber || "";
+    setPayrollEvidenceFiles((current) => {
+      const next = { ...current };
+      delete next[draft.id];
+      return next;
+    });
     setPayrollDrafts((current) => current.map((item) => (
       item.id === draft.id ? { ...item, status: "booked", voucherNumber } : item
     )));
@@ -11966,6 +12024,10 @@ function App() {
 
   async function bookPayrollReportMonth() {
     setError("");
+    if (!payrollMonthEvidenceFile) {
+      setError(language === "sv" ? "Valj manadens loneunderlag innan bokforing." : "Select the monthly payroll document before posting.");
+      return;
+    }
     const draftsToBook = payrollDrafts.filter((draft) => (
       draft.period === payrollReportMonth && draft.status !== "booked"
     ));
@@ -12004,20 +12066,11 @@ function App() {
         { accountNumber: "1930", debit: 0, credit: calculation.netPay }
       ].filter((line) => line.debit > 0 || line.credit > 0);
 
-      const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders()
-        },
-        body: JSON.stringify({
-          voucherDate,
-          description: `Lon ${draft.employeeName} ${draft.period}`,
-          lines
-        })
-      });
-
-      const data = await response.json().catch(() => null);
+      const { response, data } = await postManualMultiVoucherWithEvidence({
+        voucherDate,
+        description: `Lon ${draft.employeeName} ${draft.period}`,
+        lines
+      }, payrollMonthEvidenceFile);
 
       if (!response.ok) {
         if (bookedDrafts.length > 0) {
@@ -12045,6 +12098,7 @@ function App() {
       const booked = bookedDrafts.find((bookedDraft) => bookedDraft.id === item.id);
       return booked ? { ...item, status: "booked", voucherNumber: booked.voucherNumber } : item;
     }));
+    setPayrollMonthEvidenceFile(null);
     setPayrollMessage(language === "sv"
       ? `${bookedDrafts.length} loner bokfordes for ${formatMonthLabel(payrollReportMonth, language)}.`
       : `${bookedDrafts.length} payroll drafts were booked for ${formatMonthLabel(payrollReportMonth, language)}.`);
@@ -12736,6 +12790,10 @@ function App() {
 
   async function bookPayrollTaxAccountTransfer() {
     setError("");
+    if (!payrollTaxTransferEvidenceFile) {
+      setError(language === "sv" ? "Valj betalningsunderlag innan inbetalningen bokfors." : "Select payment evidence before posting.");
+      return;
+    }
     const amount = payrollPaymentTotals.taxToReserve + payrollPaymentTotals.employerFeesToReserve;
 
     if (amount <= 0) {
@@ -12753,23 +12811,14 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate: payrollTaxPaymentDate,
-        description: `Inbetalning skattekonto ${payrollReportMonth}`,
-        lines: [
-          { accountNumber: "1630", debit: amount, credit: 0 },
-          { accountNumber: "1930", debit: 0, credit: amount }
-        ]
-      })
-    });
-
-    const data = await response.json().catch(() => null);
+    const { response, data } = await postManualMultiVoucherWithEvidence({
+      voucherDate: payrollTaxPaymentDate,
+      description: `Inbetalning skattekonto ${payrollReportMonth}`,
+      lines: [
+        { accountNumber: "1630", debit: amount, credit: 0 },
+        { accountNumber: "1930", debit: 0, credit: amount }
+      ]
+    }, payrollTaxTransferEvidenceFile);
 
     if (!response.ok) {
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora inbetalning till skattekonto." : "Could not book tax account payment."));
@@ -12777,6 +12826,7 @@ function App() {
     }
 
     const voucherNumber = data?.[0]?.voucherNumber || "";
+    setPayrollTaxTransferEvidenceFile(null);
     updatePayrollTaxSettlement("taxAccountTransferVoucher", voucherNumber || "booked");
     setPayrollMessage(language === "sv"
       ? `Inbetalning till skattekonto bokfordes${voucherNumber ? ` som ${voucherNumber}` : ""}.`
@@ -12787,6 +12837,10 @@ function App() {
 
   async function bookPayrollTaxSettlement() {
     setError("");
+    if (!payrollTaxSettlementEvidenceFile) {
+      setError(language === "sv" ? "Valj deklarationsunderlag innan avrakningen bokfors." : "Select declaration evidence before posting.");
+      return;
+    }
     const tax = payrollPaymentTotals.taxToReserve;
     const employerFees = payrollPaymentTotals.employerFeesToReserve;
     const amount = tax + employerFees;
@@ -12806,24 +12860,15 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${apiUrl}/journal-entries/manual-multi`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      },
-      body: JSON.stringify({
-        voucherDate: payrollTaxPaymentDate,
-        description: `Avrakning arbetsgivardeklaration ${payrollReportMonth}`,
-        lines: [
-          { accountNumber: "2710", debit: tax, credit: 0 },
-          { accountNumber: "2731", debit: employerFees, credit: 0 },
-          { accountNumber: "1630", debit: 0, credit: amount }
-        ].filter((line) => line.debit > 0 || line.credit > 0)
-      })
-    });
-
-    const data = await response.json().catch(() => null);
+    const { response, data } = await postManualMultiVoucherWithEvidence({
+      voucherDate: payrollTaxPaymentDate,
+      description: `Avrakning arbetsgivardeklaration ${payrollReportMonth}`,
+      lines: [
+        { accountNumber: "2710", debit: tax, credit: 0 },
+        { accountNumber: "2731", debit: employerFees, credit: 0 },
+        { accountNumber: "1630", debit: 0, credit: amount }
+      ].filter((line) => line.debit > 0 || line.credit > 0)
+    }, payrollTaxSettlementEvidenceFile);
 
     if (!response.ok) {
       setError(apiErrorMessage(data, language === "sv" ? "Kunde inte bokfora avrakning mot skattekonto." : "Could not book tax account settlement."));
@@ -12831,6 +12876,7 @@ function App() {
     }
 
     const voucherNumber = data?.[0]?.voucherNumber || "";
+    setPayrollTaxSettlementEvidenceFile(null);
     updatePayrollTaxSettlement("taxSettlementVoucher", voucherNumber || "booked");
     setPayrollMessage(language === "sv"
       ? `Avrakning mot skattekonto bokfordes${voucherNumber ? ` som ${voucherNumber}` : ""}.`
@@ -14180,10 +14226,14 @@ function App() {
       authHeaders["X-AliBooks-Setup-Key"] = registrationSetupKey.trim();
     }
 
-    const response = await fetch(`${apiUrl}/auth/${authMode}`, {
+    const completingMfa = Boolean(mfaChallenge);
+    const authPath = completingMfa ? "/auth/login/mfa" : authMode === "register" ? "/auth/register" : "/auth/login";
+    const response = await fetch(`${apiUrl}${authPath}`, {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify(completingMfa
+        ? { challenge: mfaChallenge, code: mfaCode }
+        : { email, password })
     });
 
     const data = await response.json().catch(() => ({}));
@@ -14194,6 +14244,22 @@ function App() {
           language === "sv" ? "Inloggning eller registrering misslyckades." : "Authentication failed.",
           language
       ));
+      if (completingMfa) {
+        setMfaChallenge("");
+        setMfaCode("");
+      }
+      return;
+    }
+
+    if (data.mfaRequired === "true") {
+      setMfaChallenge(data.challenge || "");
+      setEmail(data.email || email);
+      setPassword("");
+      setMfaCode("");
+      return;
+    }
+    if (!data.token || !data.email) {
+      setError(language === "sv" ? "Inloggningen gav inget giltigt svar." : "Login returned an invalid response.");
       return;
     }
 
@@ -14205,6 +14271,8 @@ function App() {
     setEmail("");
     setPassword("");
     setRegistrationSetupKey("");
+    setMfaChallenge("");
+    setMfaCode("");
     loadInvoices(data.token);
     loadCustomers(data.token);
     loadJournalEntries(data.token);
@@ -14237,6 +14305,8 @@ function App() {
     setBalanceReport(null);
     setVatReport(null);
     setStripePayouts([]);
+    trialBalanceRequest.current++;
+    setTrialBalanceReport(null);
   }
 
   function handleSessionExpired() {
@@ -14252,6 +14322,69 @@ function App() {
     setActiveView("overview");
     setAuthPanelOpen(false);
     setError("");
+  }
+
+  async function mfaRequest(path, body = {}) {
+    setError("");
+    const response = await fetch(`${apiUrl}/auth/mfa/${path}`, {
+      method: path === "status" ? "GET" : "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      ...(path === "status" ? {} : { body: JSON.stringify(body) })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(data.message || (language === "sv" ? "MFA-atgarden misslyckades." : "MFA action failed."));
+      return null;
+    }
+    return data;
+  }
+
+  async function beginMfaSetup(event) {
+    event.preventDefault();
+    const data = await mfaRequest("setup", { password: mfaSetupPassword });
+    if (data) {
+      setMfaSetup(data);
+      setMfaSetupCode("");
+      setMfaRecoveryCodes([]);
+    }
+  }
+
+  async function confirmMfaSetup(event) {
+    event.preventDefault();
+    const data = await mfaRequest("enable", { code: mfaSetupCode });
+    if (data) {
+      if (typeof data.token === "string" && data.token) {
+        localStorage.setItem("alibooks-token", data.token);
+        setToken(data.token);
+      }
+      setMfaEnabled(true);
+      setMfaSetup(null);
+      setMfaSetupPassword("");
+      setMfaRecoveryCodes(data.recoveryCodes || []);
+    }
+  }
+
+  async function cancelMfaSetup() {
+    await mfaRequest("cancel");
+    setMfaSetup(null);
+    setMfaSetupPassword("");
+    setMfaSetupCode("");
+  }
+
+  async function disableMfa(event) {
+    event.preventDefault();
+    const result = await mfaRequest("disable", { password: mfaDisablePassword, code: mfaDisableCode });
+    if (result) {
+      setMfaEnabled(false);
+      setMfaDisablePassword("");
+      setMfaDisableCode("");
+      setMfaRecoveryCodes([]);
+      clearAuthenticatedState();
+      setActiveView("overview");
+      setError(language === "sv"
+        ? "MFA ar avstangt. Logga in igen for att fortsatta."
+        : "MFA is disabled. Sign in again to continue.");
+    }
   }
 
   function focusAuthForm(mode) {
@@ -15216,8 +15349,8 @@ function App() {
 
     if (normalizedQuestion.includes("sie") || normalizedQuestion.includes("bokforingsfil") || normalizedQuestion.includes("importfil")) {
       return createAnswer(language === "sv"
-        ? `${answerIntro} For SIE-export: ga till Rapporter eller Bokforing och klicka Exportera SIE. Exporten anvander samma urval som Bokforing: period, filter och sokning. Valda verifikationer maste balansera, annars stoppar AliBooks exporten. Just nu ar status: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} verifikationer och differens ${filteredJournalDifference} SEK.`
-        : `${answerIntro} For SIE export: go to Reports or Bookkeeping and click Export SIE. The export uses the same selection as Bookkeeping: period, filter and search. Selected vouchers must balance, otherwise AliBooks stops the export. Current status: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} vouchers and difference ${filteredJournalDifference} SEK.`, "reports");
+        ? `${answerIntro} For SIE-export: ga till Rapporter eller Bokforing och klicka Exportera SIE. Valj ett helt rakenskapsar i datumfiltret, eller lamna bada datumen tomma om bokforingen bara omfattar ett rakenskapsar. Backend kontrollerar filen innan nedladdning. Forhandsurvalet visar: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} verifikationer och differens ${filteredJournalDifference} SEK.`
+        : `${answerIntro} For SIE export, open Reports or Bookkeeping and click Export SIE. Select a complete fiscal year in the date filter, or leave both dates empty if the ledger contains only one fiscal year. The backend validates the file before download. Preview: ${sieExportStatusText}, period ${sieExportPeriodLabel}, ${filteredJournalGroups.length} vouchers and difference ${filteredJournalDifference} SEK.`, "reports");
     }
 
     if (normalizedQuestion.includes("resultatdiagnos") || normalizedQuestion.includes("balansdiagnos") || normalizedQuestion.includes("resultat och balans") || normalizedQuestion.includes("varfor ar resultat") || normalizedQuestion.includes("varfor blev resultat") || normalizedQuestion.includes("negativt resultat") || normalizedQuestion.includes("stammer balans") || normalizedQuestion.includes("balansrapporten") || normalizedQuestion.includes("profit diagnosis") || normalizedQuestion.includes("balance diagnosis") || normalizedQuestion.includes("profit and loss")) {
@@ -16466,6 +16599,8 @@ function App() {
 
     return groups;
   }, {})).sort((first, second) => new Date(second.voucherDate || second.createdAt || 0) - new Date(first.voucherDate || first.createdAt || 0));
+  const voucherEvidenceCandidates = journalGroups.filter((group) =>
+    group.rows.some((entry) => entry.evidenceStatus === "missing_voucher_evidence"));
   const filteredJournalGroups = journalGroups.filter((group) => {
     if (bookkeepingFilter === "original") return !group.correctionOfVoucherNumber;
     if (bookkeepingFilter === "corrections") return Boolean(group.correctionOfVoucherNumber);
@@ -17612,20 +17747,10 @@ function App() {
     .sort();
   const sieExportPeriodLabel = `${bookkeepingDateFrom || sieExportVoucherDates[0] || "-"} - ${bookkeepingDateTo || sieExportVoucherDates[sieExportVoucherDates.length - 1] || "-"}`;
   const sieExportCanDownload = filteredJournalGroups.length > 0 && filteredJournalDifference === 0;
-  const sieExportControlCode = stableAuditFingerprint(JSON.stringify({
-    period: sieExportPeriodLabel,
-    vouchers: filteredJournalGroups.length,
-    accounts: sieExportAccountCount,
-    debit: filteredJournalDebit,
-    credit: filteredJournalCredit,
-    difference: filteredJournalDifference,
-    firstVoucher: filteredJournalGroups[0]?.voucherNumber || "",
-    lastVoucher: filteredJournalGroups[filteredJournalGroups.length - 1]?.voucherNumber || ""
-  }));
   const sieExportStatusText = filteredJournalGroups.length === 0
     ? (language === "sv" ? "Inga verifikationer i urvalet" : "No vouchers in selection")
     : filteredJournalDifference === 0
-      ? (language === "sv" ? "Redo for SIE-export" : "Ready for SIE export")
+      ? (language === "sv" ? "Urvalet balanserar; backendkontroll kvar" : "Selection balances; backend check pending")
       : (language === "sv" ? "Obalanserat urval" : "Unbalanced selection");
   const bookkeepingAccountSearch = /^\d{4}$/.test(bookkeepingSearch.trim()) ? bookkeepingSearch.trim() : "";
   const activeBookkeepingAccount = bookkeepingAccountSearch
@@ -20430,6 +20555,19 @@ function App() {
         : "Keep login lockout active in production and review audit trail for repeated failures."
     },
     {
+      key: "mfa",
+      status: token && mfaEnabled ? "ok" : "critical",
+      title: language === "sv" ? "Multifaktorinloggning (MFA)" : "Multi-factor authentication (MFA)",
+      statusLabel: token && mfaEnabled ? "OK" : (language === "sv" ? "Saknas" : "Missing"),
+      score: token && mfaEnabled ? 100 : 0,
+      detail: token && mfaEnabled
+        ? (language === "sv" ? "TOTP ar aktiverat for det inloggade kontot. Aterstallningskoder visas bara vid aktivering." : "TOTP is enabled for the signed-in account. Recovery codes are shown only once during setup.")
+        : (language === "sv" ? "Aktivera TOTP med en autentiseringsapp. Kontot kan inte passera forsta-datagaten innan MFA ar aktiverat." : "Enable TOTP with an authenticator app. The account cannot pass the first-data gate until MFA is enabled."),
+      recommendation: language === "sv"
+        ? (token && mfaEnabled ? "Forvara aterstallningskoder separat fran enheten med autentiseringsappen." : "Oppna MFA-installningarna nedan och aktivera TOTP innan produktionsdata anvands.")
+        : (token && mfaEnabled ? "Store recovery codes separately from the authenticator device." : "Use the MFA settings below to enable TOTP before production data is used.")
+    },
+    {
       key: "cors",
       status: corsReadyForCurrentMode ? "ok" : "warning",
       title: language === "sv" ? "CORS och frontend-origin" : "CORS and frontend origin",
@@ -20606,6 +20744,13 @@ function App() {
       || stripeInvoicePaymentCount > 0
       || stripeWebsiteSaleTotal > 0
       || swishPaymentCount > 0
+  );
+  const emailUnresolvedCount = systemStatus?.email?.unresolvedDeliveryCount;
+  const emailDeliveryHealthy = Boolean(
+    systemStatus?.email?.configured
+      && systemStatus?.email?.deliveryLedgerEnabled
+      && Number.isFinite(emailUnresolvedCount)
+      && emailUnresolvedCount === 0
   );
   const complianceRows = [
     {
@@ -20888,16 +21033,20 @@ function App() {
     },
     {
       key: "email",
-      status: systemStatus?.email?.configured ? "ok" : "warning",
+      status: emailDeliveryHealthy ? "ok" : "warning",
       title: language === "sv" ? "E-post och paminnelser" : "Email and reminders",
-      statusLabel: systemStatus?.email?.configured ? "OK" : (language === "sv" ? "SMTP saknas" : "SMTP missing"),
-      score: systemStatus?.email?.configured ? 100 : 70,
+      statusLabel: emailDeliveryHealthy ? "OK" : (language === "sv" ? "Kontrollera" : "Check"),
+      score: emailDeliveryHealthy ? 100 : systemStatus?.email?.configured ? 55 : 70,
       detail: language === "sv"
-        ? `SMTP: ${systemStatus?.email?.configured ? "OK" : "saknas"}, automatisk paminnelse: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "kontrollera"}, osakra leveranser: ${systemStatus?.email?.uncertainDeliveryCount ?? 0}`
-        : `SMTP: ${systemStatus?.email?.configured ? "OK" : "missing"}, automatic reminder: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "check"}, uncertain deliveries: ${systemStatus?.email?.uncertainDeliveryCount ?? 0}`,
-      recommendation: language === "sv"
-        ? "For riktig kundkommunikation: konfigurera SMTP i miljo variabler eller IntelliJ Run Configuration."
-        : "For real customer communication: configure SMTP in environment variables or IntelliJ Run Configuration.",
+        ? `SMTP: ${systemStatus?.email?.configured ? "OK" : "saknas"}, automatisk paminnelse: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "kontrollera"}, olosta leveranser: ${Number.isFinite(emailUnresolvedCount) ? emailUnresolvedCount : "okant"} (vantar: ${systemStatus?.email?.pendingDeliveryCount ?? "?"}, osakra: ${systemStatus?.email?.uncertainDeliveryCount ?? "?"})`
+        : `SMTP: ${systemStatus?.email?.configured ? "OK" : "missing"}, automatic reminder: ${systemStatus?.automation?.invoiceRemindersConfigured ? "OK" : "check"}, unresolved deliveries: ${Number.isFinite(emailUnresolvedCount) ? emailUnresolvedCount : "unknown"} (pending: ${systemStatus?.email?.pendingDeliveryCount ?? "?"}, uncertain: ${systemStatus?.email?.uncertainDeliveryCount ?? "?"})`,
+      recommendation: emailUnresolvedCount > 0
+        ? (language === "sv"
+          ? "Granska SMTP-logg och leveransjournal innan du skickar igen; ett avbrott kan ha skett efter att mejlet accepterades."
+          : "Review SMTP logs and the delivery ledger before resending; a crash may occur after the email was accepted.")
+        : (language === "sv"
+          ? "Konfigurera och provskicka via SMTP innan riktig kundkommunikation."
+          : "Configure and test SMTP before contacting real customers."),
       action: () => setActiveView("settings")
     },
     {
@@ -21464,6 +21613,30 @@ function App() {
   const mvpFinishLineExternalCount = mvpFinishLineRows.filter((row) => row.status === "external" || row.status === "manual").length;
   const mvpFinishLineScore = Math.round(mvpFinishLineRows.reduce((sum, row) => sum + row.score, 0) / Math.max(mvpFinishLineRows.length, 1));
   const firstRealDataGateRows = [
+    {
+      key: "mfa",
+      status: token && mfaEnabled ? "ok" : "critical",
+      statusLabel: token && mfaEnabled ? "OK" : (language === "sv" ? "Stoppar" : "Blocking"),
+      score: token && mfaEnabled ? 100 : 0,
+      title: language === "sv" ? "MFA skyddar agarkontot" : "MFA protects the owner account",
+      detail: token && mfaEnabled
+        ? (language === "sv" ? "TOTP ar aktivt for det inloggade agarkontot." : "TOTP is active for the signed-in owner account.")
+        : (language === "sv" ? "Aktivera TOTP under Sakerhet innan riktiga produktionskonton eller bokforingsposter skapas." : "Enable TOTP under Security before creating real production accounts or bookkeeping entries."),
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
+    {
+      key: "cyber-governance",
+      status: "manual",
+      statusLabel: language === "sv" ? "Externt bevis" : "External evidence",
+      score: 40,
+      title: language === "sv" ? "Ledning, NIS2-scope och leverantorsrisk ar dokumenterade" : "Management, NIS2 scope and supplier risks are documented",
+      detail: language === "sv"
+        ? "Fore riktiga data: spara signerat VD-/styrelsebeslut, daterad NIS2-scopebedomning, tillgangs-/riskregister, incidentovning, kritiska leverantorsbedomningar och verifierad kontinuitets-/restoreplan."
+        : "Before real data: retain a signed CEO/board decision, dated NIS2 scope assessment, asset/risk register, incident exercise, critical supplier assessments and verified continuity/restore plan.",
+      actionLabel: t.security,
+      action: () => setActiveView("security")
+    },
     {
       key: "money-precision",
       status: minorUnitSupport ? "ok" : "critical",
@@ -24136,18 +24309,24 @@ function App() {
     };
   });
   const manualVoucherEvidenceRows = journalGroups
-    .filter((group) => String(group.voucherNumber || "").startsWith("M-") || group.voucherNumber === "Utan verifikat")
+    .filter((group) => String(group.voucherNumber || "").startsWith("M-")
+      || String(group.voucherNumber || "").startsWith("IB-")
+      || group.voucherNumber === "Utan verifikat")
     .map((group) => {
       const hasDescription = Boolean((group.description || "").trim().length >= 6);
       const isMissingVoucherNumber = group.voucherNumber === "Utan verifikat";
+      const missingDocument = group.rows.some((entry) => entry.evidenceStatus === "missing_voucher_evidence"
+        || !entry.evidenceHash && ["manual_voucher", "opening_balance"].includes(entry.sourceType));
 
       return {
         id: `manual-voucher-evidence-${group.voucherNumber}`,
         area: "bookkeeping",
         areaLabel: language === "sv" ? "Manuellt verifikat" : "Manual voucher",
-        status: isMissingVoucherNumber ? "critical" : hasDescription ? "info" : "warning",
+        status: isMissingVoucherNumber || missingDocument ? "critical" : hasDescription ? "info" : "warning",
         statusLabel: isMissingVoucherNumber
           ? (language === "sv" ? "Nummer saknas" : "Number missing")
+          : missingDocument
+            ? (language === "sv" ? "Underlag saknas" : "Document missing")
           : hasDescription
             ? (language === "sv" ? "Kontrollera underlag" : "Check evidence")
             : (language === "sv" ? "Beskrivning svag" : "Weak description"),
@@ -24156,8 +24335,8 @@ function App() {
         amount: Math.max(group.debit || 0, group.credit || 0),
         detail: group.description || (language === "sv" ? "Ingen beskrivning" : "No description"),
         recommendation: language === "sv"
-          ? "Manuella verifikat bor ha tydlig text och sparat underlag eller notering som forklarar affarshandelsen."
-          : "Manual vouchers should have clear text and saved evidence or a note explaining the business event.",
+          ? "Ladda upp originalunderlaget till verifikatet och kontrollera att datum och belopp stammer."
+          : "Upload the original document and verify its date and amount.",
         action: () => {
           setActiveView("bookkeeping");
           setBookkeepingSearch(group.voucherNumber === "Utan verifikat" ? "" : group.voucherNumber);
@@ -26681,26 +26860,23 @@ function App() {
                       </button>
                     </div>
 
-                    <label>
-                      {t.email}
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@example.com"
-                      />
-                    </label>
-
-                    <label>
-                      {t.password}
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder={language === "sv" ? "Minst 8 tecken" : "At least 8 characters"}
-                      />
-                    </label>
-                    {authMode === "register" && (
+                    {!mfaChallenge ? <>
+                      <label>
+                        {t.email}
+                        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="username" required />
+                      </label>
+                      <label>
+                        {t.password}
+                        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={language === "sv" ? "Minst 8 tecken" : "At least 8 characters"} autoComplete={authMode === "login" ? "current-password" : "new-password"} required />
+                      </label>
+                    </> : <>
+                      <p>{language === "sv" ? "Ange den sexsiffriga koden fran din autentiseringsapp eller en aterstallningskod." : "Enter the six-digit code from your authenticator app or a recovery code."}</p>
+                      <label>{language === "sv" ? "Verifieringskod" : "Verification code"}
+                        <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} autoComplete="one-time-code" required autoFocus />
+                      </label>
+                      <button type="button" className="secondary-button" onClick={() => { setMfaChallenge(""); setMfaCode(""); }}>{language === "sv" ? "Tillbaka" : "Back"}</button>
+                    </>}
+                    {!mfaChallenge && authMode === "register" && (
                       <>
                         <label>
                           {language === "sv" ? "Engangsnyckel for forsta kontot" : "One-time key for the first account"}
@@ -26720,7 +26896,7 @@ function App() {
                     )}
 
                     <button type="submit">
-                      {authMode === "login" ? t.login : t.register}
+                      {mfaChallenge ? (language === "sv" ? "Verifiera och logga in" : "Verify and sign in") : authMode === "login" ? t.login : t.register}
                     </button>
                   </form>
                 )}
@@ -32560,6 +32736,85 @@ function App() {
               ))}
             </div>
 
+            <section className="security-panel" aria-labelledby="mfa-settings-title">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3 id="mfa-settings-title">{language === "sv" ? "Tva-faktorsinloggning" : "Two-factor authentication"}</h3>
+                  <p className="automation-note">
+                    {language === "sv" ? "Anvand en TOTP-kompatibel autentiseringsapp. Spara aterstallningskoder offline och separat." : "Use a TOTP-compatible authenticator app. Store recovery codes offline and separately."}
+                  </p>
+                </div>
+                <span className={mfaEnabled ? "status success-status" : "status warning-status"}>{mfaEnabled ? (language === "sv" ? "Aktiverad" : "Enabled") : (language === "sv" ? "Inte aktiverad" : "Not enabled")}</span>
+              </div>
+              {!token ? (
+                <p>{language === "sv" ? "Logga in for att konfigurera MFA for kontot." : "Sign in to configure MFA for this account."}</p>
+              ) : mfaEnabled ? (
+                <>
+                  <form className="security-export-list" onSubmit={disableMfa}>
+                    <label>{language === "sv" ? "Losenord" : "Password"}<input type="password" value={mfaDisablePassword} onChange={(event) => setMfaDisablePassword(event.target.value)} autoComplete="current-password" required /></label>
+                    <label>{language === "sv" ? "TOTP- eller aterstallningskod" : "TOTP or recovery code"}<input value={mfaDisableCode} onChange={(event) => setMfaDisableCode(event.target.value)} autoComplete="one-time-code" required /></label>
+                    <button type="submit" className="secondary-button">{language === "sv" ? "Stang av MFA" : "Disable MFA"}</button>
+                  </form>
+                  {mfaRecoveryCodes.length > 0 && <article><strong>{language === "sv" ? "Spara dessa engangskoder nu" : "Save these one-time recovery codes now"}</strong><p>{mfaRecoveryCodes.join("   ")}</p><button type="button" className="secondary-button" onClick={() => { setMfaRecoveryCodes([]); clearAuthenticatedState(); setActiveView("overview"); setError(language === "sv" ? "MFA ar aktiverat. Logga in igen med din autentiseringsapp for att fortsatta." : "MFA is enabled. Sign in again with your authenticator app to continue."); }}>{language === "sv" ? "Jag har sparat koderna, logga ut" : "Codes saved, sign out"}</button></article>}
+                </>
+              ) : mfaSetup ? (
+                <div className="security-export-list">
+                  <p>{language === "sv" ? "Lagg till den har nyckeln manuellt i autentiseringsappen:" : "Add this key manually to your authenticator app:"}</p>
+                  <code>{mfaSetup.secret}</code>
+                  <p><a href={mfaSetup.otpauthUri}>{language === "sv" ? "Oppna autentiseringsapp" : "Open authenticator app"}</a></p>
+                  <form onSubmit={confirmMfaSetup}>
+                    <label>{language === "sv" ? "Sexsiffrig verifieringskod" : "Six-digit verification code"}<input value={mfaSetupCode} onChange={(event) => setMfaSetupCode(event.target.value)} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" required /></label>
+                    <button type="submit" className="primary-small-button">{language === "sv" ? "Bekrafta och aktivera" : "Confirm and enable"}</button>
+                    <button type="button" className="secondary-button" onClick={cancelMfaSetup}>{language === "sv" ? "Avbryt" : "Cancel"}</button>
+                  </form>
+                </div>
+              ) : (
+                <form className="security-export-list" onSubmit={beginMfaSetup}>
+                  <label>{language === "sv" ? "Bekrafta losenord" : "Confirm password"}<input type="password" value={mfaSetupPassword} onChange={(event) => setMfaSetupPassword(event.target.value)} autoComplete="current-password" required /></label>
+                  <button type="submit" className="primary-small-button">{language === "sv" ? "Starta MFA-installation" : "Start MFA setup"}</button>
+                </form>
+              )}
+            </section>
+
+            <div className="security-panel">
+              <div className="section-heading compact-heading">
+                <div>
+                  <h3>{language === "sv" ? "Cybersakerhetsstyrning for SME" : "SME cybersecurity governance"}</h3>
+                  <p className="automation-note">
+                    {language === "sv"
+                      ? "Detta ar en arbetsyta for beslut och bevis, inte ett intyg om NIS2-efterlevnad. NIS2-omfattning avgors av sektor, storlek, verksamhet och lagens undantag."
+                      : "This is a workspace for decisions and evidence, not a NIS2 compliance certificate. NIS2 scope depends on sector, size, activity and statutory exceptions."}
+                  </p>
+                </div>
+                <span className="status warning-status">{language === "sv" ? "Omfattning ej bedomd" : "Scope not assessed"}</span>
+              </div>
+              <div className="security-export-list">
+                <article>
+                  <strong>{language === "sv" ? "1. NIS2 / Cybersakerhetslagen" : "1. NIS2 / Swedish Cybersecurity Act"}</strong>
+                  <span>{language === "sv"
+                    ? "Dokumentera SNI/verksamhetssektor, tjanst, storlek och eventuella undantag. SME-status ensam avgor inte saken; en liten aktor kan omfattas genom lagens undantag eller sarskild betydelse. Bekrafta med ansvarig tillsynsmyndighet eller jurist."
+                    : "Record sector, service, size and possible exceptions. SME status alone is not decisive; a small entity can still be covered by statutory exceptions or special significance. Confirm with the competent supervisor or counsel."}</span>
+                </article>
+                <article>
+                  <strong>{language === "sv" ? "2. VD/styrelse: ansvar och beslut" : "2. CEO/board: accountability and decision"}</strong>
+                  <span>{language === "sv"
+                    ? "Ledningen ska fatta och dokumentera beslut om riskaptit, ansvarig person, resurser, utbildning, kvarvarande risker och uppfoljning. Anvand VD-brevet i docs/cybersecurity-governance-sme.md; en mall ersatter inte ett faktiskt ledningsbeslut."
+                    : "Management should decide and record risk appetite, accountable owner, resources, training, accepted residual risks and review cadence. Use the CEO letter template in docs/cybersecurity-governance-sme.md; a template is not itself a management decision."}</span>
+                </article>
+                <article>
+                  <strong>{language === "sv" ? "3. Kontroller som maste bevisas" : "3. Controls that need evidence"}</strong>
+                  <span>{language === "sv"
+                    ? "Inventera information/tillgangar och risker; begransa och granska atkomst; aktivera MFA; testa krypterad, separat backup och aterstallning; satt RTO/RPO och kontinuitetsplan; ova incidenthantering inklusive rapportering inom 24/72 timmar nar lagen galler; bedom leverantorer och beroenden."
+                    : "Inventory information/assets and risks; restrict and review access; enable MFA; test encrypted, separate backups and restore; define RTO/RPO and continuity; exercise incident handling including 24/72-hour reporting where applicable; assess suppliers and dependencies."}</span>
+                </article>
+              </div>
+              <p className="form-help">
+                {language === "sv"
+                  ? "MFA saknas i AliBooks inloggning och ar markerad som blockerare. Spara inte verksamhetshemligheter, backupnycklar eller incidentdetaljer i denna vy."
+                  : "MFA is not implemented in AliBooks login and is marked as a blocker. Do not store business secrets, backup keys or incident details in this view."}
+              </p>
+            </div>
+
             <div className="access-review-panel">
               <div className="section-heading compact-heading">
                 <div>
@@ -34905,7 +35160,12 @@ function App() {
                 <div className="button-row">
                   <label className="compact-label">
                     {language === "sv" ? "Period" : "Period"}
-                    <select value={payrollReportMonth} onChange={(event) => setPayrollReportMonth(event.target.value)}>
+                    <select value={payrollReportMonth} onChange={(event) => {
+                      setPayrollReportMonth(event.target.value);
+                      setPayrollMonthEvidenceFile(null);
+                      setPayrollTaxTransferEvidenceFile(null);
+                      setPayrollTaxSettlementEvidenceFile(null);
+                    }}>
                       {payrollPeriods.map((period) => (
                         <option value={period} key={period}>{formatMonthLabel(period, language)}</option>
                       ))}
@@ -34914,11 +35174,23 @@ function App() {
                   <button type="button" className="secondary-button" onClick={downloadPayrollReportCsv} disabled={payrollReportDrafts.length === 0}>
                     {t.exportCsv}
                   </button>
+                  <label className="compact-label">
+                    {language === "sv" ? "Manadens loneunderlag" : "Monthly payroll document"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(event) => {
+                        setPayrollMonthEvidenceFile(event.target.files?.[0] || null);
+                        event.target.value = "";
+                      }}
+                    />
+                    <small>{payrollMonthEvidenceFile?.name || (language === "sv" ? "Ingen fil vald" : "No file selected")}</small>
+                  </label>
                   <button
                     type="button"
                     className="primary-small-button"
                     onClick={bookPayrollReportMonth}
-                    disabled={!token || unbookedPayrollReportDrafts.length === 0}
+                    disabled={!token || unbookedPayrollReportDrafts.length === 0 || !payrollMonthEvidenceFile}
                   >
                     {language === "sv" ? "Bokfor manad" : "Book month"}
                   </button>
@@ -35307,6 +35579,18 @@ function App() {
                 <article>
                   <strong>{language === "sv" ? "1. Inbetalning till skattekonto" : "1. Payment to tax account"}</strong>
                   <p>{language === "sv" ? "Bokfor: 1630 debet och 1930 kredit." : "Book: 1630 debit and 1930 credit."}</p>
+                  <label>
+                    {language === "sv" ? "Betalningsunderlag" : "Payment document"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(event) => {
+                        setPayrollTaxTransferEvidenceFile(event.target.files?.[0] || null);
+                        event.target.value = "";
+                      }}
+                    />
+                    <small>{payrollTaxTransferEvidenceFile?.name || (language === "sv" ? "Ingen fil vald" : "No file selected")}</small>
+                  </label>
                   {payrollTaxSettlementForMonth.taxAccountTransferVoucher && (
                     <span className="status success-status">{t.voucher}: {payrollTaxSettlementForMonth.taxAccountTransferVoucher}</span>
                   )}
@@ -35314,7 +35598,7 @@ function App() {
                     type="button"
                     className="primary-small-button"
                     onClick={bookPayrollTaxAccountTransfer}
-                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxAccountTransferVoucher)}
+                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxAccountTransferVoucher) || !payrollTaxTransferEvidenceFile}
                   >
                     {language === "sv" ? "Bokfor inbetalning" : "Book payment"}
                   </button>
@@ -35322,6 +35606,18 @@ function App() {
                 <article>
                   <strong>{language === "sv" ? "2. Avrakning arbetsgivardeklaration" : "2. Employer declaration settlement"}</strong>
                   <p>{language === "sv" ? "Bokfor: 2710/2731 debet och 1630 kredit." : "Book: 2710/2731 debit and 1630 credit."}</p>
+                  <label>
+                    {language === "sv" ? "Deklarationsunderlag" : "Declaration document"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(event) => {
+                        setPayrollTaxSettlementEvidenceFile(event.target.files?.[0] || null);
+                        event.target.value = "";
+                      }}
+                    />
+                    <small>{payrollTaxSettlementEvidenceFile?.name || (language === "sv" ? "Ingen fil vald" : "No file selected")}</small>
+                  </label>
                   {payrollTaxSettlementForMonth.taxSettlementVoucher && (
                     <span className="status success-status">{t.voucher}: {payrollTaxSettlementForMonth.taxSettlementVoucher}</span>
                   )}
@@ -35329,7 +35625,7 @@ function App() {
                     type="button"
                     className="primary-small-button"
                     onClick={bookPayrollTaxSettlement}
-                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxSettlementVoucher)}
+                    disabled={!token || payrollTaxTotalToHandle <= 0 || Boolean(payrollTaxSettlementForMonth.taxSettlementVoucher) || !payrollTaxSettlementEvidenceFile}
                   >
                     {language === "sv" ? "Bokfor avrakning" : "Book settlement"}
                   </button>
@@ -35529,11 +35825,25 @@ function App() {
                         <span className={payslipStatus.sent ? "status success-status" : "status warning-status"}>
                           {payslipStatus.sent ? (language === "sv" ? "Lonebesked skickat" : "Payslip sent") : (language === "sv" ? "Lonebesked ej skickat" : "Payslip not sent")}
                         </span>
+                        {draft.status !== "booked" && (
+                          <label>
+                            {language === "sv" ? "Loneunderlag" : "Payroll document"}
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                              onChange={(event) => {
+                                setPayrollEvidenceFiles((current) => ({ ...current, [draft.id]: event.target.files?.[0] || null }));
+                                event.target.value = "";
+                              }}
+                            />
+                            <small>{payrollEvidenceFiles[draft.id]?.name || (language === "sv" ? "Ingen fil vald" : "No file selected")}</small>
+                          </label>
+                        )}
                         <button
                           type="button"
                           className="primary-small-button"
                           onClick={() => bookPayrollDraft(draft)}
-                          disabled={!token || draft.status === "booked"}
+                          disabled={!token || draft.status === "booked" || !payrollEvidenceFiles[draft.id]}
                         >
                           {language === "sv" ? "Bokfor lon" : "Book payroll"}
                         </button>
@@ -37507,6 +37817,7 @@ function App() {
                             <div className="sie-preview-list">
                               {row.analysis.previewVouchers.slice(0, 6).map((voucher) => {
                                 const importStatus = sieVoucherImportStatus(voucher);
+                                const evidenceKey = `${row.id}::${voucher.key}`;
 
                                 return (
                                   <div className="sie-preview-voucher" key={voucher.key}>
@@ -37524,14 +37835,29 @@ function App() {
                                           {language === "sv" ? "Importerad som" : "Imported as"} {voucher.importedVoucherNumber}
                                         </span>
                                       )}
+                                      {importStatus.ok && !voucher.importedVoucherNumber && (
+                                        <label>
+                                          {language === "sv" ? "Originalunderlag" : "Original document"}
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                            onChange={(event) => setSieVoucherEvidenceFiles((current) => ({
+                                              ...current,
+                                              [evidenceKey]: event.target.files?.[0] || null
+                                            }))}
+                                          />
+                                        </label>
+                                      )}
                                     </div>
                                     <button
                                       type="button"
                                       className="primary-small-button"
                                       onClick={() => createManualVoucherFromSie(row, voucher)}
-                                      disabled={!token || !importStatus.ok || Boolean(voucher.importedVoucherNumber)}
+                                      disabled={!token || !importStatus.ok || !sieVoucherEvidenceFiles[evidenceKey] || sieVoucherImportingKeys[evidenceKey] || Boolean(voucher.importedVoucherNumber)}
                                     >
-                                      {language === "sv" ? "Importera verifikat" : "Import voucher"}
+                                      {sieVoucherImportingKeys[evidenceKey]
+                                        ? (language === "sv" ? "Importerar..." : "Importing...")
+                                        : (language === "sv" ? "Importera verifikat" : "Import voucher")}
                                     </button>
                                   </div>
                                 );
@@ -38386,17 +38712,20 @@ function App() {
               <button type="button" className="secondary-button" onClick={downloadJournalCsv}>
                 {t.exportCsv}
               </button>
+              <button type="button" className="secondary-button" onClick={downloadJournalMinorCsv}>
+                {language === "sv" ? "Grundbok i oren" : "Journal in minor units"}
+              </button>
               <button type="button" className="secondary-button" onClick={downloadGeneralLedgerCsv}>
                 {language === "sv" ? "Exportera huvudbok" : "Export general ledger"}
+              </button>
+              <button type="button" className="secondary-button" onClick={downloadGeneralLedgerMinorCsv}>
+                {language === "sv" ? "Huvudbok i oren" : "General ledger in minor units"}
               </button>
               <button type="button" className="secondary-button" onClick={downloadJournalIntegrityCsv}>
                 {language === "sv" ? "Integritetsrapport" : "Integrity report"}
               </button>
-              <button type="button" className="secondary-button" onClick={downloadSieExport} disabled={!sieExportCanDownload}>
-                {language === "sv" ? "Exportera SIE" : "Export SIE"}
-              </button>
               <button type="button" className="secondary-button" onClick={downloadBackendSieExport}>
-                {language === "sv" ? "Backend-SIE" : "Backend SIE"}
+                {language === "sv" ? "Exportera SIE" : "Export SIE"}
               </button>
             </div>
           </div>
@@ -38521,10 +38850,48 @@ function App() {
               />
             </label>
 
-            <button type="submit" disabled={!token || manualVoucherDateIsLocked || !manualDescription || !manualDebitAccount || !manualCreditAccount || !manualAmount}>
+            <label>
+              {language === "sv" ? "Verifikationsunderlag" : "Voucher document"}
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(event) => setManualEvidenceFile(event.target.files?.[0] || null)}
+                required
+              />
+            </label>
+
+            <button type="submit" disabled={!token || manualVoucherDateIsLocked || !manualDescription || !manualDebitAccount || !manualCreditAccount || !manualAmount || !manualEvidenceFile}>
               {t.saveVoucher}
             </button>
           </form>
+
+          {voucherEvidenceCandidates.length > 0 && (
+            <form id="voucher-evidence-form" onSubmit={handleAttachVoucherEvidence} className="form manual-voucher-form">
+              <h3>{language === "sv" ? "Saknade verifikationsunderlag" : "Missing voucher documents"}</h3>
+              <label>
+                {language === "sv" ? "Verifikat" : "Voucher"}
+                <select value={voucherEvidenceNumber} onChange={(event) => setVoucherEvidenceNumber(event.target.value)} required>
+                  <option value="">{language === "sv" ? "Valj verifikat" : "Choose voucher"}</option>
+                  {voucherEvidenceCandidates.map((group) => (
+                    <option key={group.voucherNumber} value={group.voucherNumber}>{group.voucherNumber}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {language === "sv" ? "Underlag" : "Document"}
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={(event) => setVoucherEvidenceFile(event.target.files?.[0] || null)}
+                  required
+                />
+              </label>
+              <button type="submit" disabled={!token || !voucherEvidenceNumber || !voucherEvidenceFile}>
+                {language === "sv" ? "Ladda upp underlag" : "Upload document"}
+              </button>
+              {voucherEvidenceMessage && <p role="status" className="message">{voucherEvidenceMessage}</p>}
+            </form>
+          )}
 
           <form onSubmit={handleCreateOpeningBalance} className="form manual-voucher-form">
             <h3>{language === "sv" ? "Ingaende balans" : "Opening balance"}</h3>
@@ -38607,11 +38974,21 @@ function App() {
               </p>
             )}
 
+            <label>
+              {language === "sv" ? "Underlag for ingaende balans" : "Opening balance document"}
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(event) => setOpeningBalanceEvidenceFile(event.target.files?.[0] || null)}
+                required
+              />
+            </label>
+
             <div className="button-row">
               <button type="button" className="secondary-button" onClick={addOpeningBalanceLine}>
                 {language === "sv" ? "Lagg till rad" : "Add line"}
               </button>
-              <button type="submit" disabled={!openingBalanceCanBook}>
+              <button type="submit" disabled={!openingBalanceCanBook || !openingBalanceEvidenceFile}>
                 {language === "sv" ? "Bokfor ingaende balans" : "Post opening balance"}
               </button>
             </div>
@@ -39015,6 +39392,31 @@ function App() {
                               onClick={() => openExpenseReceipt(group.expense.id)}
                             >
                               {language === "sv" ? "Oppna kvitto" : "Open receipt"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {group.rows.some((entry) => ["manual_voucher", "opening_balance"].includes(entry.sourceType)) && (
+                        <div className="button-row">
+                          <span className={group.rows.every((entry) => entry.evidenceHash) ? "status success-status" : "status warning-status"}>
+                            {group.rows.every((entry) => entry.evidenceHash)
+                              ? (language === "sv" ? "Underlag sparat" : "Document archived")
+                              : (language === "sv" ? "Underlag saknas" : "Document missing")}
+                          </span>
+                          {group.rows.every((entry) => entry.evidenceHash) ? (
+                            <button type="button" className="secondary-button compact-button" onClick={() => openVoucherEvidence(group.voucherNumber)}>
+                              {language === "sv" ? "Oppna underlag" : "Open document"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="secondary-button compact-button"
+                              onClick={() => {
+                                setVoucherEvidenceNumber(group.voucherNumber);
+                                document.getElementById("voucher-evidence-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                              }}
+                            >
+                              {language === "sv" ? "Lagg till underlag" : "Add document"}
                             </button>
                           )}
                         </div>
@@ -39869,19 +40271,19 @@ function App() {
             </div>
           </div>
 
-          <div className={sieExportCanDownload ? "sie-export-panel ready" : "sie-export-panel warning"}>
+          <div className="sie-export-panel">
             <div>
               <span>{language === "sv" ? "SIE-export" : "SIE export"}</span>
               <strong>{sieExportStatusText}</strong>
               <p>
                 {language === "sv"
-                  ? "Exportera filtrerade verifikationer och kontoplan som en preliminar SIE4-fil for test, import eller vidare kontroll hos redovisningskonsult."
-                  : "Export filtered vouchers and chart of accounts as a preliminary SIE4 file for testing, import or further review with an accountant."}
+                  ? "Urvalet nedan ar en forhandsvisning. SIE-filen skapas och kontrolleras i backend innan nedladdning."
+                  : "The selection below is a preview. The SIE file is created and checked by the backend before download."}
               </p>
               <small>
                 {language === "sv"
-                  ? "Tips: valj period i Bokforing eller Momsrapport innan export om du bara vill exportera en viss period."
-                  : "Tip: choose a period in Bookkeeping or VAT report before exporting if you only want a selected period."}
+                  ? "Valj hela rakenskapsaret i datumfiltret. Delperioder och otydliga flerarsurval stoppas av backend."
+                  : "Select the complete fiscal year in the date filter. The backend rejects partial periods and ambiguous multi-year selections."}
               </small>
             </div>
             <div className="sie-export-stats">
@@ -39901,20 +40303,13 @@ function App() {
                 <span>{language === "sv" ? "Differens" : "Difference"}</span>
                 <strong>{filteredJournalDifference} SEK</strong>
               </article>
-              <article>
-                <span>{language === "sv" ? "Kontrollkod" : "Control code"}</span>
-                <strong>{sieExportControlCode}</strong>
-              </article>
             </div>
             <div className="button-row">
               <button type="button" className="secondary-button" onClick={() => setActiveView("bookkeeping")}>
                 {language === "sv" ? "Justera urval" : "Adjust selection"}
               </button>
-              <button type="button" className="primary-small-button" onClick={downloadSieExport} disabled={!sieExportCanDownload}>
+              <button type="button" className="primary-small-button" onClick={downloadBackendSieExport}>
                 {language === "sv" ? "Ladda ner SIE" : "Download SIE"}
-              </button>
-              <button type="button" className="secondary-button" onClick={downloadBackendSieExport}>
-                {language === "sv" ? "Ladda ner backend-SIE" : "Download backend SIE"}
               </button>
               <button type="button" className="secondary-button" onClick={downloadBackendSieReceiptCsv}>
                 {language === "sv" ? "Kvittens CSV" : "Receipt CSV"}
@@ -41001,8 +41396,8 @@ function App() {
           <div className="section-heading report-subheading">
             <h2>{t.trialBalance}</h2>
             <div className="button-row">
-              <span className={trialBalanceReport && Number(trialBalanceReport.difference || 0) === 0 ? "status success-status" : "status warning-status"}>
-                {language === "sv" ? "Differens" : "Difference"} {trialBalanceReport?.difference ?? "-"} SEK
+              <span className={trialBalanceReport && trialBalanceReport.differenceMinor === 0 ? "status success-status" : "status warning-status"}>
+                {language === "sv" ? "Differens" : "Difference"} {trialBalanceReport ? formatMinorAmount(trialBalanceReport.differenceMinor, language) : "-"}
               </span>
               <button type="button" className="secondary-button" onClick={() => loadTrialBalanceReport()}>
                 {t.refresh}
@@ -41020,8 +41415,8 @@ function App() {
                   ? `Period ${trialBalanceReport.periodFrom || vatPeriodFrom || "-"} - ${trialBalanceReport.periodTo || vatPeriodTo || "-"}. Kontrollen visar om debet och kredit balanserar.`
                   : `Period ${trialBalanceReport.periodFrom || vatPeriodFrom || "-"} - ${trialBalanceReport.periodTo || vatPeriodTo || "-"}. This check shows whether debit and credit balance.`}
               </p>
-              <div className="account-table" style={{ overflowX: "auto" }}>
-                <div className="account-row account-header" style={{ gridTemplateColumns: "1fr 2fr repeat(6, minmax(110px, 1fr))", minWidth: 980 }}>
+              <div className="account-table trial-balance-table" style={{ overflowX: "auto", fontVariantNumeric: "tabular-nums" }}>
+                <div className="account-row account-header" style={{ gridTemplateColumns: "130px 180px repeat(6, minmax(24ch, 1fr))", minWidth: 1800 }}>
                   <span>{t.accountNumber}</span>
                   <span>{t.accountName}</span>
                   <span>{language === "sv" ? "Ing. debet" : "Opening debit"}</span>
@@ -41035,29 +41430,29 @@ function App() {
                   <p className="empty-state">{language === "sv" ? "Inga saldon for vald period." : "No balances for selected period."}</p>
                 ) : (
                   (trialBalanceReport.lines || []).map((line) => (
-                    <div className="account-row" key={line.accountNumber} style={{ gridTemplateColumns: "1fr 2fr repeat(6, minmax(110px, 1fr))", minWidth: 980 }}>
+                    <div className="account-row" key={line.accountNumber} style={{ gridTemplateColumns: "130px 180px repeat(6, minmax(24ch, 1fr))", minWidth: 1800 }}>
                       <button type="button" className="report-line-button" onClick={() => openAccountTrace(line.accountNumber)}>
                         {line.accountNumber}
                       </button>
                       <span>{line.accountName}</span>
-                      <span>{line.openingDebit || 0} SEK</span>
-                      <span>{line.openingCredit || 0} SEK</span>
-                      <span>{line.periodDebit || 0} SEK</span>
-                      <span>{line.periodCredit || 0} SEK</span>
-                      <strong>{line.closingDebit || 0} SEK</strong>
-                      <strong>{line.closingCredit || 0} SEK</strong>
+                      <span>{formatMinorAmount(line.openingDebitMinor, language)}</span>
+                      <span>{formatMinorAmount(line.openingCreditMinor, language)}</span>
+                      <span>{formatMinorAmount(line.periodDebitMinor, language)}</span>
+                      <span>{formatMinorAmount(line.periodCreditMinor, language)}</span>
+                      <strong>{formatMinorAmount(line.closingDebitMinor, language)}</strong>
+                      <strong>{formatMinorAmount(line.closingCreditMinor, language)}</strong>
                     </div>
                   ))
                 )}
-                <div className="account-row account-header" style={{ gridTemplateColumns: "1fr 2fr repeat(6, minmax(110px, 1fr))", minWidth: 980 }}>
+                <div className="account-row account-header" style={{ gridTemplateColumns: "130px 180px repeat(6, minmax(24ch, 1fr))", minWidth: 1800 }}>
                   <span>{t.total}</span>
                   <span />
-                  <span>{trialBalanceReport.openingDebitTotal || 0} SEK</span>
-                  <span>{trialBalanceReport.openingCreditTotal || 0} SEK</span>
-                  <span>{trialBalanceReport.periodDebitTotal || 0} SEK</span>
-                  <span>{trialBalanceReport.periodCreditTotal || 0} SEK</span>
-                  <strong>{trialBalanceReport.closingDebitTotal || 0} SEK</strong>
-                  <strong>{trialBalanceReport.closingCreditTotal || 0} SEK</strong>
+                  <span>{formatMinorAmount(trialBalanceReport.openingDebitTotalMinor, language)}</span>
+                  <span>{formatMinorAmount(trialBalanceReport.openingCreditTotalMinor, language)}</span>
+                  <span>{formatMinorAmount(trialBalanceReport.periodDebitTotalMinor, language)}</span>
+                  <span>{formatMinorAmount(trialBalanceReport.periodCreditTotalMinor, language)}</span>
+                  <strong>{formatMinorAmount(trialBalanceReport.closingDebitTotalMinor, language)}</strong>
+                  <strong>{formatMinorAmount(trialBalanceReport.closingCreditTotalMinor, language)}</strong>
                 </div>
               </div>
             </div>

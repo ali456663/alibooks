@@ -77,6 +77,20 @@ class AuditServiceTest {
     assertThat(changedFingerprint).isNotEqualTo(originalFingerprint);
   }
 
+  @Test
+  void auditFieldSeparatorsCannotCreateRowHashCollisions() {
+    Instant createdAt = Instant.parse("2026-07-01T10:00:00Z");
+    AuditEvent firstEvent = eventWithReferenceAndMessage(1L, createdAt, "reference|segment", "tail");
+    AuditEvent secondEvent = eventWithReferenceAndMessage(1L, createdAt, "reference", "segment|tail");
+
+    when(auditEventRepository.findAllByOrderByCreatedAtAscIdAsc()).thenReturn(List.of(firstEvent));
+    String firstRowHash = auditService.createIntegrityReport().lines().getFirst().rowHash();
+    when(auditEventRepository.findAllByOrderByCreatedAtAscIdAsc()).thenReturn(List.of(secondEvent));
+    String secondRowHash = auditService.createIntegrityReport().lines().getFirst().rowHash();
+
+    assertThat(firstRowHash).isNotEqualTo(secondRowHash);
+  }
+
   private AuditEvent eventWithStableIdentity(Long id, Instant createdAt, String message) {
     AuditEvent event = new AuditEvent(
         "invoice",
@@ -88,6 +102,14 @@ class AuditServiceTest {
         1000,
         "authenticated-user"
     );
+    setField(event, "id", id);
+    setField(event, "createdAt", createdAt);
+    return event;
+  }
+
+  private AuditEvent eventWithReferenceAndMessage(Long id, Instant createdAt, String reference, String message) {
+    AuditEvent event = new AuditEvent(
+        "invoice", "invoice", "F-2026-0001", "created", reference, message, 1000, "authenticated-user");
     setField(event, "id", id);
     setField(event, "createdAt", createdAt);
     return event;

@@ -26,9 +26,11 @@ class ProductionConfigurationGuardTest {
         "app.cors.allowed-origins=https://books.alibooks.se",
         "app.test-data-reset.enabled=false",
         "app.bank-reconciliation-reset.enabled=false",
-        "spring.datasource.url=jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks",
+        "spring.datasource.url=jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem",
         "spring.datasource.username=alibooks_prod",
-        "spring.datasource.password=a-production-database-password"
+        "spring.datasource.password=a-production-database-password",
+        "app.auth.mfa-encryption-key=" + safeMfaKey(),
+        "app.auth.require-mfa=true"
     ).run(context -> {
       Throwable failure = context.getStartupFailure();
       assertThat(failure).isNotNull();
@@ -58,9 +60,10 @@ class ProductionConfigurationGuardTest {
         false,
         false,
         true,
-        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks",
+        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem",
         "alibooks_prod",
-        "a-production-database-password"
+        "a-production-database-password",
+        safeMfaKey(), true
     )).isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("whole SEK")
         .hasMessageContaining("ore-based accounting")
@@ -82,7 +85,8 @@ class ProductionConfigurationGuardTest {
         true,
         "jdbc:postgresql://localhost:5432/cloudshop",
         "cloudshop",
-        "cloudshop"
+        "cloudshop",
+        safeMfaKey(), true
     ))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("JWT_SECRET")
@@ -105,9 +109,10 @@ class ProductionConfigurationGuardTest {
         false,
         false,
         true,
-        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks",
+        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem",
         "alibooks_prod",
-        "replace_with_rds_password"
+        "replace_with_rds_password",
+        safeMfaKey(), true
     ))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("JWT_SECRET")
@@ -127,9 +132,10 @@ class ProductionConfigurationGuardTest {
         false,
         false,
         true,
-        "jdbc:postgresql://your-rds-endpoint.eu-north-1.rds.amazonaws.com:5432/cloudshop",
+        "jdbc:postgresql://your-rds-endpoint.eu-north-1.rds.amazonaws.com:5432/cloudshop?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem",
         "alibooks_prod",
-        "a-production-database-password"
+        "a-production-database-password",
+        safeMfaKey(), true
     ))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("APP_CORS_ALLOWED_ORIGINS")
@@ -149,12 +155,58 @@ class ProductionConfigurationGuardTest {
         false,
         false,
         true,
-        "jdbc:postgresql://db:5432/cloudshop",
+        "jdbc:postgresql://db:5432/cloudshop?sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem",
         "alibooks_prod",
-        "a-production-database-password"
+        "a-production-database-password",
+        safeMfaKey(), true
     ))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("SPRING_DATASOURCE_URL");
+  }
+
+  @Test
+  void rejectsPublicHttpOriginAndDatabaseWithoutTls() {
+    assertThatThrownBy(() -> new ProductionConfigurationGuard(
+        "Q3n9wY7rL2pV8xK4mD6sF1aH5jB0cE9uT7zN3qW6",
+        "test-owner-bootstrap-key-unique-2026",
+        60,
+        "validate",
+        false,
+        false,
+        "http://books.alibooks.se",
+        false,
+        false,
+        true,
+        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks?sslmode=prefer",
+        "alibooks_prod",
+        "a-production-database-password",
+        safeMfaKey(), true
+    ))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("APP_CORS_ALLOWED_ORIGINS must contain explicit non-local HTTPS origins")
+        .hasMessageContaining("sslmode=verify-full and the mounted RDS CA bundle");
+  }
+
+  @Test
+  void rejectsEncryptedDatabaseConnectionWithoutServerIdentityVerification() {
+    assertThatThrownBy(() -> new ProductionConfigurationGuard(
+        "Q3n9wY7rL2pV8xK4mD6sF1aH5jB0cE9uT7zN3qW6",
+        "test-owner-bootstrap-key-unique-2026",
+        60,
+        "validate",
+        false,
+        false,
+        "https://books.alibooks.se",
+        false,
+        false,
+        true,
+        "jdbc:postgresql://alibooks-prod.abc.eu-north-1.rds.amazonaws.com:5432/alibooks?sslmode=require",
+        "alibooks_prod",
+        "a-production-database-password",
+        safeMfaKey(), true
+    ))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("sslmode=verify-full and the mounted RDS CA bundle");
   }
 
   @Configuration(proxyBeanMethods = false)
@@ -168,5 +220,11 @@ class ProductionConfigurationGuardTest {
       current = current.getCause();
     }
     return current;
+  }
+
+  private static String safeMfaKey() {
+    byte[] bytes = new byte[32];
+    for (int index = 0; index < bytes.length; index++) bytes[index] = (byte) index;
+    return java.util.Base64.getEncoder().encodeToString(bytes);
   }
 }

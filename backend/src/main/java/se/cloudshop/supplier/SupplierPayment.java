@@ -70,7 +70,8 @@ public class SupplierPayment {
 
   @com.fasterxml.jackson.annotation.JsonProperty("amountMinor")
   public long getAmountMinor() {
-    return amountMinor == null ? toMinorUnits(amount) : amountMinor;
+    validateMinorUnitShadow();
+    return amountMinor;
   }
 
   public String getCurrencyCode() {
@@ -98,17 +99,11 @@ public class SupplierPayment {
   }
 
   @PostLoad
-  private void validateMinorUnitShadow() {
-    if (amountMinor != null && amountMinor.longValue() != toMinorUnits(amount)) {
-      throw new IllegalStateException("Supplier payment shadow does not match the payment amount.");
-    }
-    amountMinor = toMinorUnits(amount);
-  }
-
   @PrePersist
   @PreUpdate
-  private void synchronizeMinorUnits() {
-    amountMinor = toMinorUnits(amount);
-    currencyCode = currencyCode == null || currencyCode.isBlank() ? "SEK" : currencyCode;
+  void validateMinorUnitShadow() {
+    if (amountMinor == null || amountMinor.longValue() != toMinorUnits(amount) || !"SEK".equals(currencyCode)) {
+      throw new IllegalStateException("Supplier payment minor units or currency do not match the payment amount.");
+    }
   }
 }

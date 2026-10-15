@@ -3,11 +3,14 @@ package se.cloudshop.accounting;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -387,6 +390,34 @@ class AccountingExportControllerTest {
         3,
         authorizationHeader
     );
+  }
+
+  @Test
+  void sieExportUsesDeclaredPc8EncodingForSwedishText() {
+    String sie = "#FORMAT PC8\r\n#FNAMN \"Måleri ÅÄÖ åäö\"\r\n";
+    when(accountingService.createSieExport(null, null)).thenReturn(sie);
+    when(accountingService.createSieExportReceipt(null, null)).thenReturn(mock(SieExportReceipt.class));
+    String authorizationHeader = "Bearer " + jwtService.createToken("ali@example.com");
+
+    ResponseEntity<byte[]> response = controller.exportSie(authorizationHeader, null, null);
+
+    Charset pc8 = Charset.forName("IBM437");
+    assertThat(response.getHeaders().getContentType().getCharset()).isEqualTo(pc8);
+    assertThat(response.getBody()).isEqualTo(sie.getBytes(pc8));
+    assertThat(new String(response.getBody(), pc8)).isEqualTo(sie);
+    assertThat(response.getBody()).isNotEqualTo(sie.getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void sieExportRejectsUnrepresentableTextBeforeReceiptAndAudit() {
+    when(accountingService.createSieExport(null, null)).thenReturn("#FORMAT PC8\r\n#FNAMN \"Test 😀\"\r\n");
+    String authorizationHeader = "Bearer " + jwtService.createToken("ali@example.com");
+
+    assertThatThrownBy(() -> controller.exportSie(authorizationHeader, null, null))
+        .isInstanceOfSatisfying(ResponseStatusException.class,
+            exception -> assertThat(exception.getStatusCode().value()).isEqualTo(422));
+    verify(accountingService, never()).createSieExportReceipt(null, null);
+    verifyNoInteractions(auditService);
   }
 
   @Test

@@ -1,24 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-
-const ignoredDirectories = new Set([
-  ".git",
-  ".idea",
-  ".agents",
-  ".codex",
-  ".m2-cache",
-  "backups",
-  "node_modules",
-  "target",
-  "dist",
-  "outputs",
-  "uploads",
-  "work"
-]);
 
 const ignoredExtensions = new Set([
   ".png",
@@ -71,20 +57,21 @@ if (missingIgnoreRules.length > 0) {
   process.exit(1);
 }
 
-function walk(dir) {
-  return readdirSync(dir).flatMap((name) => {
-    if (ignoredDirectories.has(name)) {
-      return [];
-    }
-
-    const fullPath = path.join(dir, name);
-    const stats = statSync(fullPath);
-    if (stats.isDirectory()) {
-      return walk(fullPath);
-    }
-
-    return ignoredExtensions.has(path.extname(name).toLowerCase()) ? [] : [fullPath];
+function candidateFiles() {
+  const result = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd: repoRoot,
+    encoding: "buffer",
+    shell: false
   });
+  if (result.error || result.status !== 0) {
+    console.error("Secret placeholder check failed: cannot enumerate Git release candidates.");
+    process.exit(1);
+  }
+
+  return [...new Set(result.stdout.toString("utf8").split("\0").filter(Boolean))]
+    .filter((file) => !ignoredExtensions.has(path.extname(file).toLowerCase()))
+    .map((file) => path.join(repoRoot, file))
+    .filter(existsSync);
 }
 
 function relative(file) {
@@ -93,7 +80,11 @@ function relative(file) {
 
 const findings = [];
 
-for (const file of walk(repoRoot)) {
+for (const file of candidateFiles()) {
+  if (lstatSync(file).isSymbolicLink()) {
+    findings.push(`${relative(file)} is a symlink; review its target before release`);
+    continue;
+  }
   const text = readFileSync(file, "utf8");
 
   for (const pattern of patterns) {
@@ -110,4 +101,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log("Secret placeholder check passed: no real-looking API keys found in tracked project files.");
+console.log("Secret placeholder check passed: no real-looking API keys found in tracked or unignored new project files.");

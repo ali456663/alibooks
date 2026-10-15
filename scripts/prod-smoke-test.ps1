@@ -11,6 +11,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if (-not $FrontendUrl.StartsWith("https://", [System.StringComparison]::OrdinalIgnoreCase) -or
+    -not $BackendUrl.StartsWith("https://", [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "Production smoke URLs must use HTTPS."
+}
+
 Write-Host "Checking frontend: $FrontendUrl"
 $frontendResponse = Invoke-WebRequest -Uri $FrontendUrl -UseBasicParsing
 if ($frontendResponse.StatusCode -ne 200) {
@@ -26,17 +31,18 @@ if ($health.status -ne "ok") {
 Write-Host "Backend health OK"
 
 Write-Host "Checking protected system status: $BackendUrl/system/status"
-if ([string]::IsNullOrWhiteSpace($AuthToken)) {
-  try {
-    Invoke-WebRequest -Uri "$BackendUrl/system/status" -UseBasicParsing | Out-Null
-    throw "System status protection check failed. Expected HTTP 401 without AuthToken."
-  } catch {
-    if ($_.Exception.Response.StatusCode.value__ -ne 401) {
-      throw
-    }
+try {
+  Invoke-WebRequest -Uri "$BackendUrl/system/status" -UseBasicParsing | Out-Null
+  throw "System status protection check failed. Expected HTTP 401 without AuthToken."
+} catch {
+  if ($_.Exception.Response.StatusCode.value__ -ne 401) {
+    throw
   }
-  Write-Host "System status protected (HTTP 401 without AuthToken)"
-  Write-Host "Pass -AuthToken to verify database.ok in the protected status response."
+}
+Write-Host "System status protected (HTTP 401 without AuthToken)"
+
+if ([string]::IsNullOrWhiteSpace($AuthToken)) {
+  Write-Host "Bootstrap-only smoke: database.ok is unverified without AuthToken."
 } else {
   if ($AuthToken.StartsWith("Bearer ")) {
     $authHeader = $AuthToken
@@ -51,4 +57,4 @@ if ([string]::IsNullOrWhiteSpace($AuthToken)) {
   Write-Host "Authenticated system status and database OK"
 }
 
-Write-Host "Production smoke test passed."
+Write-Host "Public smoke test passed."

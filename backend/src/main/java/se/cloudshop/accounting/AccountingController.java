@@ -70,9 +70,8 @@ public class AccountingController {
       @RequestBody CreateManualJournalEntryRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    List<JournalEntry> entries = accountingService.createManualEntry(request);
-    auditService.record("voucher", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "manual_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Manual voucher created", request.amount(), authorizationHeader);
-    return entries;
+    throw new ResponseStatusException(HttpStatus.GONE,
+        "Manual vouchers require an archived document; use /journal-entries/manual-with-evidence.");
   }
 
   @PostMapping("/journal-entries/manual-multi")
@@ -82,10 +81,8 @@ public class AccountingController {
       @RequestBody CreateManualMultiLineJournalEntryRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    List<JournalEntry> entries = accountingService.createManualMultiLineEntry(request);
-    int amount = auditAmount(entries, "manuella fleradiga verifikatets auditbelopp");
-    auditService.record("voucher", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "manual_multi_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Manual multi-line voucher created", amount, authorizationHeader);
-    return entries;
+    throw new ResponseStatusException(HttpStatus.GONE,
+        "Manual multi-line vouchers require an archived document; use /journal-entries/manual-multi-with-evidence.");
   }
 
   @PostMapping("/journal-entries/opening-balance")
@@ -95,10 +92,8 @@ public class AccountingController {
       @RequestBody CreateOpeningBalanceRequest request
   ) {
     authHeader.requireValidToken(authorizationHeader);
-    List<JournalEntry> entries = accountingService.createOpeningBalanceEntry(request);
-    int amount = auditAmount(entries, "ingående balansens auditbelopp");
-    auditService.record("voucher", "journal_entry", entries.isEmpty() ? null : entries.get(0).getVoucherNumber(), "opening_balance_created", entries.isEmpty() ? "" : entries.get(0).getVoucherNumber(), "Opening balance voucher created", amount, authorizationHeader);
-    return entries;
+    throw new ResponseStatusException(HttpStatus.GONE,
+        "Opening balance requires an archived document; use /journal-entries/opening-balance-with-evidence.");
   }
 
   @PostMapping("/journal-entries/stripe-website-sale")

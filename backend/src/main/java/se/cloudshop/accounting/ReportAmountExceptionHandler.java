@@ -7,6 +7,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ReportAmountExceptionHandler {
+  @ExceptionHandler(JournalMoneyIntegrityException.class)
+  public ResponseEntity<Map<String, String>> handleLedgerMoney(JournalMoneyIntegrityException exception) {
+    return ResponseEntity.unprocessableEntity().header("Cache-Control", "no-store")
+        .body(Map.of("code", "LEDGER_MONEY_INTEGRITY", "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(SettlementSnapshot.HistoryIncomplete.class)
   public ResponseEntity<Map<String, String>> handleHistory(SettlementSnapshot.HistoryIncomplete exception) {
     return ResponseEntity.status(exception.getStatusCode())

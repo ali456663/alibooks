@@ -2,4 +2,15 @@ target
 .idea
 .mvn
 *.iml
+.env
+.env.*
+.git
+uploads
+backups
+*.dump
+*.pem
+*.key
+*.p12
+*.jks
+*.log
 

@@ -6,8 +6,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import se.cloudshop.accounting.JournalEntryRepository;
 import se.cloudshop.auth.AuthHeader;
 import se.cloudshop.auth.JwtService;
 import se.cloudshop.customer.CustomerRepository;
@@ -17,7 +17,7 @@ import se.cloudshop.order.OrderRepository;
 class TestDataControllerTest {
 
   private final AuthHeader authHeader = new AuthHeader(new JwtService("test_secret"));
-  private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
+  private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
   private final OrderRepository orderRepository = mock(OrderRepository.class);
   private final ExpenseRepository expenseRepository = mock(ExpenseRepository.class);
   private final CustomerRepository customerRepository = mock(CustomerRepository.class);
@@ -32,7 +32,7 @@ class TestDataControllerTest {
     )).isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("Test data reset is disabled");
 
-    verify(journalEntryRepository, never()).deleteAll();
+    verify(jdbcTemplate, never()).execute("TRUNCATE TABLE journal_entries, journal_voucher_registry, voucher_evidence_contents, voucher_evidence CASCADE");
     verify(orderRepository, never()).deleteAll();
     verify(expenseRepository, never()).deleteAll();
     verify(customerRepository, never()).deleteAll();
@@ -48,7 +48,7 @@ class TestDataControllerTest {
     )).isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("Missing reset confirmation header");
 
-    verify(journalEntryRepository, never()).deleteAll();
+    verify(jdbcTemplate, never()).execute("TRUNCATE TABLE journal_entries, journal_voucher_registry, voucher_evidence_contents, voucher_evidence CASCADE");
     verify(orderRepository, never()).deleteAll();
     verify(expenseRepository, never()).deleteAll();
     verify(customerRepository, never()).deleteAll();
@@ -60,7 +60,7 @@ class TestDataControllerTest {
 
     controller.clearTestData("Bearer " + authHeaderToken(), "DELETE_ALIBOOKS_TEST_DATA");
 
-    verify(journalEntryRepository).deleteAll();
+    verify(jdbcTemplate).execute("TRUNCATE TABLE journal_entries, journal_voucher_registry, voucher_evidence_contents, voucher_evidence CASCADE");
     verify(orderRepository).deleteAll();
     verify(expenseRepository).deleteAll();
     verify(customerRepository).deleteAll();
@@ -69,7 +69,7 @@ class TestDataControllerTest {
   private TestDataController controller(boolean testDataResetEnabled) {
     return new TestDataController(
         authHeader,
-        journalEntryRepository,
+        jdbcTemplate,
         orderRepository,
         expenseRepository,
         customerRepository,

@@ -54,6 +54,25 @@ class JournalEntryTraceabilityTest {
   }
 
   @Test
+  void manualAndOpeningBalanceVouchersNeedArchivedEvidence() {
+    JournalEntry manual = new JournalEntry(null, new Account("1930", "Bank"), "M-8", 100, 0,
+        "Adjustment", LocalDate.of(2026, 7, 4));
+    JournalEntry opening = new JournalEntry(null, new Account("1930", "Bank"), "IB-8", 100, 0,
+        "Opening balance", LocalDate.of(2026, 7, 4));
+
+    assertThat(manual.getEvidenceStatus()).isEqualTo("missing_voucher_evidence");
+    assertThat(opening.getEvidenceStatus()).isEqualTo("missing_voucher_evidence");
+
+    VoucherEvidence evidence = new VoucherEvidence("M-8", "memo.pdf", "application/pdf", "ABC123",
+        "%PDF-memo".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    manual.attachVoucherEvidence(evidence);
+
+    assertThat(manual.getEvidenceStatus()).isEqualTo("traceable");
+    assertThat(manual.getEvidenceHash()).isEqualTo("ABC123");
+    assertThat(manual.getIntegrityHash()).hasSize(64);
+  }
+
+  @Test
   void flagsExpenseWithoutReceiptAsMissingEvidence() {
     Expense expense = new Expense(LocalDate.of(2026, 7, 2), "Programvara", 400, 100, "5420", "1930");
 

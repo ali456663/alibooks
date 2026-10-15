@@ -51,6 +51,7 @@ check("Frontend CI release gate includes Startklar proof", releaseGate.includes(
 check("Docker CI waits for backend/frontend", includesAll(ci, ["needs:", "- backend", "- frontend"]), "Docker build should only run after test jobs pass.");
 check("Docker CI builds backend image", ci.includes("docker build -t cloudshop-backend:ci ./backend"), "CI should build backend Docker image.");
 check("Docker CI builds frontend prod image", ci.includes("docker build -f ./frontend/Dockerfile.prod -t cloudshop-frontend:ci ./frontend"), "CI should build production frontend Docker image.");
+check("Docker CI serves frontend over HTTPS", includesAll(ci, ["Smoke test production frontend over HTTPS", "--network-alias backend", "curl --fail --silent --show-error --insecure", "grep -F 'apiUrl: \"/api\"'", "grep -F '\"path\":\"/health\"'"]), "CI should start the built frontend image and verify its HTTPS page and backend proxy.");
 
 check("Dockerhub workflow supports manual release", dockerhub.includes("workflow_dispatch:"), "Dockerhub workflow should be runnable manually.");
 check("Dockerhub workflow runs on version tags", includesAll(dockerhub, ["push:", "tags:", '"v*"']), "Dockerhub workflow should publish tagged releases.");

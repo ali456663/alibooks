@@ -172,10 +172,11 @@ const problems = [];
 
 for (const [className, expectedCount] of controllerConstructors) {
   const counts = invocationArgumentCounts(allSource, className);
-  const mismatches = counts.filter((count) => count !== expectedCount);
+  const allowedCounts = new Set([expectedCount, ...constructorDeclarationCounts(mainSource, className)]);
+  const mismatches = counts.filter((count) => !allowedCounts.has(count));
 
   if (mismatches.length > 0) {
-    problems.push(`${className} expects ${expectedCount} constructor argument(s), found call(s) with ${unique(mismatches).join(", ")}.`);
+    problems.push(`${className} expects ${unique([...allowedCounts]).join(" or ")} constructor argument(s), found call(s) with ${unique(mismatches).join(", ")}.`);
   }
 }
 

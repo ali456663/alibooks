@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test:reports": "node --test scripts/report-response.test.mjs scripts/import-money.test.mjs scripts/bank-booking.test.mjs scripts/release-traceability.test.mjs",
+    "test:reports": "node --test scripts/report-response.test.mjs scripts/import-money.test.mjs scripts/bank-booking.test.mjs scripts/release-traceability.test.mjs scripts/secret-placeholder-check.test.mjs scripts/ec2-deploy.test.mjs",
     "dev": "npm --prefix frontend run dev --",
     "doctor": "npm --prefix frontend run doctor --",
     "generate:jwt-secret": "npm --prefix frontend run generate:jwt-secret --",
+    "generate:mfa-key": "npm --prefix frontend run generate:mfa-key --",
     "build": "npm --prefix frontend run build --",
     "check:release": "npm --prefix frontend run check:release --",
     "check:release:full": "npm --prefix frontend run check:release:full --",
@@ -39,6 +40,7 @@
     "check:operations": "npm --prefix frontend run check:operations --",
     "check:use-today": "npm --prefix frontend run check:use-today --",
     "check:first-real-data": "npm --prefix frontend run check:first-real-data --",
+    "check:live-accounting": "node scripts/live-accounting-readiness.mjs",
     "check:pilot": "npm --prefix frontend run check:pilot --",
     "check:calculations": "npm --prefix frontend run check:calculations --",
     "check:retention": "npm --prefix frontend run check:retention --",
@@ -60,8 +62,10 @@
     "smoke:runtime": "npm --prefix frontend run smoke:runtime --",
     "test:backend": "npm --prefix frontend run test:backend --",
     "test:integration": "node scripts/backend-integration-test.mjs",
-    "test:backup": "node scripts/backup-restore-test.mjs",
+    "test:backup": "node scripts/backup-restore-test.mjs && node --test scripts/backup-production-bundle.test.mjs scripts/verify-backup-bundle.test.mjs",
     "verify:backup": "node scripts/backup-restore-verify.mjs",
-    "backup:local": "node scripts/backup-local-bundle.mjs"
+    "verify:backup:bundle": "node scripts/verify-backup-bundle.mjs",
+    "backup:local": "node scripts/backup-local-bundle.mjs",
+    "backup:production": "node scripts/backup-production-bundle.mjs"
   }
 }

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkTrialBalanceBrowser } from "./trial-balance-browser-check.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -285,6 +286,7 @@ async function main() {
       throw new Error(`AliBooks logged-out overview should not expose internal navigation after saved-view recovery: ${JSON.stringify(loggedOutNavigationGuard)}`);
     }
 
+    await checkTrialBalanceBrowser(send, evaluateJson, smokeUrl);
     ws.close();
     console.log("AliBooks frontend smoke test passed.");
   } finally {

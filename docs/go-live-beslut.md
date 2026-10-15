@@ -3,12 +3,13 @@
 Det har ar den sista gransen mellan Lokal MVP och Skarp drift.
 
 AliBooks kan vara starkt lokalt utan att vara klar for riktig kunddata. Skarp start ar dessutom blockerad i backend sa lange bokforingsbeloppen lagras i hela SEK i stallet for exakt ore. Efter beloppsmigrering aterstar externa bevis: GitHub Actions, Dockerhub, EC2, RDS, backup, restore drill, Stripe, SMTP och release-sparbarhet.
+Produktionsstart ar ocksa blockerad tills MFA, daterad NIS2-scopebedomning, ledningsansvar, tillgangs-/riskregister, incidentovning och kritiska leverantorsbedomningar ar verifierade. Se [cybersakerhetsstyrning for SME](cybersecurity-governance-sme.md). En gron lokal sakerhetsvy ersatter inte dessa bevis.
 
 ## Beslut
 
 | Lage | Beslut | Villkor |
 | --- | --- | --- |
-| Lokal utveckling | GO lokalt | `npm run check:release:full`, backendtester, Docker-build och runtime smoke ar grona. |
+| Lokal utveckling | GO lokalt | `npm run check:release:full`, backend- och backup/restore-tester, Docker-build och runtime smoke ar grona. |
 | Forsiktig MVP-test | GO lokalt | Testdata anvands, backup finns och inga viktiga filer ar ocommitade. |
 | Skarp drift | NO-GO skarp drift | Externa bevis saknas fortfarande for GitHub Actions, Dockerhub, EC2/RDS, backup/restore, Stripe eller SMTP. |
 | Riktig kunddata | BLOCKERAR | AliBooks ska inte anvandas med riktig kunddata innan externa go-live-bevis ar sparade. |
@@ -28,6 +29,8 @@ AliBooks kan vara starkt lokalt utan att vara klar for riktig kunddata. Skarp st
 11. `npm run check:release-traceability` visar version, commit, Docker-taggar och EC2 `IMAGE_TAG`.
 12. SIE, huvudbok, saldobalans, resultat, balans och momsrapport kan lamnas till redovisningskonsult.
 
+SIE-exporten ska endast tas fran backend for ett helt rakenskapsar. Kontrollera den faktiska filen mot mottagande redovisningsprogram och SIE-formatets testtjanst fore skarp overlamning; en gron intern kvittens ar inte extern formatcertifiering.
+
 ## Kommandoordning
 
 Kor fran projektets rotmapp:
@@ -45,6 +48,15 @@ npm run check:go-live-decision
 ```
 
 Efter push ska GitHub Actions kontrolleras i webblasaren.
+
+Pa EC2 kraver `scripts/ec2-deploy.sh` publika HTTPS-adresser och
+`ALIBOOKS_AUTH_TOKEN` for att smoke-testet ska bevisa skyddad systemstatus
+och `database.ok=true`. En uttrycklig
+`ALLOW_UNVERIFIED_BOOTSTRAP=true` far bara anvandas innan forsta agarkontot
+finns; den kor publik smoke men ar inte ett godkannande for riktig data.
+Efter kontoskapande och MFA ska deploy koras om med token och utan undantaget.
+
+`check:go-live-decision`, `check:prod` och `check:first-real-data` granskar kod och dokumentation; gront resultat ar inte ett tillstand att mata in riktig bokforingsdata. For en separat teknisk live-kontroll av den driftsatta backendens skyddade status, satt `ALIBOOKS_AUTH_TOKEN` lokalt och kor `npm run check:live-accounting -- --backend-url https://DIN-API-ADRESS/api`. Kommandot returnerar NO-GO om status saknas, skydden ar avstangda eller orebaserad bokforing och migreringskontroll inte ar verifierade. Det skriver inte ut token eller belopp. Aven ett framtida gront live-resultat maste kompletteras med manuella driftbevis och redovisningsgranskning innan skarp start.
 
 ## Om nagot gar fel
 

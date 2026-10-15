@@ -4,6 +4,8 @@ param(
   [string] $PgUser = $env:PGUSER,
   [string] $PgPassword = $env:PGPASSWORD,
   [string] $PgPort = $(if ($env:PGPORT) { $env:PGPORT } else { "5432" }),
+  [string] $PgSslMode = $(if ($env:PGSSLMODE) { $env:PGSSLMODE } else { "verify-full" }),
+  [string] $RdsCaCertHostPath = $env:RDS_CA_CERT_HOST_PATH,
   [string] $RestoreFile = $env:RESTORE_FILE,
   [string] $RestoreConfirm = $env:RESTORE_CONFIRM
 )
@@ -14,6 +16,17 @@ if ([string]::IsNullOrWhiteSpace($PgHost)) { throw "Set PGHOST to the RDS/Postgr
 if ([string]::IsNullOrWhiteSpace($PgDatabase)) { throw "Set PGDATABASE to the restore target database name. Use a separate test database." }
 if ([string]::IsNullOrWhiteSpace($PgUser)) { throw "Set PGUSER to the database user." }
 if ([string]::IsNullOrWhiteSpace($PgPassword)) { throw "Set PGPASSWORD to the database password." }
+if ($PgHost -notin @("localhost", "127.0.0.1", "::1", "host.docker.internal") -and $PgSslMode -ne "verify-full") {
+  throw "Remote PostgreSQL restore requires PGSSLMODE=verify-full."
+}
+$dockerConnectionArgs = @('-e', "PGPASSWORD=$PgPassword", '-e', "PGSSLMODE=$PgSslMode")
+if ($PgSslMode -eq "verify-full") {
+  if ([string]::IsNullOrWhiteSpace($RdsCaCertHostPath) -or -not (Test-Path -LiteralPath $RdsCaCertHostPath -PathType Leaf)) {
+    throw "RDS_CA_CERT_HOST_PATH must point to an existing PostgreSQL CA certificate file."
+  }
+  $caCertAbs = (Resolve-Path -LiteralPath $RdsCaCertHostPath).Path
+  $dockerConnectionArgs += @('-e', 'PGSSLROOTCERT=/run/certs/rds-ca-bundle.pem', '-v', "${caCertAbs}:/run/certs/rds-ca-bundle.pem:ro")
+}
 if ([string]::IsNullOrWhiteSpace($RestoreFile)) { throw "Set RESTORE_FILE to the .dump file created by backup-postgres.ps1." }
 if ($RestoreConfirm -ne "RESTORE_TO_TEST_DATABASE") { throw "Refusing restore: RESTORE_CONFIRM must be RESTORE_TO_TEST_DATABASE." }
 
@@ -31,7 +44,7 @@ $restoreFileBase = Split-Path -Leaf $restorePath.Path
 
 Write-Host "Verifying backup catalog before restore: $restorePath"
 docker run --rm `
-  -e "PGPASSWORD=$PgPassword" `
+  @dockerConnectionArgs `
   -v "${restoreDirAbs}:/backups" `
   postgres:16 `
   pg_restore -l "/backups/$restoreFileBase" | Out-Null
@@ -39,7 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw "Backup catalog verification failed. Restore wa
 
 Write-Host "Restoring into separate test database: $PgDatabase"
 docker run --rm `
-  -e "PGPASSWORD=$PgPassword" `
+  @dockerConnectionArgs `
   -v "${restoreDirAbs}:/backups" `
   postgres:16 `
   pg_restore -h $PgHost -p $PgPort -U $PgUser -d $PgDatabase --single-transaction --exit-on-error --no-owner --no-privileges "/backups/$restoreFileBase"

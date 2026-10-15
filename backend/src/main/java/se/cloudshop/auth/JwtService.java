@@ -1,11 +1,13 @@
 package se.cloudshop.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,11 +36,22 @@ public class JwtService {
   }
 
   public String createToken(String email) {
+    return createToken(email, false);
+  }
+
+  public String createToken(String email, boolean mfaVerified) {
+    return createToken(email, mfaVerified, 0);
+  }
+
+  public String createToken(String email, boolean mfaVerified, long authVersion) {
+    if (authVersion < 0) throw new IllegalArgumentException("Invalid authentication version.");
     try {
       Instant now = Instant.now();
       String header = encodeJson(Map.of("alg", "HS256", "typ", "JWT"));
       String payload = encodeJson(Map.of(
           "sub", email,
+          "mfa", mfaVerified,
+          "ver", authVersion,
           "iat", now.getEpochSecond(),
           "exp", now.plusSeconds(expirationSeconds).getEpochSecond()
       ));
@@ -51,6 +64,29 @@ public class JwtService {
     }
   }
 
+  public boolean mfaVerified(String token) {
+    if (!isValid(token)) return false;
+    try {
+      Map<?, ?> payload = OBJECT_MAPPER.readValue(decodeBase64Url(token.split("\\.")[1]), Map.class);
+      return Boolean.TRUE.equals(payload.get("mfa"));
+    } catch (Exception exception) {
+      return false;
+    }
+  }
+
+  public OptionalLong authVersion(String token) {
+    if (!isValid(token)) return OptionalLong.empty();
+    try {
+      Map<?, ?> payload = OBJECT_MAPPER.readValue(decodeBase64Url(token.split("\\.")[1]), Map.class);
+      Object version = payload.get("ver");
+      if (!(version instanceof Integer || version instanceof Long)) return OptionalLong.empty();
+      long value = ((Number) version).longValue();
+      return value < 0 ? OptionalLong.empty() : OptionalLong.of(value);
+    } catch (Exception exception) {
+      return OptionalLong.empty();
+    }
+  }
+
   public boolean isValid(String token) {
     try {
       String[] parts = token.split("\\.");
@@ -60,7 +96,9 @@ public class JwtService {
       }
 
       String unsignedToken = parts[0] + "." + parts[1];
-      return sign(unsignedToken).equals(parts[2]) && !isExpired(parts[1]);
+      byte[] expectedSignature = sign(unsignedToken).getBytes(StandardCharsets.US_ASCII);
+      byte[] suppliedSignature = parts[2].getBytes(StandardCharsets.US_ASCII);
+      return MessageDigest.isEqual(expectedSignature, suppliedSignature) && !isExpired(parts[1]);
     } catch (Exception exception) {
       return false;
     }

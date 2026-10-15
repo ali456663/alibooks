@@ -15,7 +15,8 @@ const docs = [
   "docs/roadmap-kvar.md",
   "docs/backup-restore-runbook.md",
   "docs/release-evidence.md",
-  "docs/go-live-riskregister.md"
+  "docs/go-live-riskregister.md",
+  "docs/cybersecurity-governance-sme.md"
 ];
 
 const failures = [];
@@ -178,6 +179,18 @@ check(
   "Go-live path is documented",
   ["GitHub Actions", "Dockerhub", "EC2", "RDS", "smoke test"].every((term) => allDocs.includes(term)),
   "Docs should cover the production/demo path."
+);
+
+check(
+  "Cybersecurity governance covers SME scope, leadership and controls",
+  allDocs.includes("NIS2") &&
+    allDocs.includes("VD-/styrelsebrev") &&
+    allDocs.includes("MFA") &&
+    allDocs.includes("RPO/RTO") &&
+    allDocs.includes("Leverantorsbedomning") &&
+    allDocs.includes("24 timmar") &&
+    allDocs.includes("72 timmar"),
+  "The governance pack should cover NIS2 applicability, leadership accountability, MFA, continuity, suppliers and conditional incident reporting."
 );
 
 if (failures.length > 0) {

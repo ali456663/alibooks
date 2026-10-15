@@ -1,5 +1,110 @@
 # AliBooks release evidence
 
+## HTTPS-containerprov 2026-10-15
+
+Frontendens produktionsimage byggdes lokalt och startades i ett isolerat
+Docker-nat med en syntetisk backend. Provet fick HTTP 200 over HTTPS for
+startsidan, laste `config.js` med `/api` och verifierade att `/api/health`
+proxades till backend som `/health`. GitHub Actions Docker-jobb kor nu samma
+runtime-prov efter imagebyggena. Lokal `npm run check:ci` passerade 40/40
+och `npm run check:release` passerade.
+
+Detta ar inte ett produktionsgodkannande: GitHub Actions har inte kort denna
+andring, arbetsytan har opushade filer och backendens bokforingsbelopp ar
+fortfarande kronauktoritativa. Riktig bokforingsdata ska vanta pa full
+ore-migrering, extern restore/deploy-verifiering och redovisningsgranskning.
+
+## Databasskydd for journalbelopp 2026-09-24
+
+Journalens nya databastrigger avvisar motstridiga oresfalt, fel valuta,
+negativa och dubbelsidiga belopp vid direkta SQL-skrivningar. Den avvisar
+ocksa uppdatering av en redan avvikande rad. En upprepad startpatch fyller
+inte automatiskt i ett saknat skuggfalt nar migrationsmarkoren finns, och
+aldre datumkomplettering kors forst efter att integritetstriggern skapats.
+Migreringsverifieringen kraver att bada journaltriggers ar aktiva.
+En migrationsmarkor tvingar en ny full kontroll vid forsta uppstart efter
+installationen; aldre grona kontrollpunkter ateranvands inte.
+
+Verifierat lokalt mot en separat tillfallig PostgreSQL 16-container:
+- 531 backend-enhetstester och 260 integrationstester godkanda pa slutversionen.
+- PostgreSQL-prov for direkta ogiltiga INSERT/UPDATE, befintlig avvikelse,
+  upprepad startpatch och saknat datum med avvikande belopp.
+- Startpatch och fristaende SQL-migrering speglar varandra: 467/467 steg.
+- Driftanvisningens `psql`-kommando stoppar vid fel och kor patchen i en
+  transaktion; detta behover provas pa en aterlast stagingkopia fore RDS.
+
+Ingen riktig databas eller historisk bokforingspost andrades. Ingen push,
+extern CI-korning eller produktionsdeploy gjordes. Full oresmigrering,
+restore-prov och slutlig redovisningsgranskning aterstar.
+
+## Journalens beloppskontroll under drift 2026-09-24
+
+JPA-lasning och uppdatering av journalrader validerar nu lagrade oresfalt
+i stallet for att skriva over dem fran legacy-kronbelopp. Saknade eller
+motstridiga belopp, fel valuta och negativa/tvasidiga rader avvisas.
+Endast nya rader far initiera saknade skuggfalt. Historiska data repareras
+inte automatiskt. Berorda HTTP-anrop ger 422 med `LEDGER_MONEY_INTEGRITY`
+utan kontosummor eller andra bokforingsdetaljer i felmeddelandet.
+
+Verifierat lokalt pa Java 25 med ByteBuddy experimental-kompatibilitet
+(CI anvander Java 21):
+- 531 backend-enhetstester och 251 PostgreSQL-integrationstester godkanda.
+- Transaktionsprov visar rollback av tidigare skrivna rader vid felaktigt
+  belopp samt att felaktig uppdatering inte skriver om lagrade belopp.
+- HTTP-prov visar att avvikande journaldata blockerar berorda rapporter
+  och exporter utan exportaudit eller automatisk datakorrigering.
+- 65 rapportkontrakt-/formateringstester godkanda, inklusive felhantering.
+- API-kontraktskontroll, backend-wiring och berakningskontroll godkanda.
+- En separat tillfallig PostgreSQL 16-container anvandes. Ingen andring
+  av produktionsschema eller verksamhetsdata gjordes.
+
+Skyddet galler JPA-vagar; direkt SQL och bulkoperationer kraver fortfarande
+databasskydd och migrationsverifiering. Full oresmigrering av skrivvagarna
+aterstar. Detta ar inte produktionsgodkannande och ersatter inte extern CI,
+release-/driftprov, backup-aterlasning eller slutlig redovisningsgranskning.
+Ingen push eller deploy gjordes. Se [beloppssakerhet](money-safety.md).
+
+## Exakt saldobalans 2026-09-24
+
+Ny, autentiserad v2-lasvag for saldobalans med lagrade heltalsoren,
+valutakod/exponent och CSV-export. Frontendens saldobalans anvander v2,
+validerar rad- och totalsummor och formaterar utan decimal flyttalsdivision.
+Gamla rapportkontrakt och bokforingsposter andras inte.
+
+Verifierat lokalt pa Java 25 med ByteBuddy experimental-kompatibilitet
+(CI anvander Java 21):
+- 516 backend-enhetstester och 234 PostgreSQL-integrationstester godkanda.
+- 60 rapportkontrakt-/formateringstester godkanda.
+- Frontend-produktionsbygge och lokal releasekontroll godkanda.
+- Riktat webblasartest: en ores differens, storsta JSON-sakra belopp,
+  exportvag, aldre svar som anlander sist, felaktigt svar samt 1365/390 px.
+  Testet ingar i befintlig `smoke:runtime` och darigenom i frontend-CI.
+- Integrationsprovet anvande en separat tillfallig PostgreSQL 16-container;
+  inga verksamhetsdata eller produktionsdatabaser anvandes.
+
+Detta ar inte produktionsgodkannande. Full migrering av beloppens skrivvagar
+aterstar, liksom aktuella externa release-, drift-, backup- och granskningsbevis.
+Ingen push, GitHub Actions-korning eller molndeploy gjordes i denna verifiering.
+Se [beloppssakerhet](money-safety.md).
+
+## Produktions-TLS 2026-09-23
+
+Produktionskonfigurationen ar uppdaterad for HTTPS pa port 443 och redirect
+fran HTTP pa port 80. Nginx far certifikat och privat nyckel som read-only
+mounts. Backendens pgJDBC-anslutning kraver `sslmode=verify-full` och AWS RDS
+CA-bundle; CA-certifikatet monteras read-only i backendcontainern. Go-live-
+exemplen anvander HTTPS och publik doman i stallet for okrypterad HTTP till
+EC2-IP. Ingen publik EC2/TLS-deploy har verifierats annu.
+
+Verifierat lokalt:
+- `check:prod`: 57/59 (tva avsiktliga varningar for
+platshallare till agarkonto- och MFA-nycklar), `npm run check:docker`,
+`npm run check:docs`, frontend-produktionsbygge och runtime-smoke godkanda.
+Backendtest-wrappern kunde inte starta IntelliJ-bundled Maven i denna miljo
+(Atkomst nekad). Nginx/Docker-containrar kunde inte koras i denna verifiering;
+certifikat, publik DNS, TLS-handskakning och restore behover provas i EC2/RDS
+innan riktiga bokforingsdata far laggas in.
+
 ## Inloggningsskydd mot resursmissbruk 2026-09-23
 
 Misslyckade loginforsok har nu ett konfigurerbart cachetak och inaktiva poster
@@ -37,6 +142,29 @@ verifieras externt fore riktig produktionsdata.
 
 ## Fakturamejl: bestandig leveranssparning 2026-09-23
 
+Uppfoljning 2026-10-13: Olosta SMTP-forsok kan nu listas och avstammas
+autentiserat med extern bevisning. Avstamningen lases mot fakturan, uppdaterar
+forsok och eventuell saknad skickathistorik i en transaktion och skriver audit.
+Bekraftat ej levererade fakturamejl kan forsokas igen manuellt; olosta forsok
+blockerar fortsatt omsandning och automatiska paminnelser gor inte blinda
+aterforsok. Ingen avstamning skickar e-post. Backend: 642 enhetstester och
+348 integrationstester mot isolerad PostgreSQL passerade; lokal releasegrind
+passerade. Verklig SMTP-leverans, extern restore och bokforingsgranskning ar
+fortfarande inte bevisade. Se invoice-document-snapshots.md och
+go-live-riskregister.md. Den smutsiga arbetskatalogen ar inte en verifierad
+GitHub- eller Docker-release.
+
+Backup/restore-uppfoljning 2026-10-13: Verifieraren godtar nu det manuellt
+avstamda utfallet `NOT_DELIVERED` som avslutat men inte skickat; endast
+`PENDING` och `UNCERTAIN` raknas som olosta. Okanda statusar och motstridiga
+`sent_at`-tidsstamplar underkanns fortfarande. `NOT_DELIVERED` utan matchande
+auditpost for faktura, forsok, namngiven aktor och motivering underkanns ocksa.
+`npm run test:backup` passerade 58/58 isolerade PostgreSQL-aterlasningsfall och 19 manifesttester med
+syntetiska data. `npm run check:release` passerade lokalt. Detta ar inte ett
+aterlasningsbevis fran verklig produktionsbackup eller ett go-live-beslut.
+Leveransforsok utan befintlig faktura, aven paminnelser, markeras nu for
+produktionsgranskning i backupmanifestet.
+
 Varje fakturamejl skapar nu ett separat leveransforsok i databasen fore SMTP.
 Forsoket innehaller mottagare, rubrik, renderad text och kontrollsumma for
 PDF-bilagan. Efter transport markeras det `SENT`; vid SMTP-fel eller timeout
@@ -44,11 +172,25 @@ markeras det `UNCERTAIN` och det ursprungliga felet kastas vidare. Sparningen
 sker i en separat transaktion, sa posten finns kvar aven om den omgivande
 fakturatransaktionen rullas tillbaka.
 
-`GET /system/status` visar `email.uncertainDeliveryCount` efter autentisering.
-Detta ar en revisions- och avstamningskontroll, inte ett bevis pa att SMTP ar
+`GET /system/status` visar `email.pendingDeliveryCount`,
+`email.uncertainDeliveryCount` och `email.unresolvedDeliveryCount` efter
+autentisering. Ett kvarstaende `PENDING` kan betyda att processen avbrots efter
+att SMTP accepterade mejlet. Granska leveransjournal och transportlogg innan
+manuell omsandning; gor inte blinda automatiska aterforsok. Detta ar en
+revisions- och avstamningskontroll, inte ett bevis pa att SMTP ar
 konfigurerad eller att en mottagare faktiskt har oppnat mejlet. Automatisk
 outbox, kontrollerad aterforsokshantering och riktig SMTP-verifiering aterstar
 fore skarp drift.
+
+Automatiska fakturapaminnelser och forfallopaminnelser skapar nu en separat
+`PENDING`-post fore SMTP. Lyckad transport markerar `SENT`; transportfel
+markerar `UNCERTAIN`. Schemalaggaren blockerar senare automatiska forsok for
+samma faktura och paminnelsetyp om posten finns, aven om fakturans egen
+historik rullades tillbaka. Aldre `SKIPPED`-historik blockerar ocksa
+automatiska aterforsok eftersom utfallet inte gar att avgora i efterhand.
+Operator maste granska SMTP-logg och mottagare innan eventuell manuell
+omsandning. Detta loser inte atomisk SMTP/databas-commit eller ersatter ett
+verkligt leveransprov.
 
 Riktade tester for leveransforsok, systemstatus och schema-patch passerade.
 Schema-migreringen speglar nu **456/456** startup-SQL-steg.
@@ -678,10 +820,10 @@ nekas. Testcontainrar och testdatabas avvecklades.
 
 `npm run check:release` passerade med frontend-produktionsbuild, API-/vy-
 kontroller, runtime-smoke och releasebevis. `npm run check:env-go-live` passerade
-41/41. `npm run check:prod` visar 45/46 och en forvantad varning eftersom
-`.env.production.example` avsiktligt innehaller en platshallare for
-`APP_AUTH_REGISTRATION_BOOTSTRAP_KEY`; anvand en separat slumpad nyckel i riktig
-miljo. `check:use-today` rapporterar en varning for den avsiktligt andrade
+41/41. `npm run check:prod` visar 48/50 med tva forvantade template-varningar:
+owner-setupnyckeln och MFA-krypteringsnyckeln ar avsiktliga platshallare i
+`.env.production.example`; skapa separata slumpnycklar for riktig drift.
+`check:use-today` rapporterar en varning for den avsiktligt andrade
 worktree:n.
 
 Produktionens forsta agarkonto kravs nu skyddas av startnyckel; oppen registrering
@@ -1260,7 +1402,7 @@ Detta bevisar lokalt att:
 - `npm run check:dependencies`: passed 2026-08-17 09:54 +02:00, 32/32
 - `npm run check:secrets`: passed 2026-08-24, tidigare hemlighetskontroll utan fynd.
 - `npm run check:ci-handoff`: 34/34, GitHub Actions-jobb, artifacts/summaries, Dockerhub workflow, secrets, push/sync-steg, vanliga CI-fel och go-live-grans.
-- `npm run check:ci`: 39/39, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds, artifacts/summaries, Dependabot och timeout-skydd.
+- `npm run check:ci`: 40/40, GitHub Actions kontrollerar backend med `mvn -B test`, PostgreSQL 16, Java 21, frontend release gate, Docker image builds, frontend-HTTPS och API-proxy, artifacts/summaries, Dependabot och timeout-skydd.
 - `npm run check:audit`: passed 2026-08-17 09:54 +02:00, tidigare audit med 0 vulnerabilities
 - `npm run check:release-traceability`: passed 2026-08-22, 14/14, warning: local commits pending push
 - `npm run test:backend`: passed 2026-08-17 09:58 +02:00, 190 tests, 0 failures, 0 errors
@@ -1270,22 +1412,22 @@ Detta bevisar lokalt att:
 - `check:evidence`: 94/94
 - `check:bundle`: 9/9
 - `check:data-safety`: 57/57
-- `check:prod`: 45/46 (example env has one expected warning for the placeholder owner setup key)
-- `check:env-go-live`: 41/41
-- `check:ci`: 39/39
+- `check:prod`: 57/59 (2026-09-23; example env has expected warnings for placeholder owner setup and MFA encryption keys)
+- `check:env-go-live`: 41/41 (2026-09-23)
+- `check:ci`: 40/40
 - `check:ci-handoff`: 34/34
 - `check:post-push`: 31/31
 - `check:external-go-live`: 29/29
 - `check:schema`: 18/18
-- `check:migrations`: 5/5, passed 2026-08-16
+- `check:migrations`: 6/6, passed 2026-10-12
 - `check:schema-bootstrap`: 10/10
-- `check:go-live-risks`: 20/20
+- `check:go-live-risks`: 26/26
 - `check:go-live-decision`: 17/17
 - `check:manual-go-live`: 18/18
 - `check:mvp-use`: 20/20
 - `check:operations`: 23/23
 - `check:use-today`: 35/36
-- `check:first-real-data`: 37/37
+- `check:first-real-data`: 43/43
 - `check:pilot`: 25/25
 - `check:calculations`: 46/46
 - `check:retention`: 23/23
@@ -1294,7 +1436,7 @@ Detta bevisar lokalt att:
 - `check:handoff`: 29/29
 - `check:speedledger-parity`: 28/28
 - `check:startklar`: 20/20
-- `npm run check:backup`: passed, 19/19
+- `npm run check:backup`: passed, 20/20
 - `check:finish-line`: 21/21
 - Docker images skapade lokalt 2026-08-24 15:49 +02:00:
   - `alibooks-backend:release-gate`

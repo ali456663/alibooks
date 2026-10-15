@@ -17,12 +17,105 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.server.ResponseStatusException;
 import se.cloudshop.customer.Customer;
 import se.cloudshop.email.InvoiceEmailService;
+import se.cloudshop.email.EmailDeliveryLedger;
 import se.cloudshop.order.Order;
 import se.cloudshop.product.Product;
 import se.cloudshop.settings.AppSettings;
 import se.cloudshop.settings.SettingsService;
 
 class InvoiceEmailOriginalTest {
+  @Test
+  void refusesBlindResendAfterUnresolvedAttempt() {
+    var mail = mock(JavaMailSender.class);
+    var settings = mock(SettingsService.class);
+    var originals = mock(InvoiceOriginalService.class);
+    var ledger = mock(EmailDeliveryLedger.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    when(ledger.hasUnresolvedInvoiceAttempt(invoice.getId())).thenReturn(true);
+
+    var sender = new InvoiceEmailService(mail, settings, originals, ledger,
+        "test.invalid", "sender@example.invalid");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendInvoice(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Reconcile the previous attempt");
+    verifyNoInteractions(originals);
+    verify(mail, never()).send(any(MimeMessage.class));
+  }
+
+  @Test
+  void refusesResendWhenDeliverySucceededButInvoiceHistoryRolledBack() {
+    var mail = mock(JavaMailSender.class);
+    var ledger = mock(EmailDeliveryLedger.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    when(ledger.hasInvoiceAttempt(invoice.getId())).thenReturn(true);
+
+    var sender = new InvoiceEmailService(mail, mock(SettingsService.class),
+        mock(InvoiceOriginalService.class), ledger, "test.invalid", "sender@example.invalid");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendInvoice(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Reconcile the previous attempt");
+    verify(mail, never()).send(any(MimeMessage.class));
+  }
+
+  @Test
+  void permitsIntentionalResendOfReconciledInvoice() {
+    var mail = mock(JavaMailSender.class);
+    var settings = mock(SettingsService.class);
+    var originals = mock(InvoiceOriginalService.class);
+    var ledger = mock(EmailDeliveryLedger.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    invoice.setInvoiceNumber("F-RESEND");
+    invoice.setStatus("SENT");
+    invoice.setPlusGiro("123 45 67-8");
+    invoice.addReminderHistory("INVOICE_EMAIL", "SENT", "customer@example.invalid");
+    when(ledger.hasInvoiceAttempt(invoice.getId())).thenReturn(true);
+    when(settings.getSettings()).thenReturn(AppSettings.defaults());
+    byte[] pdf = "%PDF-1.4 archived".getBytes(StandardCharsets.US_ASCII);
+    when(originals.read(invoice)).thenReturn(new InvoiceOriginalService.InvoicePdfDocument(
+        pdf, "original", InvoiceOriginal.digest(pdf)));
+    when(mail.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
+
+    var sender = new InvoiceEmailService(mail, settings, originals, ledger,
+        "test.invalid", "sender@example.invalid");
+    sender.sendInvoice(invoice);
+
+    verify(mail).send(any(MimeMessage.class));
+    verify(ledger).startInvoiceAttempt(org.mockito.ArgumentMatchers.eq(invoice.getId()),
+        org.mockito.ArgumentMatchers.eq("customer@example.invalid"),
+        org.mockito.ArgumentMatchers.eq("Faktura F-RESEND"), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.eq("F-RESEND.pdf"), org.mockito.ArgumentMatchers.eq(pdf));
+  }
+
+  @Test
+  void permitsRetryOnlyAfterAllPriorAttemptsWereConfirmedNotDelivered() {
+    var mail = mock(JavaMailSender.class);
+    var settings = mock(SettingsService.class);
+    var originals = mock(InvoiceOriginalService.class);
+    var ledger = mock(EmailDeliveryLedger.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    invoice.setInvoiceNumber("F-RETRY");
+    invoice.setStatus("SENT");
+    invoice.setPlusGiro("123 45 67-8");
+    when(ledger.hasInvoiceAttempt(invoice.getId())).thenReturn(true);
+    when(ledger.hasOnlyConfirmedNotDeliveredInvoiceAttempts(invoice.getId())).thenReturn(true);
+    when(settings.getSettings()).thenReturn(AppSettings.defaults());
+    byte[] pdf = "%PDF-1.4 archived".getBytes(StandardCharsets.US_ASCII);
+    when(originals.read(invoice)).thenReturn(new InvoiceOriginalService.InvoicePdfDocument(
+        pdf, "original", InvoiceOriginal.digest(pdf)));
+    when(mail.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
+
+    new InvoiceEmailService(mail, settings, originals, ledger,
+        "test.invalid", "sender@example.invalid").sendInvoice(invoice);
+
+    verify(mail).send(any(MimeMessage.class));
+  }
+
   @Test
   void refusesToSendWhenPaymentDetailsAreMissing() {
     var mail = mock(JavaMailSender.class);
@@ -39,6 +132,32 @@ class InvoiceEmailOriginalTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendInvoice(invoice))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("Payment details are missing");
+    verify(mail, never()).send(any(MimeMessage.class));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"reconstructed", "draft"})
+  void refusesToEmailAnythingOtherThanArchivedOriginal(String source) {
+    var mail = mock(JavaMailSender.class);
+    var settings = mock(SettingsService.class);
+    var originals = mock(InvoiceOriginalService.class);
+    var ledger = mock(EmailDeliveryLedger.class);
+    var invoice = new Order(new Customer("Test", "customer@example.invalid", "", "", "", "", ""),
+        new Product("Test", "", 100), Instant.now());
+    invoice.setInvoiceNumber("F-LEGACY");
+    invoice.setStatus("SENT");
+    invoice.setPlusGiro("123 45 67-8");
+    when(settings.getSettings()).thenReturn(AppSettings.defaults());
+    when(originals.read(invoice)).thenReturn(new InvoiceOriginalService.InvoicePdfDocument(
+        "%PDF-1.4 rebuilt".getBytes(StandardCharsets.US_ASCII), source, "synthetic-hash"));
+
+    var sender = new InvoiceEmailService(mail, settings, originals, ledger,
+        "test.invalid", "sender@example.invalid");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendInvoice(invoice))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Invoice original is missing");
+    verify(ledger, never()).startInvoiceAttempt(any(), any(), any(), any(), any(), any());
     verify(mail, never()).send(any(MimeMessage.class));
   }
 

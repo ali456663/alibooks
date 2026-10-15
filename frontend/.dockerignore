@@ -2,4 +2,14 @@ node_modules
 dist
 .idea
 *.log
+.env
+.env.*
+.git
+uploads
+backups
+*.dump
+*.pem
+*.key
+*.p12
+*.jks
 

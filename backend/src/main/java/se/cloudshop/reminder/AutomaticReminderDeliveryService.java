@@ -64,7 +64,7 @@ public class AutomaticReminderDeliveryService {
       orderRepository.saveAndFlush(invoice);
       return DeliveryResult.SENT;
     } catch (RuntimeException exception) {
-      // Persist the failed attempt so the next daily run can retry it safely.
+      // SMTP may have accepted the message before a timeout. Manual review is required.
       invoice.addReminderHistory(method, SKIPPED_STATUS, reminderEmail(invoice));
       orderRepository.saveAndFlush(invoice);
       return DeliveryResult.SKIPPED;
@@ -85,7 +85,8 @@ public class AutomaticReminderDeliveryService {
     }
 
     String method = overdue ? overdueMethod : automaticMethod;
-    if (invoice.hasReminder(method, SENT_STATUS)) {
+    if (invoice.hasReminder(method, SENT_STATUS) || invoice.hasReminder(method, SKIPPED_STATUS)
+        || invoiceReminderEmailService.hasDeliveryAttempt(invoice.getId(), overdue)) {
       return false;
     }
 

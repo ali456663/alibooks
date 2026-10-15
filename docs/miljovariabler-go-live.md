@@ -41,10 +41,12 @@ Spara den endast som `APP_AUTH_REGISTRATION_BOOTSTRAP_KEY` pa produktionsservern
 For publik demo eller riktig drift ska detta vara satt:
 
 - `APP_FRONTEND_URL` ska vara publik frontend-URL.
+- Publik frontend och CORS-origin ska använda HTTPS med giltigt TLS-certifikat.
+- `TLS_CERT_HOST_PATH` och `TLS_KEY_HOST_PATH` ska peka pa giltig certificate chain och privat nyckel for Nginx; Compose monterar bada skrivskyddat.
 - `VITE_API_URL=/api` nar frontend gar via Nginx/proxy.
 - `APP_CORS_ALLOWED_ORIGINS` ska matcha publik frontend-origin.
 - `APP_CORS_LOCAL_DEV_ENABLED=false`.
-- `SPRING_DATASOURCE_URL` ska peka pa RDS eller annan hanterad PostgreSQL.
+- Produktionsdatabasen ska vara Amazon RDS eller annan hanterad PostgreSQL, inte localhost. `SPRING_DATASOURCE_URL` ska peka pa databasen och anvanda `sslmode=verify-full&sslrootcert=/run/certs/rds-ca-bundle.pem`; den aktuella AWS RDS CA-bundlen ska vara monterad lasbart i backend-containern.
 - `SPRING_DATASOURCE_USERNAME` och `SPRING_DATASOURCE_PASSWORD` ska vara riktiga databashemligheter.
 - `SPRING_JPA_HIBERNATE_DDL_AUTO=validate` eller `none`.
 - `APP_SCHEMA_PATCH_ENABLED=false`.
@@ -72,6 +74,8 @@ SMTP:
 - `SPRING_MAIL_PASSWORD`
 - `SPRING_MAIL_SMTP_AUTH=true`
 - `SPRING_MAIL_SMTP_STARTTLS_ENABLE=true`
+- `SPRING_MAIL_SMTP_STARTTLS_REQUIRED=true` och `SPRING_MAIL_SMTP_CHECK_SERVER_IDENTITY=true` stoppar okrypterad fallback och verifierar SMTP-serverns certifikatnamn. Testa med den faktiska e-postleverantoren fore skarp drift.
+- `SPRING_MAIL_CONNECTION_TIMEOUT_MS=5000`, `SPRING_MAIL_READ_TIMEOUT_MS=10000` och `SPRING_MAIL_WRITE_TIMEOUT_MS=10000` begransar hur lange ett SMTP-forsok kan blockera. En timeout bevisar inte att mejlet inte levererades; kontrollera leveransjournalen innan omsandning.
 
 AI:
 

@@ -27,12 +27,14 @@ public class ProductionConfigurationGuard {
       @Value("${app.money-migration.verify-on-startup:true}") boolean moneyMigrationVerifyOnStartup,
       @Value("${spring.datasource.url:}") String datasourceUrl,
       @Value("${spring.datasource.username:}") String datasourceUsername,
-      @Value("${spring.datasource.password:}") String datasourcePassword
+      @Value("${spring.datasource.password:}") String datasourcePassword,
+      @Value("${app.auth.mfa-encryption-key:}") String mfaEncryptionKey,
+      @Value("${app.auth.require-mfa:false}") boolean requireMfa
   ) {
     List<String> violations = violations(
         jwtSecret, registrationBootstrapKey, jwtExpirationMinutes, ddlAuto, schemaPatchEnabled, corsLocalDevEnabled,
         corsAllowedOrigins, testDataResetEnabled, bankReconciliationResetEnabled, moneyMigrationVerifyOnStartup,
-        datasourceUrl, datasourceUsername, datasourcePassword);
+        datasourceUrl, datasourceUsername, datasourcePassword, mfaEncryptionKey, requireMfa);
     if (!violations.isEmpty()) {
       throw new IllegalStateException("Unsafe production configuration: " + String.join(", ", violations));
     }
@@ -51,7 +53,9 @@ public class ProductionConfigurationGuard {
       boolean moneyMigrationVerifyOnStartup,
       String datasourceUrl,
       String datasourceUsername,
-      String datasourcePassword
+      String datasourcePassword,
+      String mfaEncryptionKey,
+      boolean requireMfa
   ) {
     List<String> errors = new ArrayList<>();
     String secret = safe(jwtSecret);
@@ -66,6 +70,10 @@ public class ProductionConfigurationGuard {
     if (jwtExpirationMinutes < 1 || jwtExpirationMinutes > 1440) {
       errors.add("JWT_EXPIRATION_MINUTES must be between 1 and 1440");
     }
+    if (!isStrongAesKey(mfaEncryptionKey)) {
+      errors.add("APP_AUTH_MFA_ENCRYPTION_KEY must be base64-encoded random 32-byte key material");
+    }
+    if (!requireMfa) errors.add("APP_AUTH_REQUIRE_MFA must be true to protect production API data");
     if (!List.of("validate", "none").contains(safe(ddlAuto).toLowerCase(Locale.ROOT))) {
       errors.add("SPRING_JPA_HIBERNATE_DDL_AUTO must be validate or none");
     }
@@ -76,7 +84,7 @@ public class ProductionConfigurationGuard {
       errors.add("APP_CORS_LOCAL_DEV_ENABLED must be false");
     }
     if (!hasExplicitPublicOrigins(corsAllowedOrigins)) {
-      errors.add("APP_CORS_ALLOWED_ORIGINS must contain explicit non-local HTTP(S) origins");
+      errors.add("APP_CORS_ALLOWED_ORIGINS must contain explicit non-local HTTPS origins");
     }
     if (testDataResetEnabled || bankReconciliationResetEnabled) {
       errors.add("test-data and bank-reconciliation reset features must be disabled");
@@ -87,6 +95,9 @@ public class ProductionConfigurationGuard {
     errors.add("Accounting amounts are stored as whole SEK; production is blocked until exact ore-based accounting and historical reconciliation are implemented and verified");
     if (!hasRemotePostgresHost(datasourceUrl)) {
       errors.add("SPRING_DATASOURCE_URL must target a remote PostgreSQL host");
+    }
+    if (!hasPostgresTls(datasourceUrl)) {
+      errors.add("SPRING_DATASOURCE_URL must verify the PostgreSQL server with sslmode=verify-full and the mounted RDS CA bundle");
     }
     if (!hasText(datasourceUsername) || "cloudshop".equalsIgnoreCase(datasourceUsername.trim())) {
       errors.add("SPRING_DATASOURCE_USERNAME must not use the local default");
@@ -114,7 +125,7 @@ public class ProductionConfigurationGuard {
     try {
       URI uri = new URI(origin);
       String host = uri.getHost();
-      if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+      if (!"https".equalsIgnoreCase(uri.getScheme())
           || !hasText(host) || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
           || (uri.getPath() != null && !uri.getPath().isEmpty())) {
         return false;
@@ -153,6 +164,30 @@ public class ProductionConfigurationGuard {
     }
   }
 
+  private static boolean hasPostgresTls(String value) {
+    String url = safe(value);
+    if (!url.startsWith("jdbc:postgresql://")) return false;
+    try {
+      URI uri = new URI(url.substring("jdbc:".length()));
+      String query = uri.getQuery();
+      if (query == null) return false;
+      List<String> modes = Arrays.stream(query.split("&"))
+          .map(parameter -> parameter.split("=", 2))
+          .filter(parts -> parts.length == 2 && "sslmode".equalsIgnoreCase(parts[0]))
+          .map(parts -> parts[1].toLowerCase(Locale.ROOT))
+          .toList();
+      List<String> rootCertificates = Arrays.stream(query.split("&"))
+          .map(parameter -> parameter.split("=", 2))
+          .filter(parts -> parts.length == 2 && "sslrootcert".equalsIgnoreCase(parts[0]))
+          .map(parts -> parts[1])
+          .toList();
+      return modes.equals(List.of("verify-full"))
+          && rootCertificates.equals(List.of("/run/certs/rds-ca-bundle.pem"));
+    } catch (URISyntaxException exception) {
+      return false;
+    }
+  }
+
   private static boolean isPlaceholder(String value) {
     String normalized = safe(value).toLowerCase(Locale.ROOT);
     return normalized.equals("change_me_in_production")
@@ -183,6 +218,21 @@ public class ProductionConfigurationGuard {
 
   private static boolean hasText(String value) {
     return value != null && !value.isBlank();
+  }
+
+  public static boolean isStrongAesKey(String value) {
+    try {
+      byte[] decoded = java.util.Base64.getDecoder().decode(safe(value));
+      return decoded.length == 32 && java.util.Arrays.stream(toInts(decoded)).distinct().count() >= 12;
+    } catch (IllegalArgumentException exception) {
+      return false;
+    }
+  }
+
+  private static int[] toInts(byte[] bytes) {
+    int[] values = new int[bytes.length];
+    for (int index = 0; index < bytes.length; index++) values[index] = bytes[index] & 0xff;
+    return values;
   }
 
   private static String safe(String value) {

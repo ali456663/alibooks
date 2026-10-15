@@ -68,6 +68,17 @@ check(
   "The register should warn against using real customer/bookkeeping data before external checks."
 );
 
+for (const [name, evidence] of [
+  ["MFA is a production blocker", ["MFA och administrativ atkomst", "agarkontots MFA", "BLOCKERAR SKARP DRIFT"]],
+  ["NIS2 applicability is explicitly assessed", ["NIS2/cybersakerhetslagen scope", "SME-storlek ensam", "scopebedomning"]],
+  ["Leadership accountability needs proof", ["Ledningens cybersakerhetsansvar", "signerat beslut", "ansvarig"]],
+  ["Incident readiness includes conditional statutory deadlines", ["Incidentberedskap och rapportering", "24 timmar", "72 timmar"]],
+  ["Supplier risk is distinct from accounting payables", ["Leverantorsrisk", "leverantorers sakerhet", "exitplan"]],
+  ["Continuity requires tested restore and RPO/RTO", ["Kontinuitet och aterstallning", "RPO/RTO", "applikationssmoke"]]
+]) {
+  check(name, includesAll(riskRegister, evidence), "Cybersecurity and continuity risks must remain explicit production blockers with concrete evidence.");
+}
+
 check(
   "Go-live checklist links risk register",
   goLiveChecklist.includes("go-live-riskregister.md"),

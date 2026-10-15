@@ -2,6 +2,14 @@
 
 AliBooks is a small cloud-based invoicing and business dashboard app.
 
+**Production status: NO-GO for real bookkeeping data.** Journal writes still use
+whole SEK as the authoritative amount. Passing local tests does not prove exact
+ore handling, a restored production backup, external CI/deployment, or an
+accountant's review. Keep real customer and accounting data out until the
+[go-live decision](docs/go-live-beslut.md) is verified. The current posting
+rules and their limits are described in the
+[accounting system documentation](docs/systemdokumentation-bokforing.md).
+
 The app will show:
 
 - User registration and login

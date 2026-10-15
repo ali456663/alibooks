@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -33,6 +34,38 @@ class ProductServiceTest {
     assertThat(json.path("price").asInt()).isEqualTo(799);
     assertThat(json.path("priceMinor").asLong()).isEqualTo(79_900L);
     assertThat(json.path("currencyCode").asText()).isEqualTo("SEK");
+  }
+
+  @Test
+  void rejectsMissingOrContradictoryStoredPriceWithoutRepairingIt() throws Exception {
+    Product product = new Product("PT Start", "Coaching", 1200);
+    product.validateMoneyShadow();
+
+    Field priceMinor = Product.class.getDeclaredField("priceMinor");
+    priceMinor.setAccessible(true);
+    priceMinor.set(product, 119_999L);
+    assertThatThrownBy(product::validateMoneyShadow).isInstanceOf(ProductMoneyIntegrityException.class);
+    assertThat(product.getPriceMinor()).isEqualTo(119_999L);
+
+    priceMinor.set(product, null);
+    assertThatThrownBy(product::validateMoneyShadow).isInstanceOf(ProductMoneyIntegrityException.class);
+  }
+
+  @Test
+  void rejectsStoredDiscountOrCurrencyMismatch() throws Exception {
+    Product product = new Product("PT Start", "Coaching", 1200);
+    product.setDiscountPrice(900);
+
+    Field discountMinor = Product.class.getDeclaredField("discountPriceMinor");
+    discountMinor.setAccessible(true);
+    discountMinor.set(product, 90_001L);
+    assertThatThrownBy(product::validateMoneyShadow).isInstanceOf(ProductMoneyIntegrityException.class);
+
+    discountMinor.set(product, 90_000L);
+    Field currencyCode = Product.class.getDeclaredField("currencyCode");
+    currencyCode.setAccessible(true);
+    currencyCode.set(product, "USD");
+    assertThatThrownBy(product::validateMoneyShadow).isInstanceOf(ProductMoneyIntegrityException.class);
   }
 
   @Test
