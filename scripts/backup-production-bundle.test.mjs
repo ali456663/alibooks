@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assessRestoredEvidence, createProductionBundle } from "./backup-production-bundle.mjs";
+import { assessRestoredEvidence, createProductionBundle, receiptCopyDockerArgs } from "./backup-production-bundle.mjs";
 import { docker } from "./backup-restore-verify.mjs";
 
 function fixture(t) {
@@ -197,13 +197,13 @@ test("copies receipts from a stopped container's named volume read-only", t => {
       "--entrypoint", "sh", "postgres:16", "-c", "true"]);
     containerCreated = true;
     docker(["run", "--rm", "--volumes-from", name, "--entrypoint", "sh", "postgres:16", "-ec",
-      "mkdir -p /app/uploads/receipts; printf 'synthetic receipt' > /app/uploads/receipts/sample.pdf"]);
-    mkdirSync(path.join(root, "receipts"));
-    docker(["run", "--rm", "--network", "none", "--read-only", "--volumes-from", `${name}:ro`,
-      "-v", `${root}:/bundle`, "--entrypoint", "sh", "postgres:16", "-ec",
-      "test -d /app/uploads/receipts; cp -a /app/uploads/receipts/. /bundle/receipts/"],
-    undefined, { timeoutMs: 1_800_000 });
+      "umask 077; mkdir -p /app/uploads/receipts; printf 'synthetic receipt' > /app/uploads/receipts/sample.pdf"]);
+    mkdirSync(path.join(root, "receipts"), { mode: 0o700 });
+    docker(receiptCopyDockerArgs(name, root), undefined, { timeoutMs: 1_800_000 });
     assert.equal(readFileSync(path.join(root, "receipts", "sample.pdf"), "utf8"), "synthetic receipt");
+    if (process.platform === "linux") {
+      assert.equal(statSync(path.join(root, "receipts")).uid, process.getuid());
+    }
   } finally {
     if (containerCreated) docker(["rm", "-v", name]);
     if (volumeCreated) docker(["volume", "rm", name]);

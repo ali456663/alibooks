@@ -7,6 +7,12 @@ import { docker, sha256, tableRowCounts, verifyBackup } from "./backup-restore-v
 const CONTAINER_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
 const DB_NAME = /^[a-zA-Z0-9_]+$/;
 
+export function receiptCopyDockerArgs(container, destination) {
+  return ["run", "--rm", "--network", "none", "--read-only", "--volumes-from", `${container}:ro`,
+    "-v", `${destination}:/bundle`, "--entrypoint", "sh", "postgres:16", "-ec",
+    "test -d /app/uploads/receipts; cp -R --no-preserve=mode,ownership /app/uploads/receipts/. /bundle/receipts/"];
+}
+
 export function assessRestoredEvidence(result) {
   const counts = ["expensesWithoutReceipts", "unreferencedFiles"];
   for (const field of counts) {
@@ -90,10 +96,7 @@ export async function createProductionBundle({ backendContainer, backupDirectory
   const receipts = path.join(destination, "receipts");
   mkdirSync(receipts, { mode: 0o700 });
   const dump = path.join(destination, "database.dump");
-  runDocker(["run", "--rm", "--network", "none", "--read-only", "--volumes-from", `${backendContainer}:ro`,
-    "-v", `${destination}:/bundle`, "--entrypoint", "sh", "postgres:16", "-ec",
-    "test -d /app/uploads/receipts; cp -a /app/uploads/receipts/. /bundle/receipts/"],
-  undefined, { timeoutMs: 1_800_000 });
+  runDocker(receiptCopyDockerArgs(backendContainer, destination), undefined, { timeoutMs: 1_800_000 });
   const files = [];
   for (const name of readdirSync(receipts)) {
     const file = path.join(receipts, name);
